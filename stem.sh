@@ -2,7 +2,8 @@
 set -e
 sudo npm i wasm-opt -g
 curl https://wasmtime.dev/install.sh -sSf | bash
-rustup target add wasm32-wasi
+rustup target add wasm32-wasi # compilation target for wasm32 wasi WebAssembly
+# rustup target add wasm32-unknown-unknown # compilation target for browser-based WebAssembly
 cargo build --bin walleXerr --target wasm32-wasi --release
 sudo cp ../../../target/wasm32-wasi/release/walleXerr.wasm ./walleXerr.wasm
 wasmtime walleXerr.wasm
