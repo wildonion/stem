@@ -31,8 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
 
     // https://crates.io/crates/wasmtime
     // https://wasmer.io/
-    // TODO - building to wasm using wasmer and wastime
-    // TODO - add build commands inside the stem.sh     
+    // TODO - building to wasm using wasmer and wastime   
     // ...
 
 
