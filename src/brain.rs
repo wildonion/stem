@@ -28,7 +28,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     daemon::bpf_loader().await;
 
 
-    // https://github.com/wildonion/uniXerr/blob/master/DEV.src
+    // near, cloudflare and shuttle are serverless:
+    //      - write contract or serverless or faas methods in rust then compile to wasm
+    //      - deploy using cli to the runtime server like coiniXerr node 
+    //      - high performence proxy like pingora and k8s will balance the requests  
+    //      - load the deployed code in js or the rust and call its methods
+    // near will load the wasm contract inside its nodes which is
+    // written in rust to change the state of the blockchain
+    // whenever one of the contract method gets called from the js
+    // like funding an account once the fund() method gets called 
+    // from the contract.
+    // the reason that contract gets compiled to wasm is because 
+    // they can be loaded inside the browsers and also they have 
+    // no access to socket and std libs thus they secured, immutable and 
+    // can not communicate with outside world.
     // https://crates.io/crates/wasmtime
     // https://wasmer.io/
     // TODO - building to wasm using wasmer and wastime   
