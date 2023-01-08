@@ -5,13 +5,13 @@
 /*
 
 
-
+    https://neurosciencenews.com/ -> get brain schemas from here
     https://en.wikipedia.org/wiki/Unconscious_mind
     https://www.sas.upenn.edu/~cavitch/pdf-library/Solms_Unconscious.pdf
     https://drive.google.com/file/d/1K2uO8D_qLhXWcAHDpICmbfFx3hfQ4Sah/view?usp=share_link -> Models of the Mind
     https://drive.google.com/file/d/17aF74xeydgx_BulPknWv6NiU4wgTBwfQ/view?usp=share_link -> Descartes' Error
     https://github.com/wildonion/uniXerr/blob/master/core/recognizer/helper_board 
-    https://arxiv.org/pdf/2212.13345v1.pdf -> FF algorithm
+    https://arxiv.org/pdf/2212.13345v1.pdf -> AI FF algorithm
     TODO - all data for communication between neuron actors must be serialized with capn'p proto to call each other methods directly inside the brain
     TODO - implement all cognitive neuroscience concepts and schemas and code the whole brain instead of having neural network like a brain engine using various macro syntax like brain!{}
     TODO - every neuron can be an actor (or the column of our input matrix) to construct the GNN in an async and multithreading manner in such a way that every actor which is a neuron can communicate with each other to get the data of the next or the last neuron asyncly 
