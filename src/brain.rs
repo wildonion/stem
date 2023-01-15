@@ -53,6 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     //// that contains the BPF bytecode in it and can call the method name
     //// inside the incoming RPC request to change the state of the blockchain.
 
+    // https://github.com/wildonion/cs-concepts
+    // https://github.com/alordash/newton-fractal
     // https://github.com/Patryk27/shorelark/ -> GA, NN and WASM
     // https://crates.io/crates/wasmtime
     // https://wasmer.io/
