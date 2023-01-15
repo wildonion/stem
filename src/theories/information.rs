@@ -22,7 +22,7 @@
 // NOTE - small world and the strength of weak ties effect is based on the butterfly effect
 
 
-// https://github.com/wildonion/uniXerr/blob/master/DEV.src
+// https://github.com/wildonion/uniXerr/blob/master/DEV.src -> AI references
 // https://competitions.codalab.org/
 // http://colah.github.io/posts/2015-09-Visual-Information/
 // https://drive.google.com/file/d/1N7BHIT7awygV5Qm5izbaYdBNfnFgF08n/view?usp=sharing
