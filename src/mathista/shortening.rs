@@ -18,7 +18,7 @@
     ➤ define the butterfly effect for the agent to avoid choosing most rewarded path greedily dangerous in a selecting the most reliable node or peer in graph env
 
     
-    https://github.com/wildonion/uniXerr/blob/master/core/agents/helper_board
+    https://github.com/wildonion/cs-concepts
     https://openai.com/blog/measuring-goodharts-law/
     https://openreview.net/pdf?id=ar92oEosBIg => TSP using GNN
     https://likegeeks.com/python-dijkstras-algorithm/
