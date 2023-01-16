@@ -3,7 +3,7 @@
 
 
 
-// https://github.com/wildonion/uniXerr/blob/master/infra/recognizer/helper_board
+// https://github.com/wildonion/cs-concepts
 // https://crates.io/crates/mnist
 // https://crates.io/crates/wasi-nn
 // https://crates.io/crates/wasmtime-wasi-nn
