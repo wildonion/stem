@@ -11,10 +11,10 @@
     https://drive.google.com/file/d/1K2uO8D_qLhXWcAHDpICmbfFx3hfQ4Sah/view?usp=share_link -> Models of the Mind
     https://drive.google.com/file/d/17aF74xeydgx_BulPknWv6NiU4wgTBwfQ/view?usp=share_link -> Descartes' Error
     https://github.com/wildonion/cs-concepts
-    https://arxiv.org/pdf/2212.13345v1.pdf -> AI FF algorithm
     TODO - all data for communication between neuron actors must be serialized with capn'p proto to call each other methods directly inside the brain
     TODO - implement all cognitive neuroscience concepts and schemas and code the whole brain instead of having neural network like a brain engine using various macro syntax like brain!{}
     TODO - every neuron can be an actor (or the column of our input matrix) to construct the GNN in an async and multithreading manner in such a way that every actor which is a neuron can communicate with each other to get the data of the next or the last neuron asyncly 
+    TODO - implement entropy measures for the training process of the brain and how much events are random 
     NOTE - cortex is involved in higher processes in the human brain, including memory, thinking, learning, reasoning, problem-solving, emotions, consciousness and functions related to your senses
     NOTE - a brain structure can have multiple interfaces like being in void and illusion abstract situations which can be implemented using traits 
     NOTE - train on ayoub conse PaaS events' phases which will be used to create behavioural graph of each player inside the game 
