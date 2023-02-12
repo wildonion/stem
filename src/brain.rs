@@ -48,10 +48,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     //// the reason that solana contract gets compiled to .so is because 
     //// they can be loaded from the linux kernel which is blazingly 
     //// fast also from the browsers, a json RPC call must be invoked 
-    //// with a contract method name to the RPC server on the runtime node 
-    //// in which it can load the .so contract which has bee deployed 
-    //// that contains the BPF bytecode in it and can call the method name
-    //// inside the incoming RPC request to change the state of the blockchain.
+    //// with a contract method name and id (wallet address or public key) 
+    //// to the RPC server on the solana runtime node to load the .so contract which 
+    //// has bee deployed and contains the BPF bytecode in it to 
+    //// call the method name inside the incoming RPC request to change 
+    //// the state of the blockchain.
 
     // https://github.com/wildonion/cs-concepts
     // https://github.com/alordash/newton-fractal
