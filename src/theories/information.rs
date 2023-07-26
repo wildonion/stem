@@ -22,6 +22,12 @@
 // NOTE - small world and the strength of weak ties effect is based on the butterfly effect
 
 
+// https://drive.google.com/drive/folders/18yLzjMke-FD_onY-ayqDo03uqxUS-cHc => Google Drive Books
+// https://github.com/atcold/pytorch-Deep-Learning/ => DL tutorial
+// https://github.com/ritchieng/deep-learning-wizard => DL tutorial
+// https://julienbeaulieu.gitbook.io => DS tutorial
+// https://drive.google.com/drive/folders/1vNTdWOWXI3MetTYlIxnxDuWRK6M5VGZH => Google Drive CSR folder + ideas.txt + master_thesis.docx for research papers
+// https://github.com/wildonion/cs-concepts => CS Concepts and Roadmap
 // https://competitions.codalab.org/
 // http://colah.github.io/posts/2015-09-Visual-Information/
 // https://drive.google.com/file/d/1N7BHIT7awygV5Qm5izbaYdBNfnFgF08n/view?usp=sharing
