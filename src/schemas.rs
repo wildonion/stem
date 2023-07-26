@@ -11,6 +11,7 @@
     https://drive.google.com/file/d/1K2uO8D_qLhXWcAHDpICmbfFx3hfQ4Sah/view?usp=share_link -> Models of the Mind
     https://drive.google.com/file/d/17aF74xeydgx_BulPknWv6NiU4wgTBwfQ/view?usp=share_link -> Descartes' Error
     https://github.com/wildonion/cs-concepts
+    TODO - a neuron sends message to its closest neuron using slot, epoch and graph concepts
     TODO - all data for communication between neuron actors must be serialized with capn'p proto to call each other methods directly inside the brain
     TODO - implement all cognitive neuroscience concepts and schemas and code the whole brain instead of having neural network like a brain engine using various macro syntax like brain!{}
     TODO - every neuron can be an actor (or the column of our input matrix) to construct the GNN in an async and multithreading manner in such a way that every actor which is a neuron can communicate with each other to get the data of the next or the last neuron asyncly also they can build and form the brain  
