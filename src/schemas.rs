@@ -18,8 +18,6 @@
     TODO - implement entropy measures for the training process of the brain and how much events are random 
     NOTE - cortex is involved in higher processes in the human brain, including memory, thinking, learning, reasoning, problem-solving, emotions, consciousness and functions related to your senses
     NOTE - a brain structure can have multiple interfaces like being in void and illusion abstract situations which can be implemented using traits 
-    NOTE - train on ayoub conse PaaS events' phases which will be used to create behavioural graph of each player inside the game 
-            to show the tips and tricks of the new game based on the history or the behavioural graph of the player
 
 
 
