@@ -24,7 +24,8 @@ use std::sync::{Arc, Weak, RwLock};
     send sync static, shared ownership using Mutex and RwLock and RefCell, 
     referene counting using Rc Arc, Box, Pin, &mut pointer, cap, length, traits, macros 
     (ast, token stream), std::mem, generic, lifetimes, closures, traits, pointers and 
-    bytes and hex serding ops
+    bytes and hex serding ops, async trait and associative bounding Trait::method(): Send 
+    and ?async and ?const, &mut
     
     
     share ownership between threads using Arc by borrowing the ownership using pointers like & clone 
