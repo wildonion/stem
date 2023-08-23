@@ -3,4 +3,4 @@
 
 ## Project STEM 🤖
 
-> **BPF** and **WASM** bytecode contains the actor based model of the brain 🧠 that can be loaded inside chips for **AI** computations.
+> Actor based model of the brain 🧠 for AI and neuron computations which can be used and injected as dynamic library or shared object (`.so`) in other codes and as a `.wasm` file into `js` projects 

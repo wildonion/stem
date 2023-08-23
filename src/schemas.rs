@@ -135,17 +135,6 @@ pub struct Neuron{
     pub data: Vec<f32>, //// data is a 32 bits float 
 }
 
-impl Actor for Neuron{
-
-    type Msg = Vec<f32>; 
-
-    fn recv(&mut self, ctx: &Context<Self::Msg>, msg: Self::Msg, sender: Sender){ //// ctx is the actor system which we can build child actors with it also sender is another actor 
-
-        todo!();        
-
-    }
-
-}
 
 
 impl<Neuron> Default for BrainContext<Neuron>{

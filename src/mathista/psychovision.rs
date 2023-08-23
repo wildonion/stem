@@ -49,6 +49,7 @@ pub mod visioner{
         multithreaded and async NFT generator
     
         https://github.com/Jon-Becker/nft-generator-py
+        
         🍟 A MULTITHREADED AND ASYNC NFT LAYERING TOOLS
         🚧 ------- leetcode algos -------  
     
@@ -58,7 +59,7 @@ pub mod visioner{
             to find the largest sum in all subarray to build based on the largest rarity
         - conditional layering
         - use tokio::spawn and rayon for multithreading ops
-        - steganography using binding techniques like .so and bpf .elf
+        - steganography
     
     */
 
