@@ -21,11 +21,11 @@ use std::sync::{Arc, Weak, RwLock};
     arc weak and strong ref counting, shared ownership and interior mutability, based on 
     actor and graph concepts so we have followers weighted tree to understand the 
     relationship between peers to suggests events in a graph virtual machine by using 
-    send sync static, shared ownership using Mutex and RwLock and RefCell, 
+    send sync static, shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena
     referene counting using Rc Arc, Box, Pin, &mut pointer, cap, length, traits, macros 
     (ast, token stream), std::mem, generic, lifetimes, closures, traits, pointers and 
     bytes and hex serding ops, async trait and associative bounding Trait::method(): Send 
-    and ?async and ?const, &mut
+    and ?async and ?const, &mut, r3bl_rs_utils crate
     
     
     share ownership between threads using Arc by borrowing the ownership using pointers like & clone 
@@ -120,6 +120,9 @@ type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
 type ParentNodeToChildIsStrongThreadSafe<T> = Arc<NodeData<T>>;
 type ThreadSafeMutableParent<T> = RwLock<ChildNodeToParentIsWeak<T>>;
 type ThreadSafeMutableChildren<T> = RwLock<Vec<ParentNodeToChildIsStrongThreadSafe<T>>>;
+/* future are traits that must be behind pointers like Box<dyn> or &dyn */
+// let pinned_box_pointer_to_future: PinnedBoxPointerToFuture = Box::pin(async{34});
+type PinnedBoxPointerToFuture = std::pin::Pin<Box<dyn std::future::Future<Output=i32>>>;
 
 /* thread safe tree using Arc and RwLock to create DOM */
 struct NodeData<T>{
