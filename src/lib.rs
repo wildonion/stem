@@ -21,11 +21,14 @@ use std::sync::{Arc, Weak, RwLock};
     arc weak and strong ref counting, shared ownership and interior mutability, based on 
     actor and graph concepts so we have followers weighted tree to understand the 
     relationship between peers to suggests events in a graph virtual machine by using 
+
+
     send sync static, shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena
-    referene counting using Rc Arc, Box, Pin, &mut pointer, cap, length, traits, macros 
+    referene counting using Rc Arc, Box leaking, Pin, &mut pointer, cap, length, traits, macros 
     (ast, token stream), std::mem, generic, lifetimes, closures, traits, pointers and 
     bytes and hex serding ops, async trait and associative bounding Trait::method(): Send 
-    and ?async and ?const, &mut, r3bl_rs_utils crate
+    and ?async and ?const, &mut, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, 
+    also can't move type when it's behind a pointer
     
     
     share ownership between threads using Arc by borrowing the ownership using pointers like & clone 
