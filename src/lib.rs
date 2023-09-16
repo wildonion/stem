@@ -24,13 +24,14 @@ use std::sync::{Arc, Weak, RwLock};
 
 
     send sync static, shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena
-    referene counting using Rc Arc, Box leaking, Pin, &mut pointer, cap, length, traits, macros 
+    referene counting using Rc Arc, Box leaking, Pin, &mut pointer, cap, length, macros 
     (ast, token stream), std::mem, generic, lifetimes, closures, traits, pointers and 
-    bytes and hex serding ops, async trait and associative bounding Trait::method(): Send 
-    and ?async and ?const, &mut, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, 
-    also can't move type when it's behind a pointer, Box stores data on the heap and contains 
-    an smart pointer with a valid lifetime to the underlying type, also the size of the boxed 
-    type is the size of the type itself, the value of the box can be caught by dereferencing the box
+    bytes and hex serding and codec ops using borsh and serde, async trait and associative 
+    bounding Trait::method(): Send and ?async and ?const, &mut, r3bl_rs_utils crate, read/write io traits, 
+    Box<dyn Trait>, &mut type, as_ref(), unwrap(), clone() and trait as type also can't move type when 
+    it's behind a pointer and Box stores data on the heap and contains an smart pointer with a valid 
+    lifetime to the underlying type, also the size of the boxed type is the size of the type itself, 
+    the value of the box can be caught by dereferencing the box
     
     
     share ownership between threads using Arc by borrowing the ownership using pointers like & clone 
