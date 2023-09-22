@@ -136,6 +136,15 @@ pub struct Neuron{
 }
 
 
+pub struct Model{
+    pub layers: Vec<Layer>
+}
+
+pub struct Layer{
+    pub neurons: Vec<ٔNeuron>, // columns
+    pub data: Vec<f64>, // rows
+    pub metadata: String,
+}
 
 impl<Neuron> Default for BrainContext<Neuron>{
     fn default() -> Self{
