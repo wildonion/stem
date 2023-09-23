@@ -9,6 +9,7 @@ use std::sync::{Arc, Weak, RwLock};
     -----------------------------
     interact with gem repo mmr.rs
     -----------------------------
+    build dl models based on phases dataset using keras and https://github.com/wildonion/stem/
     behavioural graph virtual machine (**GVM**) built on top of each event's `phases` 
     field inside the game for each player to suggests them the tips and tricks for a new 
     game and reward them based on their game scores using an AI based coin generation 
