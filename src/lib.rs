@@ -14,9 +14,9 @@ use std::sync::{Arc, Weak, RwLock};
     field inside the game for each player to suggests them the tips and tricks for a new 
     game and reward them based on their game scores using an AI based coin generation 
     model in which players get rewarded based on their scores and positions then update 
-    the balance field of the user based on those attributes also players can get a higher 
-    rank by paying for the rank, playing with more than 3 gods in a week, player ability 
-    limitation when the god is updating the status
+    the balance field of the user based on those attributes also players will be ranked
+    based on their each play rewards and scores from the AI model output that can be used
+    in mmr.rs engine of the gem
 
 
     this is lle parallel based vm and game engine graph like DOM, an state manager 
