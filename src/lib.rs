@@ -12,9 +12,11 @@ use std::sync::{Arc, Weak, RwLock};
     behavioural graph virtual machine (**GVM**) built on top of each event's `phases` 
     field inside the game for each player to suggests them the tips and tricks for a new 
     game and reward them based on their game scores using an AI based coin generation 
-    model in which players get rewarded based on their scores and positions then update t
-    he balance field of the user based on those attributes.
-    
+    model in which players get rewarded based on their scores and positions then update 
+    the balance field of the user based on those attributes also players can get a higher 
+    rank by paying for the rank, playing with more than 3 gods in a week, player ability 
+    limitation when the god is updating the status
+
 
     this is lle parallel based vm and game engine graph like DOM, an state manager 
     like yew and redux with tree walking using (shared ref and mutably) using rc and 
