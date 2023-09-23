@@ -10,13 +10,15 @@ use std::sync::{Arc, Weak, RwLock};
     interact with gem repo mmr.rs
     -----------------------------
     build dl models based on phases dataset using keras and https://github.com/wildonion/stem/
-    behavioural graph virtual machine (**GVM**) built on top of each event's `phases` 
-    field inside the game for each player to suggests them the tips and tricks for a new 
-    game and reward them based on their game scores using an AI based coin generation 
-    model in which players get rewarded based on their scores and positions then update 
-    the balance field of the user based on those attributes also players will be ranked
-    based on their each play rewards and scores from the AI model output that can be used
-    in mmr.rs engine of the gem
+    behavioural graph virtual machine (**GVM**) built on top of each event's `phases` field inside 
+    the game for each player to suggests them the tips and tricks for a new game and reward them 
+    based on their game scores using an AI based coin generation model in essence, each player gets 
+    rewarded and ranked based on their scores and in-game positions then the `balance` field will 
+    be updated based on those attributes, the match making rating (**MMR**) engine, on the other 
+    hand is is a weighted tree based suggestion engine that suggests players, events and other 
+    games based on their past experiences, scores, tokens and rewards earned using **GVM** 
+    during the game.
+    
 
 
     this is lle parallel based vm and game engine graph like DOM, an state manager 
