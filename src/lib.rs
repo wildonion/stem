@@ -167,7 +167,48 @@ fn pinned_box(){
     */
     // let deref_boxed = *instance.data;
     instance.data = &mut Box::pin(func()); // passing the result of calling async func to the pinned box
+    
 
+}
+
+
+fn init_vm(){
+
+    struct Runtime;
+    trait RuntimeExt{}
+    struct ByteCode<'b>{
+    	pub bytes: &'b [u8]
+    };
+    enum Cost{
+        Runtime{},
+    }
+    struct VirtualMachine<'Exectuor, 'b, Runtime: Send + Sync + 'static, const SIZE: usize>
+    	where Runtime: RuntimeExt,
+    	ByteCode<'b>: Send + Sync + 'static{
+       pub rt: &'Exectuor Runtime,
+       pub bytecodes: &'b [ByteCode<'b>; SIZE]
+    }
+    
+    #[derive(Debug, Clone)]
+    struct Executor;
+    #[derive(Debug, Clone)]
+    enum Cost{
+        Runtime{executor: Executor},
+        Vm,
+    }
+    let cost = Cost::Runtime { executor: Executor };
+    match cost{
+        Cost::Runtime { executor: executor_instance } => {
+            let ext = executor_instance;
+            todo!()
+        },
+        Cost::Vm =>{
+            todo!()
+        }
+        _ => {
+            todo!()
+        }
+    }
 }
 
 type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
