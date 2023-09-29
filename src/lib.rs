@@ -174,6 +174,16 @@ fn pinned_box(){
 
 fn init_vm(){
 
+    #[derive(Debug, Clone)]
+    enum Chip{
+        Intel{version: String},
+        M1
+    }
+    let cmd = Chip::Intel{version:"wildonion".to_string()};
+    let Chip::Intel{version: esm} = cmd else{
+        panic!("no");
+    };
+
     struct Runtime;
     trait RuntimeExt{}
     struct ByteCode<'b>{
