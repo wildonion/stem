@@ -174,6 +174,9 @@ fn pinned_box(){
 
 fn init_vm(){
 
+    let datarefcell: Rc<RefCell<&'static [u8; 64]>> = Rc::new(RefCell::new(&[0u8; 64]));
+    let lam = **datarefcell.borrow_mut(); //// double dereference to get the [0u8l 64] which has 64 bytes data 
+
     #[derive(Debug, Clone)]
     enum Chip{
         Intel{version: String},
@@ -187,14 +190,11 @@ fn init_vm(){
     struct Runtime;
     trait RuntimeExt{}
     struct ByteCode<'b>{
-    	pub bytes: &'b [u8]
+        pub bytes: &'b [u8]
     };
-    enum Cost{
-        Runtime{},
-    }
     struct VirtualMachine<'Exectuor, 'b, Runtime: Send + Sync + 'static, const SIZE: usize>
-    	where Runtime: RuntimeExt,
-    	ByteCode<'b>: Send + Sync + 'static{
+        where Runtime: RuntimeExt,
+        ByteCode<'b>: Send + Sync + 'static{
        pub rt: &'Exectuor Runtime,
        pub bytecodes: &'b [ByteCode<'b>; SIZE]
     }
