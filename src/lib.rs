@@ -266,6 +266,28 @@ fn init_vm(){
             todo!()
         }
     }
+
+    enum Enum{
+        Struct{
+            name: i32
+        },
+        Int,
+        IntU8(u8)
+    }
+    
+    let enumtor = Enum::Int;
+    let res = match enumtor{
+        Enum::Struct{name: esm} if esm == 0 => {
+            todo!()
+        },
+        Enum::Int | Enum::IntU8(0) => {
+            todo!()
+        },
+        Enum::IntU8(num) if num > 10 => {
+            todo!()
+        }
+        _ | _ => todo!()
+    };
 }
 
 type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
