@@ -40,13 +40,15 @@ use std::sync::{Arc, Weak, RwLock};
     also the size of the boxed type is the size of the type itself, the value of the box can be 
     caught by dereferencing the box
     
-    
-    share ownership between threads using Arc by borrowing the ownership using pointers like & clone 
-    share ownership between scopes using Rc by  borrwoing the ownership using pointers like & and clone
-    Rc is not safe to be used between threads but Arc can be used to share the type between multiple 
-    threads safely without having race conditions, also if we want to mutate an immutable type at runtime
-    we must use RefCell which is a single threaded smart pointer and for mutating type between multiple 
-    threads we must use Mutex or RwLock to avoid deadlocks situations.
+
+    every type has its own lifetime and if it goes out of scope it'll be dropped from the ram and we can 
+    either borrow it or clone it since rust dones't have gc instead it has rc, refcell for single thread 
+    and arc and mutex for multithread reference counting and borrowing based on these concetps share ownership 
+    between threads using Arc by borrowing the ownership using pointers like & clone share ownership between 
+    scopes using Rc by  borrwoing the ownership using pointers like & and clone Rc is not safe to be used between 
+    threads but Arc can be used to share the type between multiple threads safely without having race conditions, 
+    also if we want to mutate an immutable type at runtime we must use RefCell which is a single threaded smart 
+    pointer and for mutating type between multiple threads we must use Mutex or RwLock to avoid deadlocks situations.
     
     Single Thread    Multithread             Usage
     Rc               --> Arc                 make the type shareable between scopes and threads
