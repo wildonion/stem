@@ -292,6 +292,32 @@ fn init_vm(){
     };
 }
 
+
+struct Gadget{
+    me: Weak<Gadget>, 
+    you: Rc<Gadget>
+}
+
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, Clone, Copy, Debug, Default)]
+struct Generic<'info, Gadget>{
+    pub gen: Gadget,
+    pub coded_data: &'info [u8]
+}
+
+impl Gadget{
+
+    fn new(ga: Gadget) -> Rc<Self>{
+        Rc::new_cyclic(|g|{
+            Gadget { me: g.clone(), you: Rc::new(ga) }
+        })
+    }
+
+    fn me(&self) -> Rc<Self>{
+        self.me.upgrade().unwrap() /* upgrade weak pointer to rc */
+    }
+}
+
+
 type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
 type ParentNodeToChildIsStrongThreadSafe<T> = Arc<NodeData<T>>;
 type ThreadSafeMutableParent<T> = RwLock<ChildNodeToParentIsWeak<T>>;
