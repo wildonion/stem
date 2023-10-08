@@ -28,17 +28,16 @@ use std::sync::{Arc, Weak, RwLock};
     relationship between peers to suggests events in a graph virtual machine by using 
 
 
-    ret &'validlifetime ref and trait as param from method also can't move type if it's behind pointer 
-    send sync static, shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena
-    referene counting using Rc Arc, Box leaking, Pin, &mut pointer, cap, length, macros 
-    (ast, token stream), std::mem, generic, lifetimes, closures, traits, pointers and 
-    bytecode, .so and .elf bpf, wasm, bytes and hex serding and codec ops using borsh and serde, 
-    async trait and associative bounding Trait::method(): Send and ?async and ?const, &mut, 
-    r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, &mut type, as_ref(), unwrap(), 
-    clone() and trait as type also can't move type when it's behind a pointer and Box stores 
-    data on the heap and contains an smart pointer with a valid lifetime to the underlying type, 
-    also the size of the boxed type is the size of the type itself, the value of the box can be 
-    caught by dereferencing the box
+    ret &'validlifetime ref and trait as param like -> impl Trait as type from method and use them in method 
+    param like param: impl Trait from method also can't move type if it's behind pointer send sync static, 
+    shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena referene counting using Rc Arc, Box 
+    leaking, Pin, &mut type, cap, length, macros, Cow, Borrowed, ToOwned, as_ref(), &mut (ast, token stream), 
+    std::mem, generic, lifetimes, closures, traits, pointers and bytecode, .so and .elf bpf, wasm, bytes and 
+    hex serding and codec ops using borsh and serde, async trait and associative bounding Trait::method(): Send and 
+    ?async and ?const, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, as_ref(), unwrap(), clone() 
+    and trait as type also can't move type when it's behind a pointer and Box stores data on the heap and contains 
+    an smart pointer with a valid lifetime to the underlying type, also the size of the boxed type is the size 
+    of the type itself, the value of the box can be caught by dereferencing the box
     
 
     every type has its own lifetime and if it goes out of scope it'll be dropped from the ram and we can 
@@ -112,6 +111,11 @@ use std::sync::{Arc, Weak, RwLock};
                 In Rust, manual memory management means you need to be more careful.
 
 
+    we've to initialize shared data once and share them between threads and scopes by cloning inside 
+    the tokio mutex since rust doesn't have gc and because of that there is no concept of global storage 
+    allocation because it's not thread and memory safe, we have to initialize an static data using lazy 
+    std arc and tokio mutex.
+    
     global state of type requires to have a complex valid lifetime like 'static 
     and be mutable which this can't be happend since rust doesn't gc and by mutating 
     an static lifetime type we may face deadlock and race conditions issues in other 
@@ -182,6 +186,13 @@ NodeData
 
 
 fn pinned_box(){
+
+    /*
+        the type that is being used in solving future must be valid across .awaits, 
+        because future objects will be pinned into the ram to be solved later, worth
+        to know that trait pointers are Boxes and we pin their pointer into ram like: 
+        Pin<Box<dyn Future<Output=String>>>
+    */
 
     async fn func(){}
     type Type = Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>;
