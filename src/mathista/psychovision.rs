@@ -58,7 +58,7 @@ pub mod visioner{
             subarray as the root and other elements as its children then we use bfs or dfs 
             to find the largest sum in all subarray to build based on the largest rarity
         - conditional layering
-        - use tokio::spawn and rayon for multithreading ops like rendering concurrently using ppap acter.rs and thread::scope
+        - use tokio::spawn and rayon for multithreading ops like rendering concurrently using zoomate acter.rs and thread::scope
     
     */
 
