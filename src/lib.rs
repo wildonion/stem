@@ -129,11 +129,51 @@ use std::sync::{Arc, Weak, RwLock};
 // eg: Lazy<std::sync::Arc<tokio::sync::Mutex<MapDataStruct>>> + Send + Sync + 'static 
 // as a mutable global data will be shared between apis to mutate it safely 
 // to avoid deadlocks and race conditions
+// more info: see a thread safe global response object sample in https://github.com/wildonion/zoomate/blob/main/src/lib.rs
 type Db = HashMap<i32, String>; 
 pub static SHARED_STATE_GLOBAL: Lazy<std::sync::Arc<tokio::sync::Mutex<Db>>> = Lazy::new(||{
     std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()))
 });
 
+
+thread_local! {
+    /* 
+        a mutable single threaded local storage that can be mutated using Cell
+        which is a mutable memory location by calling the set() method on
+        SINGLE_THREAD_THINGS_CELL
+    */
+    pub static SINGLE_THREAD_THINGS_CELL: std::cell::Cell<Vec<u8>> = const {std::cell::Cell::new(Vec::new())};
+    /* 
+        a mutable single threaded local storage that can be mutated using RefCell
+        which is a mutable memory location with dynamically checked borrow rules 
+        by calling the set() method on SINGLE_THREAD_THINGS_REFCELL
+    */
+    pub static SINGLE_THREAD_THINGS_REFCELL: std::cell::RefCell<Vec<u8>> = const {std::cell::RefCell::new(Vec::new())};
+
+}
+
+fn local_storage_ex(){
+
+    // set() sets or initializes the contained value unlike the other methods, 
+    // this will not run the lazy initializer of the thread local. instead, 
+    // it will be directly initialized with the given value if it wasn't 
+    // initialized yet.
+    SINGLE_THREAD_THINGS_CELL.set(vec![1]);
+    SINGLE_THREAD_THINGS_CELL.set(vec![2]);
+
+    SINGLE_THREAD_THINGS_REFCELL.with_borrow_mut(|v: &mut Vec<u8>| v.push(3));
+    // Calling SINGLE_THREAD_THINGS_REFCELL.with() here would result in a panic
+    // since with() will lazily initialize the value if this thread has not 
+    // referenced this key yet also This function will panic!() if the key currently 
+    // has its destructor running, and it may panic if the destructor has previously 
+    // been run for this thread.
+    SINGLE_THREAD_THINGS_REFCELL.with(|v| {
+        *v.borrow_mut() = vec![0];
+    });
+    // but SINGLE_THREAD_THINGS_REFCELL.set() is fine, as it skips the initializer
+    SINGLE_THREAD_THINGS_REFCELL.set(vec![4]);
+
+}
 
 /*
 
