@@ -229,6 +229,9 @@ NodeData
 */
 
 
+// --------------------------------------------------------------------
+// ----------------------- ret ref to struct ex -----------------------
+// --------------------------------------------------------------------
 // return a valid ref to struct itself from method is ok cause it 
 // allocates nothing on the stack thus we can ret &'elifetime Exe
 struct Exe{pub id: i32}
@@ -236,16 +239,19 @@ fn execute<'elifetime>() -> &'elifetime Exe{
     &Exe {id: 8}
 }
 // but if the struct contains a heap data field we can't do that
-struct Exe1{pub name: String, pub vec: Vec<String>}
-fn execute1<'elifetime>() -> &'elifetime Exe1{
-    &Exe1 {name: "wildonion".to_string(), vec: vec!["now".to_string()]}
-}
+// struct Exe1{pub name: String, pub vec: Vec<String>}
+// fn execute1<'elifetime>() -> &'elifetime Exe1{
+//     &Exe1 {name: "wildonion".to_string(), vec: vec!["now".to_string()]}
+// }
 // of course we're ok to return the slice of String or Vec or their coerced types
 // note that everything is in their coerced type of slice type
 struct Exe2<'elifetime>{pub name: &'elifetime str, pub arr: &'elifetime [&'elifetime str]}
 fn execute2<'elifetime>() -> &'elifetime Exe2<'elifetime>{
     &Exe2::<'elifetime>{name: "wildonion", arr: &["now"]}
 }
+// --------------------------------------------------------------------
+// --------------------------------------------------------------------
+// --------------------------------------------------------------------
 
 fn pinned_box(){
 
@@ -255,6 +261,11 @@ fn pinned_box(){
         to know that trait pointers are Boxes and we pin their pointer into ram like: 
         Pin<Box<dyn Future<Output=String>>>
     */
+
+    async fn callback() -> i32 {3}
+    // we can't add let func: fn callback() -> impl Future<Output = i32> but compiler can
+    let callbackfunc = callback;
+    callbackfunc().await;
 
     async fn func(){}
     type Type = Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>;
