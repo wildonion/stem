@@ -35,9 +35,9 @@ use std::sync::{Arc, Weak, RwLock};
     std::mem, generic, lifetimes, closures, traits, pointers and bytecode, .so and .elf bpf, wasm, bytes and 
     hex serding and codec ops using borsh and serde, async trait and associative bounding Trait::method(): Send and 
     ?async and ?const, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, as_ref(), unwrap(), clone() 
-    and trait as type also can't move type when it's behind a pointer and Box stores data on the heap and contains 
-    an smart pointer with a valid lifetime to the underlying type, also the size of the boxed type is the size 
-    of the type itself, the value of the box can be caught by dereferencing the box
+    and Box stores data on the heap and contains an smart pointer with a valid lifetime to the underlying type, 
+    also the size of the boxed type is the size of the type itself, the value of the box can be caught 
+    by dereferencing the box
     
 
     every type has its own lifetime and if it goes out of scope it'll be dropped from the ram and we can 
@@ -227,31 +227,6 @@ NodeData
     We represent this relationship w/ a weak reference.
 
 */
-
-
-// --------------------------------------------------------------------
-// ----------------------- ret ref to struct ex -----------------------
-// --------------------------------------------------------------------
-// return a valid ref to struct itself from method is ok cause it 
-// allocates nothing on the stack thus we can ret &'elifetime Exe
-struct Exe{pub id: i32}
-fn execute<'elifetime>() -> &'elifetime Exe{
-    &Exe {id: 8}
-}
-// but if the struct contains a heap data field we can't do that
-// struct Exe1{pub name: String, pub vec: Vec<String>}
-// fn execute1<'elifetime>() -> &'elifetime Exe1{
-//     &Exe1 {name: "wildonion".to_string(), vec: vec!["now".to_string()]}
-// }
-// of course we're ok to return the slice of String or Vec or their coerced types
-// note that everything is in their coerced type of slice type
-struct Exe2<'elifetime>{pub name: &'elifetime str, pub arr: &'elifetime [&'elifetime str]}
-fn execute2<'elifetime>() -> &'elifetime Exe2<'elifetime>{
-    &Exe2::<'elifetime>{name: "wildonion", arr: &["now"]}
-}
-// --------------------------------------------------------------------
-// --------------------------------------------------------------------
-// --------------------------------------------------------------------
 
 fn pinned_box(){
 
