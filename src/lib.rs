@@ -53,6 +53,10 @@ use std::sync::{Arc, Weak, RwLock};
     Rc               --> Arc                 make the type shareable between scopes and threads
     RefCell          --> RwLock || Mutex     make the type mutable safe at runtime in scopes and threads
 
+    everytime we try to move type betweeen scopes and threads without losing ownership we're taking a reference to that thread so:
+        share and mutate the actual type using its &mut pointer in a single thread scope
+        share and mutate the actual type using its Arc<RwLock<Type>> pointer in a multithread scope 
+
     zero copy      ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/schemas.rs#L1621C6-L1621C6
     data collision ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/utils.rs#L640 
     https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/schemas.rs#L1305
@@ -224,6 +228,24 @@ NodeData
 
 */
 
+
+// return a valid ref to struct itself from method is ok cause it 
+// allocates nothing on the stack thus we can ret &'elifetime Exe
+struct Exe{pub id: i32}
+fn execute<'elifetime>() -> &'elifetime Exe{
+    &Exe {id: 8}
+}
+// but if the struct contains a heap data field we can't do that
+struct Exe1{pub name: String, pub vec: Vec<String>}
+fn execute1<'elifetime>() -> &'elifetime Exe1{
+    &Exe1 {name: "wildonion".to_string(), vec: vec!["now".to_string()]}
+}
+// of course we're ok to return the slice of String or Vec or their coerced types
+// note that everything is in their coerced type of slice type
+struct Exe2<'elifetime>{pub name: &'elifetime str, pub arr: &'elifetime [&'elifetime str]}
+fn execute2<'elifetime>() -> &'elifetime Exe2<'elifetime>{
+    &Exe2::<'elifetime>{name: "wildonion", arr: &["now"]}
+}
 
 fn pinned_box(){
 
