@@ -47,7 +47,10 @@ pub mod visioner{
         ┗———————————————┛
     
         multithreaded and async NFT generator
-    
+
+        https://gist.github.com/wildonion/e4bdc8cde72e7d330778d7ec705b0b48
+        https://gist.github.com/wildonion/b422d8e6ab2912c4b9ac5cdcb63b9b7f
+        https://gist.github.com/wildonion/dda42cffbbe8414c24b5e4f1240f9926
         https://github.com/Jon-Becker/nft-generator-py
         
         🍟 A MULTITHREADED AND ASYNC NFT LAYERING TOOLS
