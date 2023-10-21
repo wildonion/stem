@@ -66,6 +66,9 @@ use std::sync::{Arc, Weak, RwLock};
     https://developerlife.com/2022/03/12/rust-redux/
     https://bevyengine.org/learn/book/introduction/  
     https://godotengine.org/
+    https://nannou.cc/
+    https://crates.io/crates/rg3d
+    https://amethyst.rs/
     https://fyrox-book.github.io/introduction.html
     https://www.youtube.com/watch?v=yq-msJOQ4nU
     https://github.com/wildonion/cs-concepts
