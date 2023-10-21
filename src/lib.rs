@@ -57,7 +57,7 @@ use std::sync::{Arc, Weak, RwLock};
         share and mutate the actual type using its &mut pointer in a single thread scope
         share and mutate the actual type using its Arc<RwLock<Type>> pointer in a multithread scope 
 
-    all ltgs in rust ::::: https://github.com/wildonion/rusty/blob/89ab3a320c6b7c6d2a08b7480410bf62805d5b95/src/retbyref.rs#L12
+    all ltgs in rust ::::: https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17
     zero copy        ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/schemas.rs#L1621C6-L1621C6
     data collision   ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/utils.rs#L640 
     https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/schemas.rs#L1305
