@@ -92,7 +92,11 @@ use std::sync::{Arc, Weak, RwLock};
 */
 
 
-/* 
+
+/*      
+           --------------------------------------------------
+                 a thread safe global response objects
+           --------------------------------------------------
 
     reasons rust don't have static global types:
         
@@ -112,35 +116,56 @@ use std::sync::{Arc, Weak, RwLock};
 
         Lifetimes: Rust uses lifetimes to track how long data is valid. Global state has a complex 
                 lifetime that can easily lead to dangling references if not managed carefully.
+                with this in mind there is no need to define a global mutexed response object
+                and reload it everytime in each api to avoid runtime memory overloading, cause rust
+                will handle this automatically by using the concept of borrowing and lifetime
 
         No Garbage Collector: While the presence or absence of a garbage collector (GC) isn't the 
                 main reason Rust is cautious with global state, it's worth noting. Many languages 
                 with GCs allow for more liberal use of global state because the GC can clean up. 
                 In Rust, manual memory management means you need to be more careful.
 
+    heap data need to be behind pointer or their slice form, for traits they must be behind Box<dyn or 
+    &dyn, for String and Vec need to be &str and &[], good to know that if we want to return pointer to 
+    heap data from method they must be in their slice form with a valid lifetime like pointer to closure 
+    traits as method param and return type, if the heap data is one of the field of a structure it's ok 
+    to return a pointer with a valid lifetime to that cause the pointer will be valid as long as the &self 
+    is valid and once we move self into a new scope like tokio::spawn() we can't do this although rust won't
+    allow move self to new scope in the first place, in general we shouldn't return pointer to type from 
+    method since rust handled each type lifetime automatically unless it's a mutable pointer cause mutating 
+    a mutable pointer will mutate the actual type
 
-    we've to initialize shared data once and share them between threads and scopes by cloning inside 
-    the tokio mutex since rust doesn't have gc and because of that there is no concept of global storage 
-    allocation because it's not thread and memory safe, we have to initialize an static data using lazy 
-    std arc and tokio mutex.
-    
-    global state of type requires to have a complex valid lifetime like 'static 
-    and be mutable which this can't be happend since rust doesn't gc and by mutating 
-    an static lifetime type we may face deadlock and race conditions issues in other 
-    threads, instead we can define an static mutex since static types are immutable 
-    by default and because static values must be constant we must put the mutex 
-    inside Lazy, like the following:
-    
+    global state of type requires to have a complex valid lifetime like 'static and be mutable which this can't 
+    be happend since rust doesn't gc and by mutating an static lifetime type we may face deadlock and race conditions 
+    issues in other threads, instead we can define an static mutex since static types are immutable by default and 
+    because static values must be constant we must put the mutex inside Lazy, like the following:
+    since we can't return none const from a static type thus we have to 
+    put it inside the lazy as a closure which returns the actual type 
+    because Arc and RwLock are none const types although we can implement 
+    this logic using thread_local!{}
+
+    note that the data we want to share it between threads must be Send + Sync + 'static
+    eg: Lazy<std::sync::Arc<tokio::sync::RwLock<ZoomateResponse>>> + Send + Sync + 'static 
+    as a mutable global data will be shared between apis to mutate it safely to avoid deadlocks 
+    and race conditions and the sharing process can be done using mpsc jobq channel sender
+    so having this: 
+    	 // can't put the actual data in const since Arc and RwLock are none const types that can mutate data
+    	pub static MULTI_THREAD_THINGS: std::sync::Arc<tokio::sync::RwLock<Vec<u8>>> = 
+     		std::sync::Arc::new(tokio::sync::RwLock::new(Vec::new()));
+    is wrong and we should use the following syntaxes instead:
 */
-
-// note that the data we want to share it between threads must be Send + Sync + 'static
-// eg: Lazy<std::sync::Arc<tokio::sync::Mutex<MapDataStruct>>> + Send + Sync + 'static 
-// as a mutable global data will be shared between apis to mutate it safely 
-// to avoid deadlocks and race conditions
-// more info: see a thread safe global response object sample in https://github.com/wildonion/zoomate/blob/main/src/lib.rs
 type Db = HashMap<i32, String>; 
 pub static SHARED_STATE_GLOBAL: Lazy<std::sync::Arc<tokio::sync::Mutex<Db>>> = Lazy::new(||{
     std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()))
+});
+
+pub static STORAGE: Lazy<std::sync::Arc<tokio::sync::RwLock<Db>>> = 
+Lazy::new(||{
+    std::sync::Arc::new(
+        tokio::sync::RwLock::new(
+            HashMap::new()
+        )
+    )
 });
 
 
