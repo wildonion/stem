@@ -34,7 +34,7 @@ use std::sync::{Arc, Weak, RwLock};
     leaking, Pin, &mut type, cap, length, macros, Cow, Borrowed, ToOwned, as_ref(), &mut (ast, token stream), 
     std::mem, generic, lifetimes, closures, traits, pointers and bytecode, .so and .elf bpf, wasm, bytes and 
     hex serding and codec ops using borsh and serde, async trait and associative bounding Trait::method(): Send and 
-    ?async and ?const, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, as_ref(), unwrap(), clone() 
+    ?async and ?const, gen block, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, as_ref(), unwrap(), clone() 
     and Box stores data on the heap and contains an smart pointer with a valid lifetime to the underlying type, 
     also the size of the boxed type is the size of the type itself, the value of the box can be caught 
     by dereferencing the box
