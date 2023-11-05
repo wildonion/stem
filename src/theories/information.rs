@@ -26,7 +26,8 @@
 // https://github.com/atcold/pytorch-Deep-Learning/ => DL tutorial
 // https://github.com/ritchieng/deep-learning-wizard => DL tutorial
 // https://julienbeaulieu.gitbook.io => DS tutorial
-// https://drive.google.com/drive/folders/1vNTdWOWXI3MetTYlIxnxDuWRK6M5VGZH => Google Drive CSR folder + ideas.txt + master_thesis.docx for research papers
+// https://drive.google.com/drive/folders/1vNTdWOWXI3MetTYlIxnxDuWRK6M5VGZH => Google Drive CSR folder
+// https://docs.google.com/document/d/1E-aacOX8zj2RQeQZ0IXAM7RNy5bEAX3aqUJ4K2kSxtg/edit => ideas
 // https://github.com/wildonion/cs-concepts => CS Concepts and Roadmap
 // https://competitions.codalab.org/
 // http://colah.github.io/posts/2015-09-Visual-Information/
