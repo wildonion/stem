@@ -42,7 +42,7 @@ use std::sync::{Arc, Weak, RwLock};
     actor and graph concepts so we have followers weighted tree to understand the 
     relationship between peers to suggests events in a graph virtual machine by using 
 
-
+    lazy static global, mutexed, rwlocked, mpsc, rusty ltg pointers, slices, codec hash hex and file bytes,
     ret &'validlifetime ref and trait as param like -> impl Trait as type from method and use them in method 
     param like param: impl Trait from method also can't move type if it's behind pointer send sync static, 
     shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena referene counting using Rc Arc, Box 
