@@ -153,6 +153,11 @@ impl<Neuron> Default for BrainContext<Neuron>{
 }
 
 
+trait Mdp{}
+struct Qlearning;
+impl Mdp for Qlearning{}
+let qmodel: &'static dyn Mdp = &Qlearning;
+
 impl Synapse for Neuron{
 
     //-- we also have a lifetime 'f for the future event notifs means that all notifs must be valid as long as 'f
