@@ -22,19 +22,20 @@ use std::sync::{Arc, Weak, RwLock};
     its slice form with valid lifetime or return it as self.field cause self has longer lifetime also the 
     memory allocation process in rust depends on the types' lifetimes means that every type in rust has a 
     valid lifetime and as soon as the type gets moved into other scopes or threads or methods its lifetime 
-    will be dropped from the ram and will be owned by that scope in other words we can't have a type in two 
-    scopes at the same without passing a reference or a clone of that into the second scopes, we should either 
-    clone the type or borrow it and pass one of these to the second scope cause rust doesn't have gc to track 
-    the references came to the type and use that to destroy the type when it reaches the zero instead it's 
-    using lifetime conceptes which in single thread contexts we can use Rc to count the references of a type 
-    shared between scopes but in multithread contexts we must use Arc and Mutex or RwLock to share the ownership 
-    of the type between threads without having race conditions and deadlocks although rust forces us to use 
-    every type only once during the whole lifetime of the app which this manner prevents us from allocating 
-    extra space on the ram and deadlocks situation since the concept of ownership and borrowing is about sharing 
-    a type with reference or cloning to not to lose its ownership in future scopes, if we allocate something 
-    in a scope we can't move it out of that cause its being used inside that scopes, we have to borrow it or 
-    clone it or convert it to its owned type if it's a sliced form or pointer of a type, slices are just a 
-    representation of dynamic types with no dynamic allocation feature.
+    will be dropped from the ram and will be owned by that scope in other words we can't move out of a type
+    or deref it if it's behind a shared ref or pointer also we can't have a type in two scopes at the same 
+    without passing a reference or a clone of that into the second scopes, we should either clone the type or 
+    borrow it and pass one of these to the second scope cause rust doesn't have gc to track the references 
+    came to the type and use that to destroy the type when it reaches the zero instead it's using lifetime 
+    conceptes which in single thread contexts we can use Rc to count the references of a type shared between 
+    scopes but in multithread contexts we must use Arc and Mutex or RwLock to share the ownership of the type 
+    between threads without having race conditions and deadlocks although rust forces us to use every type only 
+    once during the whole lifetime of the app which this manner prevents us from allocating extra space on the 
+    ram and deadlocks situation since the concept of ownership and borrowing is about sharing a type with 
+    reference or cloning to not to lose its ownership in future scopes, if we allocate something in a scope we 
+    can't move it out of that cause its being used inside that scopes, we have to borrow it or clone it or convert 
+    it to its owned type if it's a sliced form or pointer of a type, slices are just a representation of dynamic 
+    types with no dynamic allocation feature.
 
     this is lle parallel based vm and game engine graph like DOM, an state manager 
     like yew and redux with tree walking using (shared ref and mutably) using rc and 
@@ -46,7 +47,7 @@ use std::sync::{Arc, Weak, RwLock};
     ret &'validlifetime ref and trait as param like -> impl Trait as type from method and use them in method 
     param like param: impl Trait from method also can't move type if it's behind pointer send sync static, 
     shared ownership using Mutex and RwLock and RefCell, GlobalAlloc arena referene counting using Rc Arc, Box 
-    leaking, Pin, &mut type, cap, length, macros, Cow, Borrowed, ToOwned, as_ref(), &mut (ast, token stream), 
+    leaking, Pin, &mut type, cap, length, macros, Cow, Borrowed, ToOwned, Deref, &mut (ast, token stream), 
     std::mem, generic, lifetimes, closures, traits, pointers and bytecode, .so and .elf bpf, wasm, bytes and 
     hex serding and codec ops using borsh and serde, async trait and associative bounding Trait::method(): Send and 
     ?async and ?const, gen block, r3bl_rs_utils crate, read/write io traits, Box<dyn Trait>, as_ref(), unwrap(), clone() 
