@@ -28,7 +28,6 @@ tokio-cron-scheduler = "0.9.1"
 env_logger = "0.10.0"
 bytes = { version = "1", features = ["serde"] }
 hex = "0.4"
-sha2 = "0.10.6"
 rand = "0.8"
 rand_chacha = "0.3.1"
 rust-argon2 = "1"
@@ -38,7 +37,7 @@ wasmer = "4.1.1"
 wasmer-wasi = "3.1.1"
 bindgen = "0.66.1"
 clap = "4.4.2"
-wallexerr = "0.2.4"
+wallexerr = "0.2.6"
 
 [lib]
 name = "daemon"
