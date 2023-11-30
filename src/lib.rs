@@ -1,8 +1,10 @@
 
 
 
-
-use std::sync::{Arc, Weak, RwLock};
+mod build;
+use std::{sync::{Arc, Weak, RwLock}, cell::RefCell};
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 
 /*
 
@@ -219,16 +221,16 @@ use std::sync::{Arc, Weak, RwLock};
      		std::sync::Arc::new(tokio::sync::RwLock::new(Vec::new()));
     is wrong and we should use the following syntaxes instead:
 */
-type Db = HashMap<i32, String>; 
+type Db = std::collections::HashMap<i32, String>; 
 pub static SHARED_STATE_GLOBAL: Lazy<std::sync::Arc<tokio::sync::Mutex<Db>>> = Lazy::new(||{
-    std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()))
+    std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new()))
 });
 
 pub static STORAGE: Lazy<std::sync::Arc<tokio::sync::RwLock<Db>>> = 
 Lazy::new(||{
     std::sync::Arc::new(
         tokio::sync::RwLock::new(
-            HashMap::new()
+            std::collections::HashMap::new()
         )
     )
 });
@@ -322,7 +324,7 @@ NodeData
 
 */
 
-fn pinned_box(){
+async fn pinned_box(){
 
     /*
         the type that is being used in solving future must be valid across .awaits, 
@@ -376,7 +378,7 @@ fn pinned_box(){
 
 fn init_vm(){
 
-    let datarefcell: Rc<RefCell<&'static [u8; 64]>> = Rc::new(RefCell::new(&[0u8; 64]));
+    let datarefcell: std::rc::Rc<RefCell<&'static [u8; 64]>> = std::rc::Rc::new(RefCell::new(&[0u8; 64]));
     let lam = **datarefcell.borrow_mut(); //// double dereference to get the [0u8l 64] which has 64 bytes data 
 
     #[derive(Debug, Clone)]
@@ -446,12 +448,13 @@ fn init_vm(){
 }
 
 
+#[derive(Clone)]
 struct Gadget{
-    me: Weak<Gadget>, 
-    you: Rc<Gadget>
+    me: std::rc::Weak<Gadget>, 
+    you: std::rc::Rc<Gadget>
 }
 
-#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize, Clone, Copy, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
 struct Generic<'info, Gadget>{
     pub gen: Gadget,
     pub coded_data: &'info [u8]
@@ -459,14 +462,14 @@ struct Generic<'info, Gadget>{
 
 impl Gadget{
 
-    fn new(ga: Gadget) -> Rc<Self>{
-        Rc::new_cyclic(|g|{
-            Gadget { me: g.clone(), you: Rc::new(ga) }
+    fn new(ga: Gadget) -> std::rc::Rc<Self>{
+        std::rc::Rc::new_cyclic(|g|{
+            Gadget { me: g.to_owned(), you: std::rc::Rc::new(ga) }
         })
     }
 
-    fn me(&self) -> Rc<Self>{
-        self.me.upgrade().unwrap() /* upgrade weak pointer to rc */
+    fn me(&self) -> std::rc::Rc<Self>{
+        std::rc::Rc::new(self.clone()) /* upgrade weak pointer to rc */
     }
 }
 

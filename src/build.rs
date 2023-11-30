@@ -1,3 +1,5 @@
 
+// compile time build 
+// run with cargo build
 
-// compile time build
+
