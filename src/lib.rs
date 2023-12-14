@@ -12,11 +12,11 @@ use serde::{Deserialize, Serialize};
     interact with gem repo mmr.rs
     -----------------------------
     build dl models based on phases dataset using keras and https://github.com/wildonion/stem/
-    behavioural graph virtual machine (**[GVM](https://github.com/wildonion/gvm/)**) built on top 
-    of each event's `phases` field inside the game for each player to match them for new game and 
-    rank them based on their in-game statuses, the match making rating or ranking (**MMR**) engine, 
-    on the other hand is is a weighted tree based suggestion engine that suggests players, events 
-    and other games and players based on their ranks earned using **GVM** during the game.
+    behavioural graph virtual machine built on top of each event's `phases` field inside the game 
+    for each player to match them for new game and rank them based on their in-game statuses, the 
+    match making rating or ranking (**MMR**) engine, on the other hand is is a weighted tree based 
+    suggestion engine that suggests players, events and other games and players based on their ranks 
+    earned using **GVM** during the game.
     
 
     never return poiner from method just return vec or string but pass them in slice form to not to lose 
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
     memory allocation process in rust depends on the types' lifetimes means that every type in rust has a 
     valid lifetime and as soon as the type gets moved into other scopes or threads or methods its lifetime 
     will be dropped from the ram and will be owned by that scope in other words we can't move out of a type
-    or deref it if it's behind a shared ref or pointer also we can't have a type in two scopes at the same 
+    or deref it if it's behind a shared ref or pointer also we can't have a type in two scopes at the same time
     without passing a reference or a clone of that into the second scopes, we should either clone the type or 
     borrow it and pass one of these to the second scope cause rust doesn't have gc to track the references 
     came to the type and use that to destroy the type when it reaches the zero instead it's using lifetime 
