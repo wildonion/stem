@@ -35,7 +35,7 @@ wasmer = "4"
 wasmer-wasi = "3.1.1"
 bindgen = "0.66.1"
 clap = "4.4.2"
-wallexerr = "0.3.0"
+wallexerr = "0.3.1"
 
 [lib]
 name = "daemon"
