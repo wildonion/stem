@@ -161,6 +161,13 @@ use serde::{Deserialize, Serialize};
                  a thread safe global response objects
            --------------------------------------------------
 
+
+        code order execution and synchronization in multithreaded based envs like
+        actor worker like having static lazy arced mutex data without having deadlocks 
+        and race conditions using std::sync tokio::sync objects like 
+        semaphore,arc,mutex,rwlock,mpsc
+        
+
     reasons rust don't have static global types:
         
         Memory Safety: One of Rust's main goals is to ensure memory safety without the need 
