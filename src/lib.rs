@@ -243,6 +243,24 @@ Lazy::new(||{
 });
 
 
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// static lazy arced mutexed and pinned box type
+// -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+pub static Db: Lazy<std::sync::Arc<tokio::sync::Mutex<
+    std::pin::Pin<Box<dyn futures::Future<Output = HashMap<u32, String>> + Send + Sync + 'static>>
+    >>> = 
+Lazy::new(||{
+
+    std::sync::Arc::new(
+        tokio::sync::Mutex::new(
+            Box::pin(async move{
+                HashMap::new()
+            })
+        )
+    )
+
+});
+
 thread_local! {
     /* 
         a mutable single threaded local storage that can be mutated using Cell
