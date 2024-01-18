@@ -18,7 +18,9 @@
     TODO - implement entropy measures for the training process of the brain and how much events are random 
     NOTE - cortex is involved in higher processes in the human brain, including memory, thinking, learning, reasoning, problem-solving, emotions, consciousness and functions related to your senses
     NOTE - a brain structure can have multiple interfaces like being in void and illusion abstract situations which can be implemented using traits 
-
+    
+    every neuron is an actor, local neurons can communicate throuth actor message sending pubsub algo
+    and outside neurons can communicate through libp2p gossipsub or redis pubsub patterns
 
 
 
