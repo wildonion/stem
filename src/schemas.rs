@@ -19,10 +19,17 @@
     NOTE - cortex is involved in higher processes in the human brain, including memory, thinking, learning, reasoning, problem-solving, emotions, consciousness and functions related to your senses
     NOTE - a brain structure can have multiple interfaces like being in void and illusion abstract situations which can be implemented using traits 
     
-    every neuron is an actor working in and mdp env, local neurons can communicate throuth actor message passing and sending pubsub algo
-    and outsider neurons can communicate through libp2p gossipsub, redis or gRPC pubsub patterns also every brain can be a canister or ipc 
-    contract whic is an actor model runs brain methods
+    every neuron is an actor working in and mdp env, which signs the data that wants to fire using its private key, other
+    neurons know each other through the public key, the cryptography logics can be done using wallexerr, local neurons can 
+    communicate throuth actor message passing and sending pubsub algo and outsider neurons can communicate through libp2p 
+    gossipsub, redis or gRPC pubsub patterns also every brain can be a canister or ipc contract whic is an actor model 
+    runs brain methods.
 
+    neuron wallet :
+        - ed25519 keypair
+        - sign aes256 bits encrypted data with ed25519 private key 
+        - id with ed25519 pubkey
+        - fire the signature, pubkey, encrypted data to other neurons 
 
 
 */
