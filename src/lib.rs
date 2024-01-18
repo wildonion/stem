@@ -166,7 +166,12 @@ use serde::{Deserialize, Serialize};
         actor worker like having static lazy arced mutex data without having deadlocks 
         and race conditions using std::sync tokio::sync objects like 
         semaphore,arc,mutex,rwlock,mpsc
-        
+
+        data collision, memory corruption, deadlocks, race conditions 
+        avoidance in async and multithreaded contexts: 
+            - share app state data between tokio::spawn() threads using mpsc 
+            - enum as unique storage key
+            - global storage using thread local, actor id and lazy arc mutexed
 
     reasons rust don't have static global types:
         
