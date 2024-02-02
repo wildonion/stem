@@ -73,8 +73,8 @@ use serde::{Deserialize, Serialize};
 
     everytime we try to move type betweeen scopes and threads without losing ownership we're taking a reference to that thread so:
         share and mutate the actual type using its &mut pointer in a single thread scope
-        share and mutate the actual type using its Arc<RwLock<Type>> pointer in a multithread scope 
-
+        share and mutate the actual type using its Arc<RwLock<Type>> pointer in a multithread scope   
+    
     all ltgs in rust ::::: https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17
     zero copy        ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/schemas.rs#L1621C6-L1621C6
     data collision   ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/utils.rs#L640 
@@ -106,6 +106,13 @@ use serde::{Deserialize, Serialize};
     https://medium.com/clevyio/using-rust-and-nom-to-create-an-open-source-programming-language-for-chatbots-12fe67582af5
     https://cheats.rs/#behind-the-scenes
     https://github.com/ethereum/evmone => compiled smart contract bytecode executes as a number of EVM opcodes
+    https://blog.logrocket.com/guide-using-arenas-rust/
+    codec, virtual machine like move and evm with allocation concepts 
+        - macro dsl and 
+        - jemalloc and bumpalo arena, thread_local, actor id and address 
+        - zero copy 
+        - null pointer optimiser
+        - unique storage key
 
 */
 
@@ -162,16 +169,20 @@ use serde::{Deserialize, Serialize};
            --------------------------------------------------
 
 
+        single thread and none gc concepts: ltg &mut pointer (rc,refcell,arc,mutex,lazy,threadlocal),box,pin,impl Trait,
+
         code order execution and synchronization in multithreaded based envs like
         actor worker like having static lazy arced mutex data without having deadlocks 
         and race conditions using std::sync tokio::sync objects like 
-        semaphore,arc,mutex,rwlock,mpsc
-
-        data collision, memory corruption, deadlocks, race conditions 
-        avoidance in async and multithreaded contexts: 
-            - share app state data between tokio::spawn() threads using mpsc 
-            - enum as unique storage key
-            - global storage using thread local, actor id and lazy arc mutexed
+        semaphore,arc,mutex,rwlock,mpsc also data collision, memory corruption, deadlocks 
+        and race conditions avoidance in async and multithreaded contexts are: 
+            - share none global app state data between tokio::spawn() threads using mpsc 
+            - enum and actor id as unique storage key
+            - mutate a global storage using thread local in single-threaded contexts
+            - mutate a gloabl storage using static lazy arc mutexed in multi-threaded contexts
+            - can't move out of a reference or deref a type if its pointer is being used by and shared with other scopes
+            - can't mutate data without acquiring the lock of the mutex in other threads
+            - can't have both mutable and immutable pointers at the same time
 
     reasons rust don't have static global types:
         
@@ -266,6 +277,11 @@ Lazy::new(||{
 
 });
 
+/*
+    these are areas of heap memory that are reserved for a given thread and are used only by that thread 
+    to allocate memory: By working in this way, no synchronization is necessary since only a single 
+    thread can pull from this buffer
+*/
 thread_local! {
     /* 
         a mutable single threaded local storage that can be mutated using Cell
