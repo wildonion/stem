@@ -109,7 +109,7 @@ use serde::{Deserialize, Serialize};
     https://blog.logrocket.com/guide-using-arenas-rust/
     codec, virtual machine like move and evm with allocation concepts 
         - macro dsl and 
-        - jemalloc and bumpalo arena, thread_local, actor id and address 
+        - std::alloc, jemalloc and bumpalo arena as global allocation, thread_local, actor id and address 
         - zero copy 
         - null pointer optimiser
         - unique storage key
