@@ -265,14 +265,14 @@ Lazy::new(||{
 // static lazy arced mutexed and pinned box type
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 pub static Db: Lazy<std::sync::Arc<tokio::sync::Mutex<
-    std::pin::Pin<Box<dyn futures::Future<Output = HashMap<u32, String>> + Send + Sync + 'static>>
+    std::pin::Pin<Box<dyn futures::Future<Output = std::collections::HashMap<u32, String>> + Send + Sync + 'static>>
     >>> = 
 Lazy::new(||{
 
     std::sync::Arc::new(
         tokio::sync::Mutex::new(
             Box::pin(async move{
-                HashMap::new()
+                std::collections::HashMap::new()
             })
         )
     )
@@ -354,7 +354,7 @@ NodeData
  | |                                        Simple onwership of value
  | |
  | +-- parent: RwLock<WeakNodeNodeRef<T>> --------+
- |                                            |
+ |                                                |
  |                 This describes a non-ownership relationship.
  |                 When a node is dropped, its parent will not be dropped.
  |
@@ -522,27 +522,45 @@ impl Gadget{
 }
 
 
+/** a multithreaded based graph, parent and child are both of type NodeData<T> */
+///// Arc ----> Rc | Mutex -----> RefCell
 type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
-type ParentNodeToChildIsStrongThreadSafe<T> = Arc<NodeData<T>>;
-type ThreadSafeMutableParent<T> = RwLock<ChildNodeToParentIsWeak<T>>;
-type ThreadSafeMutableChildren<T> = RwLock<Vec<ParentNodeToChildIsStrongThreadSafe<T>>>;
+type ParentNodeToChildIsStrongThreadSafe<T> = Arc<NodeData<T>>; // equivalent to Rc<NodeData<T>> in single thread
+type ThreadSafeMutableParent<T> = tokio::sync::Mutex<ChildNodeToParentIsWeak<T>>; // Mutex<Weak<NodeData<T>>> is equivalent to RefCell<Weak<NodeData<T>> in single thread
+type ThreadSafeMutableChildren<T> = tokio::sync::Mutex<Vec<ParentNodeToChildIsStrongThreadSafe<T>>>; // Mutex<Vec<Arc<NodeData<T>>>> is equivalent to RefCell<Vec<Rc<NodeData<T>>>> in single thread
 /* future are traits that must be behind pointers like Box<dyn> or &dyn */
 // let pinned_box_pointer_to_future: PinnedBoxPointerToFuture = Box::pin(async{34});
 type PinnedBoxPointerToFuture = std::pin::Pin<Box<dyn std::future::Future<Output=i32>>>;
 
-/* thread safe tree using Arc and RwLock to create DOM */
+/* 
+    thread safe tree using Arc and tokio::sync::Mutex to create DOM and redux like system 
+    note that a node data can be either a parent or a child node, if it's a parent node 
+    then all its `children` must be in form Arc<NodeData<T>> or a strong reference to all 
+    children and if it's a child node then its `parent` field must be in form Weak<NodeData<T>>
+    or a weak reference to its parent 
+*/
 struct NodeData<T>{
     pub value: T,
-    /* 
-        parent is a weak ref since it's not owned by the struct 
-        also RwLock is RefCell in single thread context
-    */
-    pub parent: ThreadSafeMutableParent<T>, 
-    /* 
-        children is a strong reference since it's owned by the 
-        parent so we've put Arc which is Rc in single theread 
-        context thus it's like RefCell<Rc<T>> in single 
-        thread context 
-    */
-    pub children: ThreadSafeMutableChildren<T>
+    pub parent: ThreadSafeMutableParent<T>, // Mutex<Weak<NodeData<T>>> means any child node contains the parent node must be in form of a weak reference to parent node data but safe to be mutated
+    pub children: ThreadSafeMutableChildren<T> // // Mutex<Vec<Arc<NodeData<T>>>> means any parent node contains its children must be a vector of strong references to its children and safe to be mutated cause if the parent get removed all its children must be removed
+}
+
+struct Arena<T: Sized + Clone>{
+    data: Box<NodeData<T>>
+}
+trait ArenaExt{
+    type Data;
+    fn set_data(&mut self, new_data: Self::Data) -> Self;
+    fn get_data(self) -> Self::Data;
+
+}
+impl<T: Sized + Clone> ArenaExt for Arena<T>{
+    type Data = Box<NodeData<T>>;
+    fn set_data(&mut self, new_data: Self::Data) -> Self{
+        Self { data: new_data }
+    }
+    fn get_data(self) -> Self::Data {
+        // let data = self.data; // can't move out of self since it's behind a shared reference and is valid as long as the object is valid
+        self.data
+    }
 }
