@@ -308,6 +308,15 @@ thread_local! {
 
 }
 
+// a single thread arena allocator
+thread_local!{
+    pub static DB: std::cell::RefCell<std::collections::HashMap<String, String>> = 
+        std::cell::RefCell::new(HashMap::new());
+}
+// DB.with_borrow_mut(|db| {
+//     db.insert("key".to_string(), "value".to_string())
+// });
+
 fn local_storage_ex(){
 
     // set() sets or initializes the contained value unlike the other methods, 
