@@ -383,6 +383,11 @@ NodeData
 async fn pinned_box(){
 
     /* 
+        types that implement Unpin can be moved safely but those types likes futures and tratis that
+        implements !Unpin are not safe to be moved and if we need them later to use them like solving
+        a future object we must pin their pointer into the ram to prevent them from moving so we need
+        Pin them to safely poll them or solve them using .await, by pinning the pointer of the type
+        we can tell the rust that hey don't move this type around the ram.
         trait objects like closures are dynamically sized means they're stored on the heap in order 
         to act them as a separate object or type we need to either put them behind a pointer or box 
         them, this would be true about the futures cause they're traits too.
