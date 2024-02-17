@@ -394,30 +394,40 @@ async fn pinned_box(){
     /* 
         types that implement Unpin can be moved safely but those types likes futures and tratis that
         implements !Unpin are not safe to be moved and if we need them later to use them like solving
-        a future object we must pin their pointer into the ram to prevent them from moving so we need
-        Pin them to safely poll them or solve them using .await, by pinning the pointer of the type
-        we can tell the rust that hey don't move this type around the ram.
-        trait objects like closures are dynamically sized means they're stored on the heap in order 
-        to act them as a separate object or type we need to either put them behind a pointer or box 
-        them, this would be true about the futures cause they're traits too.
+        a future object we must pin their mutable pointer into the ram to prevent them from moving so 
+        we need Pin them to safely poll them or solve them using .await, by pinning the pointer of the 
+        type we can tell the rust that hey don't move this type around the ram when the type wants to 
+        be moved trait objects like closures are dynamically sized means they're stored on the heap in 
+        order to act them as a separate object or type we need to either put them behind a pointer or 
+        box them, this would be true about the futures cause they're traits too. boxing is the best way
+        of passing them between different scopes since box is an smart pointer which puts the data
+        on the heap and points to it with a valid lifetime so it's better to pass future objects as
+        a boxed value.
         future objects must be pinned to the ram before they can be solved or polled the reason 
         of doing this is first of all they're trait objects and traits are dynamically sized means 
-        they're size will be known at runtime second of alldue to the fact that rust doesn’t have 
-        gc which allows us not to have a tracking reference counting process for a type at runtime 
-        cause it’ll move the type if the type goes out of the scope hence in order to solve and 
+        they're size will be known at runtime second of all due to the fact that rust doesn’t have 
+        gc which causes not to have a tracking reference counting process for a type at runtime, 
+        because it’ll move the type if the type goes out of the scope hence in order to solve and 
         poll a future in other scopes later on, we should pin it to the ram first which can be done 
         once we await on the future but if we want to solve and poll a mutable reference of a future 
         we should stick and pin it to the ram manually, first by pinning the future into the ram using 
         Box::pin, tokio::pin!(), std::pin::pin!() then do an await on the mutable reference of the 
-        future object, so if it is required to call .await on a &mut _ reference, the caller is 
-        responsible for pinning the future by pinning future objects manually we make them as an object 
-        before polling them like having a mutable reference to them or pass them into other parts to 
-        solve them in different parts
+        future object, so if it is required to call .await on a &mut _ reference, cause .await consumes
+        the object itself and we can't have it later so in this case the caller is responsible for pinning 
+        the future by pinning future objects manually we make them as a safe object before polling them 
+        like having a mutable reference to them or move them into other parts to solve 
+        them in different parts.
+        conclusion:
+        so pinning logic must be used if a type is not safe to be moved (!Unpin) like future objects 
+        and we want to move it safely without changing its location in the ram for future usage, which
+        can be done by pinning the mutable pointer of the type into the ram, for future and trait based
+        objects this can be done by pinning their box smart pointer with Box::pin or the type itself 
+        with tokio::pin!() or std::pin::pin!() and other types be like std::pin::Pin::new(&mut Data{});
     */
     let mut future = async move{};
     tokio::pin!(future); // first we must pin the future object before solving/polling its mutable pointer 
     (&mut future).await;
-    
+
     // pinning the pointer of future object into the ram, future objects are traits
     // and traits must be behind &dyn or Box<dyn to be as an object at runtime thus
     // we're pinning the box pointer of the future object which is on the heap into 
