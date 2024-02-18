@@ -399,3 +399,17 @@ impl<F: Interface + Clone, C: Send + Sync + 'static + FnOnce() -> String> UserIn
         }
     }
 } 
+
+type ActorCls = Box<dyn FnOnce(fn() -> String) -> ()>;
+type PinnedBoxedFut = std::pin::Pin<Box<dyn futures::Future<Output=String>>>; // pinning the boxed future will be used to move the future around other scopes cause they can't move safely and we must kinda convert them into an object to move them
+pub struct GenericActor<'p, ActorCls: Clone, B, F> 
+    where ActorCls: Send + Sync + 'static, 
+    B: FnMut() -> fn() -> (),
+    F: futures::Future<Output=String>{
+    pub actor_cls: ActorCls,
+    pub cls: B,
+    pub fut: F,
+    pub pinned: PinnedBoxedFut,
+    pub db: std::pin::Pin<&'p mut HashMap<String, String>> // pinning the mutable pointer of the map into the ram to move it safely between scopes without having changes in its location by the compiler
+}
+
