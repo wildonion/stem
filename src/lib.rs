@@ -435,10 +435,17 @@ async fn pinned_box(){
         and they may gets moved by the compiler before getting polled so in order to use their reference 
         we should tell the compiler that i'm using the pointer of this future so don't move it around until
         i await on its mutable pointer well the compiler says you must pin it manually!
+        the reason of pinning the mutable pointer of the object instead of its immutable pointer into the stack
+        is because mutable pointer can access to the underlying data of the object and by mutating it we can 
+        mutate the actual content and data of the object itself thus by pinning the mutable pointer into the 
+        stack we're pinning the object itself actually and prevent it from moving around.
+        types that implements Unpin means they can be unpinned from the stack later but types that are !Unpin 
+        means they don't implement Unpin so can't be unpinned so are not safe to be moved and they must be 
+        pinned to the ram
     */
     let mut future = async move{};
-    tokio::pin!(future); // first we must pin the future object before solving/polling its mutable pointer 
-    (&mut future).await;
+    tokio::pin!(future); // first we must pin the mutable pointer of the future object into the stack before solving/polling and awaiting its mutable pointer 
+    (&mut future).await; 
 
     // pinning the pointer of future object into the ram, future objects are traits
     // and traits must be behind &dyn or Box<dyn to be as an object at runtime thus
