@@ -392,6 +392,10 @@ NodeData
 async fn pinned_box(){
 
     /* 
+            --------------------------------------------------------------
+            ------------------- Box, Pin, Future recap -------------------
+            --------------------------------------------------------------
+
         types that implement Unpin can be moved safely but those types likes futures and tratis that
         implements !Unpin are not safe to be moved and if we need them later to use them like solving
         a future object we must pin their mutable pointer into the ram to prevent them from moving so 
@@ -441,17 +445,59 @@ async fn pinned_box(){
         stack we're pinning the object itself actually and prevent it from moving around.
         types that implements Unpin means they can be unpinned from the stack later but types that are !Unpin 
         means they don't implement Unpin so can't be unpinned so are not safe to be moved and they must be 
-        pinned to the ram
+        pinned to the ram.
+
+        some objects are not safe to be moved around, between threads and scopes
+        their value must be first pin into the ram to make them safe for moving 
+        this can be done via std::pin::Pin::new(&mut Data{}); 
+        as we can see above the mutable pointer of the object gets pinned into the
+        ram so we can move it around safely, reason of pinning the mutable pointer
+        is because the mutable pointer has access to the underlying data and its value
+        and by pinning it we're actually pinning the object itself.
+        in case of trait objects, actually traits are not sized at compile time and 
+        due to the fact that they're dynamically sized and stored on the heap they 
+        must be in form of pointer like &'validlifetime dyn Trait or Box<dyn Trait>
+        so pinning their pointer be like Box::pin(trait_object); which allows us 
+        to move them safely as an object between threads and other scopes without 
+        changing their location at runtime by the compiler, in case of future objects
+        they're trait objects too and they're not safe to be moved around, to do so 
+        we must pin them into the ram first cause we might want to solve and poll them 
+        later in other scopes, when we want to solve and poll a future we put .await 
+        after calling it, .await first consumes the future object and do the pinning 
+        process for us but if we want to move the future manually between scopes we 
+        should pin its mutable pointer manually then move the pinned object safely 
+        for future solvation like: Box::pin(async move{}); which pins the pointer
+        of the future object into the ram, in this case its better to put the future
+        object into heap using Box to avoid overflow issues and pin the Box pointer
+        into the ram for future pollings.
+
+        pinning the pointer of future object into the ram, future objects are traits
+        and traits must be behind &dyn or Box<dyn to be as an object at runtime thus
+        we're pinning the box pointer of the future object which is on the heap into 
+        the ram to avoid moving it for futuer solvation.
+        in order to move the future between different scopes safely
+        we should first pin it into the ram then we can move it as an 
+        object between threads and once we get into our desired thread
+        we can put an await on the pinned boxed to solve the future
+        reason of doing so is because future objects are not safe to 
+        move around by the compiler and the must be pinned first then
+        move around, this behaviour is actually being used in tokio::spawn
+        tokio will move the pinned box of the future into its threads for 
+        future solvation also the future task and its output must be 
+        Send and Sync, in order to avoid overflowing, pinning must be
+        done by pinning the pointer of the future object and since futures
+        are dynamically sized their pointer will be a Box which is an 
+        smart pointer with a valid lifetime, which store the data on the 
+        heap and returns a pointer to that
     */
     let mut future = async move{};
     tokio::pin!(future); // first we must pin the mutable pointer of the future object into the stack before solving/polling and awaiting its mutable pointer 
     (&mut future).await; 
-
-    // pinning the pointer of future object into the ram, future objects are traits
-    // and traits must be behind &dyn or Box<dyn to be as an object at runtime thus
-    // we're pinning the box pointer of the future object which is on the heap into 
-    // the ram to avoid moving it for futuer solvation.
-    let pinned_boxed = Box::pin(&mut future); // in cases if we need to access the pinned value outside of the current scope cause the future is boxed and we can move it as an object
+    
+    let fut = async move{};
+    let mut pinned_box = Box::pin(fut); // in cases if we need to access the pinned value outside of the current scope cause the future is boxed and we can move it as an object
+    (&mut pinned_box).await;
+    pinned_box.await;
 
     /*
         the type that is being used in solving future must be valid across .awaits, 

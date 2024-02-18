@@ -409,7 +409,7 @@ pub struct GenericActor<'p, ActorCls: Clone, B, F>
     pub actor_cls: ActorCls,
     pub cls: B,
     pub fut: F,
-    pub pinned: PinnedBoxedFut,
+    pub pinned: PinnedBoxedFut, // we can solve this later by putting .await on pinned field
     pub db: std::pin::Pin<&'p mut HashMap<String, String>> // pinning the mutable pointer of the map into the ram to move it safely between scopes without having changes in its location by the compiler
 }
 
