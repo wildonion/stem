@@ -411,18 +411,30 @@ async fn pinned_box(){
         poll a future in other scopes later on, we should pin it to the ram first which can be done 
         once we await on the future but if we want to solve and poll a mutable reference of a future 
         we should stick and pin it to the ram manually, first by pinning the future into the ram using 
-        Box::pin, tokio::pin!(), std::pin::pin!() then do an await on the mutable reference of the 
-        future object, so if it is required to call .await on a &mut _ reference, cause .await consumes
-        the object itself and we can't have it later so in this case the caller is responsible for pinning 
-        the future by pinning future objects manually we make them as a safe object before polling them 
-        like having a mutable reference to them or move them into other parts to solve 
-        them in different parts.
+        Box::pin, tokio::pin!(), std::pin::pin!() then do an await on another instance of future or the 
+        mutable reference of the future object, so if it is required to call .await on a &mut _ reference, 
+        cause .await consumes the object itself and we can't have it later so in this case the caller 
+        is responsible for pinning the future by pinning future objects manually we make them as a safe 
+        object before polling them like having a mutable reference to them or move them into other parts 
+        to solve them in different parts.
         conclusion:
         so pinning logic must be used if a type is not safe to be moved (!Unpin) like future objects 
         and we want to move it safely without changing its location in the ram for future usage, which
         can be done by pinning the mutable pointer of the type into the ram, for future and trait based
         objects this can be done by pinning their box smart pointer with Box::pin or the type itself 
-        with tokio::pin!() or std::pin::pin!() and other types be like std::pin::Pin::new(&mut Data{});
+        with tokio::pin!(), std::pin::pin!() or std::pin::Pin::new(&mut Data{});
+        recap:
+        futures are trait objects and traits are dynamically sized and they must be behind pointer like 
+        &dyn or Box<dyn also they're unsafe to be moved and must be first stick into the ram then we can 
+        move them between different scopes, the process can be done by pinning the mutable pointer of the 
+        type into the ram to prevent that from moving around by the compiler it's ok to put .await on the 
+        fut without manual pinning cause .await do this but it consumes the future and we can't do whatever 
+        we want with the future after that like if we want to await on another instance of the future like
+        the mutable pointer of the future we must do the pinning process manually, like pin the future into 
+        the ram first then await on its mutable pointer, in the first place futures are unsafe to be moved
+        and they may gets moved by the compiler before getting polled so in order to use their reference 
+        we should tell the compiler that i'm using the pointer of this future so don't move it around until
+        i await on its mutable pointer well the compiler says you must pin it manually!
     */
     let mut future = async move{};
     tokio::pin!(future); // first we must pin the future object before solving/polling its mutable pointer 
@@ -433,8 +445,6 @@ async fn pinned_box(){
     // we're pinning the box pointer of the future object which is on the heap into 
     // the ram to avoid moving it for futuer solvation.
     let pinned_boxed = Box::pin(&mut future); // in cases if we need to access the pinned value outside of the current scope cause the future is boxed and we can move it as an object
-    std::pin::pin!(&future); // first we must pin the future object before solving/polling its mutable pointer, also pin!() macro returns a pinned mutable pointer which we can solve it later
-    (&mut future).await; // polling the mutable reference of the futuer object
 
     /*
         the type that is being used in solving future must be valid across .awaits, 
