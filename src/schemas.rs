@@ -152,7 +152,7 @@ pub struct Model{
 }
 
 pub struct Layer{
-    pub neurons: Vec<ٔNeuron>, // columns
+    pub neurons: Vec<Neuron>, // columns
     pub data: Vec<f64>, // rows
     pub metadata: String,
 }
@@ -167,7 +167,7 @@ impl<Neuron> Default for BrainContext<Neuron>{
 trait Mdp{}
 struct Qlearning;
 impl Mdp for Qlearning{}
-let qmodel: &'static dyn Mdp = &Qlearning;
+// let qmodel: &'static dyn Mdp = &Qlearning;
 
 impl Synapse for Neuron{
 
