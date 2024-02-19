@@ -18,7 +18,24 @@ use actix::prelude::*;
 
 
 #[tokio::main(flavor="multi_thread", worker_threads=10)] //// use the tokio multi threaded runtime by spawning 10 threads
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>{ //// bounding the type that is caused to error to Error, Send and Sync traits to be shareable between threads and have static lifetime across threads and awaits; Box is an smart pointer which has valid lifetime for what's inside of it, we're putting the error part of the Result inside the Box since we have no idea about the size of the error or the type that caused this error happened at compile time thus we have to take a reference to it but without defining a specific lifetime
+
+/* 
+    if we want to use Result<(), impl std::error::Error + Send + Sync + 'static>
+    as the return type of the error part, the exact error type instance must be 
+    sepecified also the Error trait must be implemented for the error type (impl 
+    Error for ErrorType{}) since we're implementing the Error trait for the error 
+    type in return type which insists that the instance of the type implements the 
+    Error trait. by returning a boxed error trait we're returning the Error trait 
+    as a heap object behind a valid pointer which handles all error type at runtime, 
+    this is the solution to return traits as an object cause we don't know what type 
+    causes the error at runtiem and is the implementor of the Error trait which 
+    forces us to return the trait as the error itself and since traits are dynamically
+    sized we can't treat them as a typed object directly we must put them behind 
+    pointer like &'valid dyn Trait or box them to send them on the heap, also by 
+    bounding the Error trait to Send + Sync + 'static we'll make it sefable, sendable 
+    and shareable to move it between different scopes and threads.
+*/
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>{
     
 
 
