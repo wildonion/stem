@@ -1,5 +1,7 @@
 
 
+use std::collections::HashMap;
+
 use futures::future::{BoxFuture, FutureExt};
 
 pub const CHARSET: &[u8] = b"0123456789";
@@ -79,14 +81,17 @@ pub enum RuntimeCode{
 
 }
 
-// refer to https://github.com/wildonion/zoomate for more algorithms
+struct CodePid{
+    pub ramdb: HashMap<String, String>
+}
+
 
 /*  ----------------------------------------------------------------------
     implementing a dynamic type handler for structs and enums using traits
     ----------------------------------------------------------------------
 */
 trait TypeTrait{
-    type Value;
+    type Value; // this can be the implementor type
 
     /* 
         we can use the lifetime of self in struct and trait methods 
@@ -96,6 +101,22 @@ trait TypeTrait{
     fn get_data(&self) -> Self::Value;
     fn get_ctx_data(&self, ctx: Self::Value) -> Self;
     fn fill_buffer(&mut self) -> &[u8];
+}
+
+impl TypeTrait for CodePid{
+    type Value = Self; // the CodePid structure
+
+    fn fill_buffer(&mut self) -> &[u8] {
+        todo!()
+    }
+
+    fn get_ctx_data(&self, ctx: Self::Value) -> Self {
+        todo!()
+    }
+
+    fn get_data(&self) -> Self::Value {
+        todo!()
+    }
 }
 
 impl TypeTrait for MerkleNode{
@@ -418,6 +439,25 @@ fn ltg(){
             String::from("") // we can return String in here since it implements Clone
         } 
     }
+
+    #[derive(Debug)]
+    struct CustomError{data: u8}
+    impl std::fmt::Display for CustomError{
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            todo!()
+        }
+    }
+    impl std::error::Error for CustomError{}
+    let boxed_trait: Box<dyn std::error::Error> = Box::new(CustomError{data: 0}); // boxing the instance of CustomError - boxing trait to move them around as an object 
+    let mut pinned_boxed_fut = Box::pin(async move{}); // pinning the boxed future to move it around for future solvation
+    { // now we can await on the future in other scopes
+        // await on the mutable pointer of the future cause we want to await on pinned_boxed_fut in later scopes
+        // we can do this cause we've pinned the boxed future (pointer to future) on the ram which allows us to 
+        // move it safely between scopes and threads
+        (&mut pinned_boxed_fut).await; 
+    }
+    pinned_boxed_fut.await; // solve the future itself
+
 
     type ActorCls = Box<dyn FnOnce(fn() -> String) -> ()>;
     type PinnedBoxedFut = std::pin::Pin<Box<dyn futures::Future<Output=String>>>; // pinning the boxed future will be used to move the future around other scopes cause they can't move safely and we must kinda convert them into an object to move them
