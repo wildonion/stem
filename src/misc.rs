@@ -447,8 +447,31 @@ fn ltg(){
             todo!()
         }
     }
-    impl std::error::Error for CustomError{}
-    let boxed_trait: Box<dyn std::error::Error> = Box::new(CustomError{data: 0}); // boxing the instance of CustomError - boxing trait to move them around as an object 
+
+    
+    impl std::error::Error for CustomError{} // in order to return an instance of CustomError the Error trait must be implemented for it so we can return the instance inside a boxed type
+    // ----------------------------------------------------
+    //              boxing traits be like: 
+    // ----------------------------------------------------
+    // (putting them on the heap and return an smart pointer with valid lifetime to move the around safely as an object)
+    let boxed_cls: Box<dyn FnOnce() -> () + Send + Sync + 'static> = Box::new(||{});
+    // boxing the Error trait allows us to handle any possible runtime errors 
+    // reason of putting the trait inside the box is because we don't know the 
+    // exact type of the object that caused the error and by putting it inside 
+    // the box we're converting it into a safe object cause traits are not sized
+    // at compile time their size depends on the implementor at runtime smt that 
+    // implements the trait, if we don't want to box it we can use it as the return
+    // type of the method but it needs to be implemented for the exact object that
+    // may causes the error at runtime and we should return an instance of that 
+    // type which implements the Error trait already, with this approach there is
+    // no need to put the trait inside the box cause we know the exact type of
+    // object that may causes the error and the syntax be like => ... -> impl Error{}
+    let boxed_err: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(CustomError{data: 0}); // the instance of the implementor must be passed  - boxing trait to move them around as an object 
+    // to move the future objects around we should pin them (the mutable pointer) into the ram 
+    // to prevent them from moving by the compiler at runtime sine we may want to solve them
+    // in other scopes and threads hence we must have their previous location inside the ram
+    // to put .await on them
+    let boxed_fut: std::pin::Pin<Box<dyn futures::Future<Output=String>>> = Box::pin(async move{String::from("")}); 
     let mut pinned_boxed_fut = Box::pin(async move{}); // pinning the boxed future to move it around for future solvation
     { // now we can await on the future in other scopes
         // await on the mutable pointer of the future cause we want to await on pinned_boxed_fut in later scopes
