@@ -699,7 +699,7 @@ impl Gadget{
 
 
 /** a multithreaded based graph, parent and child are both of type NodeData<T> */
-///// Arc ----> Rc | Mutex -----> RefCell
+///// Arc ----> Rc | Mutex -----> RefCell | Weak is Weak
 type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
 type ParentNodeToChildIsStrongThreadSafe<T> = Arc<NodeData<T>>; // equivalent to Rc<NodeData<T>> in single thread
 type ThreadSafeMutableParent<T> = tokio::sync::Mutex<ChildNodeToParentIsWeak<T>>; // Mutex<Weak<NodeData<T>>> is equivalent to RefCell<Weak<NodeData<T>> in single thread
@@ -719,15 +719,24 @@ type PinnedBoxPointerToFuture = std::pin::Pin<Box<dyn std::future::Future<Output
     dropped and child points to parent in a weak way since by dropping a child the parent shouldn’t 
     be dropped which is the nature of weak reference since the type can be dropped even there are 
     multiple weak references are pointing to the type
+    any instance of NodeData, if it's a child node instance then the pointer to the parent field must be weak
+    if it's a parent node instance then the pointer to the child must be strong
 */
 struct NodeData<T>{
     pub value: T,
-    pub parent: ThreadSafeMutableParent<T>, // Mutex<Weak<NodeData<T>>> means any child node contains the parent node must be in form of a weak reference to parent node data but safe to be mutated
-    pub children: ThreadSafeMutableChildren<T> // // Mutex<Vec<Arc<NodeData<T>>>> means any parent node contains its children must be a vector of strong references to its children and safe to be mutated cause if the parent get removed all its children must be removed
+    pub parent: Option<ThreadSafeMutableParent<T>>, // Mutex<Weak<NodeData<T>>> means any child node contains the parent node must be in form of a weak reference to parent node data but safe to be mutated
+    pub children: Option<ThreadSafeMutableChildren<T>> // // Mutex<Vec<Arc<NodeData<T>>>> means any parent node contains its children must be a vector of strong references to its children and safe to be mutated cause if the parent get removed all its children must be removed
 }
 
 struct Arena<T: Sized + Clone>{
-    data: Box<NodeData<T>>
+    data: Option<Box<NodeData<T>>> // the arena in this case is the Box
+}
+impl<T: Sized + Clone> Arena<T>{
+    pub fn new() -> Self{
+        Self{
+            data: None
+        }
+    }
 }
 trait ArenaExt{
     type Data;
@@ -737,11 +746,22 @@ trait ArenaExt{
 }
 impl<T: Sized + Clone> ArenaExt for Arena<T>{
     type Data = Box<NodeData<T>>;
-    fn set_data(&mut self, new_data: Self::Data) -> Self{
+    fn set_data(&mut self, new_data: Option<Self::Data>) -> Self{
         Self { data: new_data }
     }
     fn get_data(self) -> Self::Data {
         // let data = self.data; // can't move out of self since it's behind a shared reference and is valid as long as the object is valid
         self.data
     }
+}
+
+fn create_arena_node(){
+    let mut arena_node = Arena::<String>::new();
+    let arena_node_data = arena_node.set_data(Some(
+        Box::new(NodeData::<String>{
+            value: String::from("root"),
+            parent: None,
+            children: None
+        })
+    ));
 }

@@ -419,7 +419,40 @@ impl<F: Interface + Clone, C: Send + Sync + 'static + FnOnce() -> String> UserIn
             ),
         }
     }
-} 
+}
+
+struct SizeableImage{
+    size: (u16, u16)   
+}
+impl Into<SizeableImage> for String{
+    fn into(self) -> SizeableImage { // self refers to the String cause we're implementing this for String
+        let mut splitted_size = self.split(",");
+        let width = splitted_size.next().unwrap();
+        let height = splitted_size.next().unwrap();
+        SizeableImage{
+            size: (width.parse::<u16>().unwrap(), height.parse::<u16>().unwrap()) 
+        }
+    }
+}
+fn construct_image<VALUE>(size: VALUE) where VALUE: Into<SizeableImage>{}
+
+struct ErrorHandler<E> where E: std::error::Error{
+    cause: Box<dyn std::error::Error>, // any type could causes the error at runtime, Error trait is implemented for that
+    err: E
+}
+#[derive(Debug)]
+struct ErrorItself{}
+impl std::error::Error for ErrorItself{}
+impl std::fmt::Display for ErrorItself{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+// let err = ErrorHandler{
+//     cause: Box::new(ErrorItself{}), // return the error on the heap to move it around to implement for other types
+//     err: ErrorItself{}
+// };
+
 
 fn ltg(){
     
