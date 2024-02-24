@@ -714,11 +714,13 @@ type PinnedBoxPointerToFuture = std::pin::Pin<Box<dyn std::future::Future<Output
     then all its `children` must be in form Arc<NodeData<T>> or a strong reference to all 
     children and if it's a child node then its `parent` field must be in form Weak<NodeData<T>>
     or a weak reference to its parent
-    parent to points to children in a strong way since if a parent want to be removed all its 
+    parent points to children in a strong way since if a parent want to be removed all its 
     children or strong references must be removed and reaches zero first then the parent can be 
     dropped and child points to parent in a weak way since by dropping a child the parent shouldn’t 
     be dropped which is the nature of weak reference since the type can be dropped even there are 
-    multiple weak references are pointing to the type
+    multiple weak references are pointing to the type, but in strong case first all the pointers 
+    and references came to the type must be dropped and reach zero count then the type itself can 
+    be dropped after that easily.
     any instance of NodeData, if it's a child node instance then the pointer to the parent field must be weak
     if it's a parent node instance then the pointer to the child must be strong
 */
