@@ -9,17 +9,29 @@ async fn pinned_box_ownership_borrowing(){
     /* 
         
         --------------------------------------------------------------------
-        ------------------- Ownership an Borrowing recaps ------------------
+        ------------------- Ownership an Borrowing Recaps ------------------
         --------------------------------------------------------------------
         https://github.com/wildonion/rusty/blob/main/src/llu.rs => ownership and borroing concepts
-        rust moves types around them and later update their pointers to point
-        to the right location to avoid dangling issues, almost every type 
-        is safe to be moved like heap data ones but self-referential and future
-        objects are not safe to be moved cause rust won't update their pointer
-        to point to the right location after moving, as the result, they must 
-        be pinned to the ram to avoid moving at all due to the facts that if 
-        there is any pointer of these type it won't get updated to point to 
-        the right location after moving.
+        https://www.reddit.com/r/rust/comments/dymc8f/selfreference_struct_how_to/
+        https://arunanshub.hashnode.dev/self-referential-structs-in-rust
+
+        rust moves types specially heap data ones around the ram by passing them
+        into a function call or other scopes (unless we pass them by reference or
+        clone them) to make the ram clean by removing extra spaces hence the value of 
+        those types takes palce in a new location inside the ram (heap), compiler 
+        it then updates their pointers to point to the right location (new one) 
+        to avoid dangling issues, almost every type is safe to be moved like heap 
+        data ones, but self-referential and future objects are not safe to be moved 
+        cause rust won't update their pointer to point to the right location after 
+        they get moved, as the result, they must be pinned to the ram to avoid moving 
+        them at all due to the facts that if there is any pointer of these type exist 
+        it won't get updated by the compiler to point to the right location after 
+        moving, solution to this would be either pin the value of those types like 
+        pinning their mutable pointer to avoid moving completely or put them inside 
+        Arc,Rc,Mutex or RefCell to break the cycle of pointing to their instance, this 
+        one is mostly used to store an instance of a structure as the field of the 
+        struct itself like: 
+        struct Struct{ pub data: Arc<Struct> } or struct Struct{ pub data: Rc<Struct> }
 
         in Rust, ownership is a key feature that ensures memory safety and prevents issues 
         like memory leaks and data races. The ownership system revolves around three rules:
@@ -270,9 +282,9 @@ async fn pinned_box_ownership_borrowing(){
         lifetime, which store the data on the heap and returns a pointer to that
 
         self-referential structure is a type has fields which store references to the struct itself
-        it would break as soon as the move happens; the references would be dangling and rust can't 
-        update the pointer to points to the new location of the type (Pin is better) a solution to
-        this is either using Arc Mutex for multithreaded or Rc RefCell in single threaded to break 
+        it would break as soon as the move happens and would invalidate it; the references would be 
+        dangling and rust can't update the pointer to points to the new location of the type (Pin is better) 
+        a solution to this is either using Arc Mutex for multithreaded or Rc RefCell in single threaded to break 
         the cycle when a field is pointing to the struct itself (see graph.rs) or using Pin, unsafe 
         or raw pointers so we go for the second option thus our recap on pin, pointer, ownership and
         borrowing rules would be:
@@ -281,7 +293,7 @@ async fn pinned_box_ownership_borrowing(){
         implementing Unpin trait which means they don't need to be pinned to prevent them from moving 
         cause once they get moved rust compiler can take care of their pointers to point to the right 
         and newly location of them to avoid having any dangling pointers after moving. those types that 
-        are not safe to be moved are the one whose don't implement Unpin trait and are !Unpin means 
+        are not safe to be moved are the one who don't implement Unpin trait and are !Unpin means 
         they can't be moved safely and their pointers must get pinned into the ram so their value can't 
         be moved into a new ownership variable and thus we can move them safely around the ram, the 
         reason that we can't move them it's because rust won't take care of updating their pointers at 
