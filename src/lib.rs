@@ -7,6 +7,11 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 mod misc;
 use crate::misc::*;
+mod graph;
+use crate::graph::*;
+mod bop;
+use crate::bop::*;
+
 
 /*
 
@@ -124,10 +129,7 @@ use crate::misc::*;
         - null pointer optimiser
         - unique storage key
 
-*/
-
-
-/*      
+     
            --------------------------------------------------
                              Mutex Vs RwLock
            --------------------------------------------------
@@ -169,11 +171,7 @@ use crate::misc::*;
     However, if your specific case involves a lot of concurrent reads with infrequent writes and the read operations 
     are substantial enough to create a bottleneck, a RWLock might be a better choice.
 
-
-*/
     
-
-/*      
            --------------------------------------------------
                  a thread safe global response objects
            --------------------------------------------------
@@ -342,229 +340,6 @@ fn local_storage_ex(){
 
 }
 
-/*
-
-concepts:
-    shared ownership, 
-    interior mutability, 
-    weak, and strong references
-
-Shared ownership
-    While the children are owned by the struct, it is necessary to provide access to these 
-    children node to other code that use this tree data structure. Moving these references 
-    out of the tree isn’t desirable. And cloning the entire node before moving it out of the 
-    tree isn’t optimal either. This is where shared onwnership comes into play. In order to 
-    do that, we wrap the underlying node in a Rc. This is a reference counted pointer. However, 
-    that isn’t enough, since once we pass a (shared) reference to other code (that is using 
-        this tree), we need to provide the ability to mutate what is inside the node itself, 
-        which leads us to interior mutability.
-Interior mutability
-    Once a reference (that allows for shared ownership) of a node is passed to code 
-    using the tree, it becomes necessary to allow modifications to the underlying node 
-    itself. This requires us to use interior mutability by wrapping the node in a 
-    RefCell. Which is then wrapped in the Rc that we use to share ownership. Combining 
-    these two together gets us to where we need to be.
-
-
-NodeData
- | | |
- | | +- value: T ---------------------------------------+
- | |                                                    |
- | |                                        Simple onwership of value
- | |
- | +-- parent: RwLock<WeakNodeNodeRef<T>> --------+
- |                                                |
- |                 This describes a non-ownership relationship.
- |                 When a node is dropped, its parent will not be dropped.
- |
- +---- children: RwLock<Vec<Child<T>>> ---+
-                                          |
-                This describes an ownership relationship.
-                When a node is dropped its children will be dropped as well.
-
-
-1 - When a node is dropped, its children will be dropped as well (since it owns them). 
-    We represent this relationship w/ a strong reference.
-
-2 - However, the parent should not be dropped (since it does not own them). 
-    We represent this relationship w/ a weak reference.
-
-*/
-
-async fn pinned_box(){
-
-    /* 
-            --------------------------------------------------------------
-            ------------------- Box, Pin, Future recap -------------------
-            --------------------------------------------------------------
-
-        types that implement Unpin can be moved safely but those types likes futures and tratis that
-        implements !Unpin are not safe to be moved and if we need them later to use them like solving
-        a future object we must pin their mutable pointer into the ram to prevent them from moving so 
-        we need Pin them to safely poll them or solve them using .await, by pinning the pointer of the 
-        type we can tell the rust that hey don't move this type around the ram when the type wants to 
-        be moved trait objects like closures are dynamically sized means they're stored on the heap in 
-        order to act them as a separate object or type we need to either put them behind a pointer or 
-        box them, this would be true about the futures cause they're traits too. boxing is the best way
-        of passing them between different scopes since box is an smart pointer which puts the data
-        on the heap and points to it with a valid lifetime so it's better to pass future objects as
-        a boxed value.
-        future objects must be pinned to the ram before they can be solved or polled the reason 
-        of doing this is first of all they're trait objects and traits are dynamically sized means 
-        they're size will be known at runtime second of all due to the fact that rust doesn’t have 
-        gc which causes not to have a tracking reference counting process for a type at runtime, 
-        because it’ll move the type if the type goes out of the scope hence in order to solve and 
-        poll a future in other scopes later on, we should pin it to the ram first which can be done 
-        once we await on the future but if we want to solve and poll a mutable reference of a future 
-        we should stick and pin it to the ram manually, first by pinning the future into the ram using 
-        Box::pin, tokio::pin!(), std::pin::pin!() then do an await on another instance of future or the 
-        mutable reference of the future object, so if it is required to call .await on a &mut _ reference, 
-        cause .await consumes the object itself and we can't have it later so in this case the caller 
-        is responsible for pinning the future by pinning future objects manually we make them as a safe 
-        object before polling them like having a mutable reference to them or move them into other parts 
-        to solve them in different parts.
-        conclusion:
-        so pinning logic must be used if a type is not safe to be moved (!Unpin) like future objects 
-        and we want to move it safely without changing its location in the ram for future usage, which
-        can be done by pinning the mutable pointer of the type into the ram, for future and trait based
-        objects this can be done by pinning their box smart pointer with Box::pin or the type itself 
-        with tokio::pin!(), std::pin::pin!() or std::pin::Pin::new(&mut Data{});
-        recap:
-        futures are trait objects and traits are dynamically sized and they must be behind pointer like 
-        &dyn or Box<dyn also they're unsafe to be moved and must be first stick into the ram then we can 
-        move them between different scopes, the process can be done by pinning the mutable pointer of the 
-        type into the ram to prevent that from moving around by the compiler it's ok to put .await on the 
-        fut without manual pinning cause .await do this but it consumes the future and we can't do whatever 
-        we want with the future after that like if we want to await on another instance of the future like
-        the mutable pointer of the future we must do the pinning process manually, like pin the future into 
-        the ram first then await on its mutable pointer, in the first place futures are unsafe to be moved
-        and they may gets moved by the compiler before getting polled so in order to use their reference 
-        we should tell the compiler that i'm using the pointer of this future so don't move it around until
-        i await on its mutable pointer well the compiler says you must pin it manually!
-        the reason of pinning the mutable pointer of the object instead of its immutable pointer into the stack
-        is because mutable pointer can access to the underlying data of the object and by mutating it we can 
-        mutate the actual content and data of the object itself thus by pinning the mutable pointer into the 
-        stack we're pinning the object itself actually and prevent it from moving around.
-        types that implements Unpin means they can be unpinned from the stack later but types that are !Unpin 
-        means they don't implement Unpin so can't be unpinned so are not safe to be moved and they must be 
-        pinned to the ram.
-
-        some objects are not safe to be moved around, between threads and scopes
-        their value must be first pin into the ram to make them safe for moving 
-        this can be done via std::pin::Pin::new(&mut Data{}); 
-        as we can see above the mutable pointer of the object gets pinned into the
-        ram so we can move it around safely, reason of pinning the mutable pointer
-        is because the mutable pointer has access to the underlying data and its value
-        and by pinning it we're actually pinning the object itself.
-        in case of trait objects, actually traits are not sized at compile time and 
-        due to the fact that they're dynamically sized and stored on the heap they 
-        must be in form of pointer like &'validlifetime dyn Trait or Box<dyn Trait>
-        so pinning their pointer be like Box::pin(trait_object); which allows us 
-        to move them safely as an object between threads and other scopes without 
-        changing their location at runtime by the compiler, in case of future objects
-        they're trait objects too and they're not safe to be moved around, to do so 
-        we must pin them into the ram first cause we might want to solve and poll them 
-        later in other scopes, when we want to solve and poll a future we put .await 
-        after calling it, .await first consumes the future object and do the pinning 
-        process for us but if we want to move the future manually between scopes we 
-        should pin its mutable pointer manually then move the pinned object safely 
-        for future solvation like: Box::pin(async move{}); which pins the pointer
-        of the future object into the ram, in this case its better to put the future
-        object into heap using Box to avoid overflow issues and pin the Box pointer
-        into the ram for future pollings.
-
-        pinning the pointer of future object into the ram, future objects are traits
-        and traits must be behind &dyn or Box<dyn to be as an object at runtime thus
-        we're pinning the box pointer of the future object which is on the heap into 
-        the ram to avoid moving it for futuer solvation.
-        in order to move the future between different scopes safely
-        we should first pin it into the ram then we can move it as an 
-        object between threads and once we get into our desired thread
-        we can put an await on the pinned boxed to solve the future
-        reason of doing so is because future objects are not safe to 
-        move around by the compiler and the must be pinned first then
-        move around, this behaviour is actually being used in tokio::spawn
-        tokio will move the pinned box of the future into its threads for 
-        future solvation also the future task and its output must be 
-        Send and Sync, in order to avoid overflowing, pinning must be
-        done by pinning the pointer of the future object and since futures
-        are dynamically sized their pointer will be a Box which is an 
-        smart pointer with a valid lifetime, which store the data on the 
-        heap and returns a pointer to that
-    */
-    let mut future = async move{};
-    tokio::pin!(future); // first we must pin the mutable pointer of the future object into the stack before solving/polling and awaiting its mutable pointer 
-    (&mut future).await; 
-    
-    let fut = async move{};
-    let mut pinned_box = Box::pin(fut); // in cases if we need to access the pinned value outside of the current scope cause the future is boxed and we can move it as an object
-    (&mut pinned_box).await;
-    pinned_box.await;
-
-    /*
-        the type that is being used in solving future must be valid across .awaits, 
-        because future objects will be pinned into the ram to be solved later, worth
-        to know that trait pointers are Boxes and we pin their pointer into ram like: 
-        Pin<Box<dyn Future<Output=String>>>
-    */
-
-    fn get_data<G>(param: impl FnMut() -> ()) -> impl FnMut() 
-        -> std::pin::Pin<Box<dyn std::future::Future<Output=String> + Send + Sync + 'static>>
-        where G: Send + Sync + 'static + Sized + Upin{
-        ||{
-            Box::pin(async move{
-                String::from("")
-            })
-        }
-    }
-
-    async fn callback() -> i32 {3}
-    // we can't add let func: fn callback() -> impl Future<Output = i32> but compiler can
-    let callbackfunc = callback;
-    callbackfunc().await;
-
-    let pinned_boxed_future: std::pin::Pin<Box<dyn std::future::Future<Output=String>>> = 
-        Box::pin(async move{
-            String::from("")
-        });
-
-    async fn func(){}
-    type Type = Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>;
-    struct Generic<'lifetmie, Type>{
-        pub data: &'lifetmie mut Type // mutating mutable pointer mutates the underlying data too
-    }
-    let mut instance = Generic{
-        /*  
-            to have future objects as a type which are of type Future trait we have to
-            put them behind a pointer and pin the pointer into the ram to get their result
-            in later scopes by awaiting on them which actually will unpin their pointer,
-            we can't use Box::new(async move{()}) if we want to access the result of the 
-            future outside of the Boxed scope to solve this we must pin the boxed value 
-            which in this case is pinning the pointer to the Future trait, and put an await
-            on that in later scopes to unpin the boxed value from the ram to get the result
-            of the future object
-
-            since Future trait doesn't implement Unpin trait thus we can pin the boxed 
-            type into the ram by constructing a new Pin<Box<Type>>. then Type will be 
-            pinned in memory and unable to be moved.
-        */
-        data: &mut Box::pin(func()) // passing the result of calling async func to the pinned box
-    };
-    let unpinned_boxed = instance.data.await;
-    /*  
-        moving type can also be dereferencing the type which converts
-        the pointer into the owned value but based on the fact that 
-        if the type is behind a pointer we can't move it! so we can't
-        deref the pinned boxed in here, we must clone it or borrow it 
-        which clone is not working in here because Clone it's not 
-        implemented for &mut Type which is the type of data field
-    */
-    // let deref_boxed = *instance.data;
-    instance.data = &mut Box::pin(func()); // passing the result of calling async func to the pinned box
-    
-
-}
-
 
 fn serding(){
     
@@ -669,101 +444,7 @@ fn init_vm(){
         }
         _ | _ => todo!()
     };
-}
-
-
-#[derive(Clone)]
-struct Gadget{
-    me: std::rc::Weak<Gadget>, 
-    you: std::rc::Rc<Gadget>
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
-struct Generic<'info, Gadget>{
-    pub gen: Gadget,
-    pub coded_data: &'info [u8]
-}
-
-impl Gadget{
-
-    fn new(ga: Gadget) -> std::rc::Rc<Self>{
-        std::rc::Rc::new_cyclic(|g|{
-            Gadget { me: g.to_owned(), you: std::rc::Rc::new(ga) }
-        })
-    }
-
-    fn me(&self) -> std::rc::Rc<Self>{
-        std::rc::Rc::new(self.clone()) /* upgrade weak pointer to rc */
-    }
-}
-
-
-/** a multithreaded based graph, parent and child are both of type NodeData<T> */
-///// Arc ----> Rc | Mutex -----> RefCell | Weak is Weak
-type ChildNodeToParentIsWeak<T> = Weak<NodeData<T>>;
-type ParentNodeToChildIsStrongThreadSafe<T> = Arc<NodeData<T>>; // equivalent to Rc<NodeData<T>> in single thread
-type ThreadSafeMutableParent<T> = tokio::sync::Mutex<ChildNodeToParentIsWeak<T>>; // Mutex<Weak<NodeData<T>>> is equivalent to RefCell<Weak<NodeData<T>> in single thread
-type ThreadSafeMutableChildren<T> = tokio::sync::Mutex<Vec<ParentNodeToChildIsStrongThreadSafe<T>>>; // Mutex<Vec<Arc<NodeData<T>>>> is equivalent to RefCell<Vec<Rc<NodeData<T>>>> in single thread
-/* future are traits that must be behind pointers like Box<dyn> or &dyn */
-// let pinned_box_pointer_to_future: PinnedBoxPointerToFuture = Box::pin(async{34});
-type PinnedBoxPointerToFuture = std::pin::Pin<Box<dyn std::future::Future<Output=i32>>>;
-
-/* 
-    thread safe tree using Arc and tokio::sync::Mutex to create DOM and redux like system 
-    note that a node data can be either a parent or a child node, if it's a parent node 
-    then all its `children` must be in form Arc<NodeData<T>> or a strong reference to all 
-    children and if it's a child node then its `parent` field must be in form Weak<NodeData<T>>
-    or a weak reference to its parent
-    parent points to children in a strong way since if a parent want to be removed all its 
-    children or strong references must be removed and reaches zero first then the parent can be 
-    dropped and child points to parent in a weak way since by dropping a child the parent shouldn’t 
-    be dropped which is the nature of weak reference since the type can be dropped even there are 
-    multiple weak references are pointing to the type, but in strong case first all the pointers 
-    and references came to the type must be dropped and reach zero count then the type itself can 
-    be dropped after that easily.
-    any instance of NodeData, if it's a child node instance then the pointer to the parent field must be weak
-    if it's a parent node instance then the pointer to the child must be strong
-*/
-struct NodeData<T>{
-    pub value: T,
-    pub parent: Option<ThreadSafeMutableParent<T>>, // Mutex<Weak<NodeData<T>>> means any child node contains the parent node must be in form of a weak reference to parent node data but safe to be mutated
-    pub children: Option<ThreadSafeMutableChildren<T>> // // Mutex<Vec<Arc<NodeData<T>>>> means any parent node contains its children must be a vector of strong references to its children and safe to be mutated cause if the parent get removed all its children must be removed
-}
-
-struct Arena<T: Sized + Clone>{
-    data: Option<Box<NodeData<T>>> // the arena in this case is the Box
-}
-impl<T: Sized + Clone> Arena<T>{
-    pub fn new() -> Self{
-        Self{
-            data: None
-        }
-    }
-}
-trait ArenaExt{
-    type Data;
-    fn set_data(&mut self, new_data: Self::Data) -> Self;
-    fn get_data(self) -> Self::Data;
 
 }
-impl<T: Sized + Clone> ArenaExt for Arena<T>{
-    type Data = Box<NodeData<T>>;
-    fn set_data(&mut self, new_data: Option<Self::Data>) -> Self{
-        Self { data: new_data }
-    }
-    fn get_data(self) -> Self::Data {
-        // let data = self.data; // can't move out of self since it's behind a shared reference and is valid as long as the object is valid
-        self.data
-    }
-}
 
-fn create_arena_node(){
-    let mut arena_node = Arena::<String>::new();
-    let arena_node_data = arena_node.set_data(Some(
-        Box::new(NodeData::<String>{
-            value: String::from("root"),
-            parent: None,
-            children: None
-        })
-    ));
-}
+
