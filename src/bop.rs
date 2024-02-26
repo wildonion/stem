@@ -15,6 +15,7 @@ use crate::*;
     https://www.reddit.com/r/rust/comments/dymc8f/selfreference_struct_how_to/
     https://arunanshub.hashnode.dev/self-referential-structs-in-rust#heading-pinlesstgreater-the-objects
     https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/main.rs#L5
+    https://stackoverflow.com/questions/72562870/how-can-i-write-a-self-referential-rust-struct-with-arc-and-bufreader
 
 
     In Rust, the behavior of dropping values and updating pointers after moving a value is governed by 
@@ -23,7 +24,7 @@ use crate::*;
     rust has its own lifetime and once it goes out of scope like moving it into other scopes and threads 
     followings happen:
         0) lifetime belongs to pointers in overall and it means that we're borrowing a type that must be
-            valid as long as 'a lifetime is valid or we're borrowing it for 'a
+            valid as long as 'a lifetime is valid or we're borrowing the type that must be valid for 'a
         1) first note that if there is a pointer of a type it's better not to move the type at all
             instead pass its reference or its clone to methods and other scopes otherwise rust says
             something like "borrowed value does not live long enough" means that we have a reference 
@@ -85,7 +86,7 @@ use crate::*;
             the compiler updates the location of the pointer to point to the right location of the newly address of
             the moved value cause the ownership of the value has changed and all its pointers must gets updated to 
             point to the new location, this is not true about the raw pointers and rust won't update the location of 
-            raw pointers to the new on when two value gets swapped or moved into another scope, they still point to
+            raw pointers to the new one when two value gets swapped or moved into another scope, they still point to
             the old value even after swapping, in rust we should use pin when the pointer of a type can't be updated
             by the rust compiler after it gets moved pinning allows us to pin the pointer of the type into the ram 
             and explicitly prevents the value from being moved, so the references to the value remain valid without 
@@ -98,8 +99,14 @@ use crate::*;
         13) pin uses cases: handling raw pointers, self-refrential types and future objects 
             raw pointer swapping won't change the pointers pointees or pointer values it only swaps the contents
             which is not good since the first type pointer points to a location now which contains the content 
-            of the second type after swapping and vice versa to fix this we can pin each instance to tell rust 
-            make those objects immovable cause 
+            of the second type after swapping and vice versa in other words rust won't update each pointer value
+            based on the swapped values and there would be the same as before which causes to have undefined behaviours
+            and dangling issues as rust don't care about updating the location of each pointer to point to the right
+            location after moving to fix this we can pin each instance to tell rust make those objects immovable cause
+            we don't want to invalidate any pointer of them, we're avoiding this by pinning each instance value using
+            their pointer into the ram (usually heap using Box::pin()) so they can't be able to be moved cause by
+            moving rust needs to update pointers to point the right location after moving but this is not true 
+            about these none safe types
         conclusion: 
             types that are not safe to be moved (don't impl Unpin or are !Unpin) like self-refrential structs, 
             future objects, raw pointers are the types that unlike normal types rust compiler won't update their 
@@ -121,10 +128,11 @@ use crate::*;
             owned value from being moved, later on we should use the pinned type instead of the 
             actual type cause the pinned type has a fixed memory location for the value thus has 
             a valid pointer which won't get dangled at all cause the value can't be moved by the 
-            compiler at all which its location and the address inside the ram will be the same in 
-            all scopes, this is because the Pin type ensures that the references remain valid even 
-            after the values are moved, in summary, pinning a value using Pin in Rust ensures that 
-            the value is safe to use and reference, even if the value is moved by the compiler, 
+            compiler at all even if rust wants to move them it can't since we're telling rust hey 
+            u back off this is pinned! but its location and the address inside the ram will be the 
+            same in all scopes, this is because the Pin type ensures that the references remain valid 
+            even after the values are moved, in summary, pinning a value using Pin in Rust ensures 
+            that the value is safe to use and reference, even if the value is moved by the compiler, 
             because the pointer to the value is pinned into a fixed memory location already
 
             let name = String::from("");
