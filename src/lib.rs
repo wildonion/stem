@@ -190,7 +190,9 @@ use crate::bop::*;
             - mutate a gloabl storage using static lazy arc mutexed in multi-threaded contexts
             - can't move out of a reference or deref a type if its pointer is being used by and shared with other scopes
             - can't mutate data without acquiring the lock of the mutex in other threads
-            - can't have both mutable and immutable pointers at the same time
+            - can't have both mutable and immutable pointers at the same time if multiple immutable ones is in there can't have mutable one and also only one mutable in each scope (multi producer and single consumer concept)
+            - can't move a pointer of a type into a tokio::spawn() scope cause its lifetime gets dropped from the ram
+            - can't move data into a new scope if it's behind a pointer, we can move it but if it's behind a pointer the pointer can't be accessible and gets dangled
 
     reasons rust don't have static global types:
         
@@ -337,40 +339,6 @@ fn local_storage_ex(){
     });
     // but SINGLE_THREAD_THINGS_REFCELL.set() is fine, as it skips the initializer
     SINGLE_THREAD_THINGS_REFCELL.set(vec![4]);
-
-}
-
-
-fn serding(){
-    
-    #[derive(Serialize, Deserialize, Debug)]
-    struct DataBucket{data: String, age: i32}
-    let instance = DataBucket{data: String::from("wildonion"), age: 27};
-    ///// encoding
-    let instance_bytes = serde_json::to_vec(&instance);
-    let instance_json_string = serde_json::to_string_pretty(&instance);
-    let instance_str = serde_json::to_string(&instance);
-    let isntance_json_value = serde_json::to_value(&instance);
-    let instance_json_bytes = serde_json::to_vec_pretty(&instance);
-    let instance_hex = hex::encode(&instance_bytes.as_ref().unwrap());
-    ///// decoding
-    let instance_from_bytes = serde_json::from_slice::<DataBucket>(&instance_bytes.as_ref().unwrap());
-    let instance_from_json_string = serde_json::from_str::<DataBucket>(&instance_json_string.unwrap());
-    let instance_from_str = serde_json::from_str::<DataBucket>(&instance_str.unwrap());
-    let isntance_from_json_value = serde_json::from_value::<DataBucket>(isntance_json_value.unwrap());
-    let instance_from_hex = hex::decode(instance_hex.clone()).unwrap();
-    let instance_from_hex_vector_using_serde = serde_json::from_slice::<DataBucket>(&instance_from_hex);
-    let instance_from_hex_vector_using_stdstr = std::str::from_utf8(&instance_from_hex);
-    let instance_from_vector_using_stdstr = std::str::from_utf8(&instance_bytes.as_ref().unwrap());
-    
-    println!(">>>>>>> instance_hex {:?}", instance_hex);
-    println!(">>>>>>> instance_from_bytes {:?}", instance_from_bytes.as_ref().unwrap());
-    println!(">>>>>>> instance_from_json_string {:?}", instance_from_json_string.unwrap());
-    println!(">>>>>>> instance_from_str {:?}", instance_from_str.unwrap());
-    println!(">>>>>>> isntance_from_json_value {:?}", isntance_from_json_value.unwrap());
-    println!(">>>>>>> instance_from_hex_vector_using_serde {:?}", instance_from_hex_vector_using_serde.unwrap());
-    println!(">>>>>>> instance_from_vector_using_stdstr {:?}", instance_from_vector_using_stdstr.unwrap());
-    println!(">>>>>>> instance_from_hex_vector_using_stdstr {:?}", instance_from_hex_vector_using_stdstr.unwrap());
 
 }
 
