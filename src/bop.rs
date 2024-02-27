@@ -11,6 +11,7 @@ use crate::*;
     --------------------------------------------------------------------
     ------------------- Ownership an Borrowing Recaps ------------------
     --------------------------------------------------------------------
+    https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
     https://github.com/wildonion/rusty/blob/main/src/llu.rs => ownership and borroing concepts
     https://www.reddit.com/r/rust/comments/dymc8f/selfreference_struct_how_to/
     https://arunanshub.hashnode.dev/self-referential-structs-in-rust#heading-pinlesstgreater-the-objects
@@ -106,12 +107,13 @@ use crate::*;
             we don't want to invalidate any pointer of them, we're avoiding this by pinning each instance value using
             their pointer into the ram (usually heap using Box::pin()) so they can't be able to be moved cause by
             moving rust needs to update pointers to point the right location after moving but this is not true 
-            about these none safe types
+            about these none safe types and by swapping them two values along with their pointer are swapped
         conclusion: 
             types that are not safe to be moved (don't impl Unpin or are !Unpin) like self-refrential structs, 
             future objects, raw pointers are the types that unlike normal types rust compiler won't update their 
             pointer to point to the right location inside the memory (new address) after they get moved into other 
-            scopes so they invalidate their own references and break the moves, in order to fix this we should pin 
+            scopes it's because of they kinda have infinite size at compile time or don't have specific size at 
+            all so they invalidate their own references and break the moves, in order to fix this we should pin 
             their value into the ram (stack using std::pin::Pin or heap using Box::pin()) by passing their pointer 
             to the pin() method to tell the rust that don't move their values at all so their pointers can be valid
             across the scopes and threads but note that we can move the type after its value it gets pinned to the
@@ -200,7 +202,7 @@ use crate::*;
     pointer, take note of that once the lifetime of the type goes out of scope type will be dropped out 
     of the ram and removed completely, so the recaps are:
         - can't move the type around if it's behind a pointer, use the pointer instead
-        - Rust compiler often moves values around in memory, for example, if we pass an struct into 
+        - Rust compiler often moves values (heap data) around in memory, for example, if we pass an struct into 
             another function, it might get moved to a different memory address, or we might Box it and 
             put it on the heap or if the struct was in a Vec<MyStruct>, and we pushed more values in, 
             the Vec might outgrow its capacity and need to move its elements into a new, larger buffer.
@@ -211,10 +213,11 @@ use crate::*;
             this is a fundamental aspect of Rust's ownership and borrowing system, and it is designed 
             to ensure memory safety and prevent issues such as data races and dangling pointers:
                 0 - heap data types move by default to avoid allocating extra spaces in the ram
-                1 - Passing a value to a function: When a value is passed to a function, it may be moved to a different memory address if the function takes ownership of the value.
-                2 - Boxing a value and putting it on the heap: When a value is boxed using Box::new, it is moved to the heap, and the pointer to the boxed value is stored on the stack.
-                3 - Growing a Vec beyond its capacity: When a Vec outgrows its capacity and needs to reallocate memory, the elements may be moved to a new, larger buffer in memory.
-                4 - In each of these cases, the Rust compiler ensures that the ownership and borrowing rules are followed, and it updates references and pointers to the moved values to maintain memory safety.
+                1 - returning a value from a method: by returning the value from method the owner gets dropped out of the ram and is no longer accessible, the value however goes into a new location and gets a new ownership where the method return type is being stored
+                2 - Passing a value to a function: When a value is passed to a function, it may be moved to a different memory address if the function takes ownership of the value.
+                3 - Boxing a value and putting it on the heap: When a value is boxed using Box::new, it is moved to the heap, and the pointer to the boxed value is stored on the stack.
+                4 - Growing a Vec beyond its capacity: When a Vec outgrows its capacity and needs to reallocate memory, the elements may be moved to a new, larger buffer in memory.
+                5 - In each of these cases, the Rust compiler ensures that the ownership and borrowing rules are followed, and it updates references and pointers to the moved values to maintain memory safety.
     
     _________________________________________________
     _> code snippet for ownership and borrowing rules
@@ -424,7 +427,7 @@ use crate::*;
     the cycle when a field is pointing to the struct itself (see graph.rs) or using Pin, unsafe 
     or raw pointers so we go for the second option thus our recap on pin, pointer, ownership and
     borrowing rules would be:
-    in rust, data often move around the ram by the compiler to avoid allocating extra spaces
+    in rust, data (heap data) often move around the ram by the compiler to avoid allocating extra spaces
     at runtime, most of the data like heap data are safe to be moved means that they're 
     implementing Unpin trait which means they don't need to be pinned to prevent them from moving 
     cause once they get moved rust compiler can take care of their pointers to point to the right 

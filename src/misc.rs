@@ -457,11 +457,22 @@ impl std::fmt::Display for ErrorItself{
 
 
 fn ltg(){
+
+    // C must be ?Sized since its size can't be known at compile time
+    // its can be either &[] or any type
+    struct Gene<'r, C: ?Sized>{ 
+        pub chromosemes: &'r C,
+    }
+
+    let gene = Gene::<'_, [u8]>{
+        chromosemes: &[0, 255]
+    };
     
     // traits
     //     - method param
     //     - return type
     //     - bound to generic and generic would be the type
+    //     - cast the generic into a triat then bound the trait gat to other traits 
     //     - put them in box
     type ClsMe = Box<dyn FnOnce() -> ()>;
     trait NewTrait: Clone + FnOnce() -> (){} // if we want to implement NewTrait for the Fancy all the supertraits must be implemented for Fancy
