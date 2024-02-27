@@ -11,6 +11,8 @@ mod graph;
 use crate::graph::*;
 mod bop;
 use crate::bop::*;
+mod nodify;
+use crate::nodify::*;
 
 
 /*
