@@ -11,6 +11,7 @@ use crate::*;
     --------------------------------------------------------------------
     ------------------- Ownership an Borrowing Recaps ------------------
     --------------------------------------------------------------------
+    https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
     https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
     https://github.com/wildonion/rusty/blob/main/src/llu.rs => ownership and borroing concepts
     https://www.reddit.com/r/rust/comments/dymc8f/selfreference_struct_how_to/
