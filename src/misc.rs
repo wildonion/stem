@@ -1,10 +1,9 @@
 
 
 use std::{collections::HashMap};
-
-use actix::spawn;
 use futures::future::{BoxFuture, FutureExt};
 use tokio::net::tcp;
+use serde::{Serialize, Deserialize};
 
 pub const CHARSET: &[u8] = b"0123456789";
 
@@ -207,8 +206,6 @@ pub struct Synapse<A>{id: A}
 #[derive(Default)]
 pub struct Neuron<A=u8>{
     pub data: Option<Synapse<A>>,
-    pub multipart: Option<actix_multipart::Multipart>,
-    pub payload: Option<actix_web::web::Payload>,
 }
 
 /* 
@@ -392,7 +389,7 @@ fn trait_as_param_type(param: impl FnOnce() -> ()){}
 
 
 // C must be send sync to be share between threads safely
-impl<F: Interface + Clone, C: Send + Sync + 'static + FnOnce() -> String> Interface for UserInfo<C, F>{}
+impl<F: Interface + Clone, C: Send + Sync + 'static + Unpin + Sized + FnOnce() -> String> Interface for UserInfo<C, F>{}
 struct UserInfo<C: Send + Sync + 'static, F: Clone> where 
     F: Interface, 
     C: FnOnce() -> String{
@@ -400,7 +397,7 @@ struct UserInfo<C: Send + Sync + 'static, F: Clone> where
     __data: C,
     _data: Box<dyn Interface>,
 }
-impl<F: Interface + Clone, C: Send + Sync + 'static + FnOnce() -> String> UserInfo<C, F>{
+impl<F: Interface + Clone, C: Send + Sync + 'static + Unpin + Sized + FnOnce() -> String> UserInfo<C, F>{
     fn set_data(cls: impl FnOnce() -> String, clstopass: C, f: F) -> impl Interface{
         
         struct ExecuteMe;
@@ -456,7 +453,7 @@ impl std::fmt::Display for ErrorItself{
 // };
 
 
-fn ltg(){
+async fn ltg(){
 
     // C must be ?Sized since its size can't be known at compile time
     // its can be either &[] or any type
@@ -467,6 +464,16 @@ fn ltg(){
     let gene = Gene::<'_, [u8]>{
         chromosemes: &[0, 255]
     };
+    
+    impl std::fmt::Display for ClientError{
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            todo!()
+        }
+    }
+    #[derive(Debug)]
+    struct ClientError{}
+    impl std::error::Error for ClientError{}
+    let boxed_error: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(ClientError{});
     
     // traits
     //     - method param

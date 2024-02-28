@@ -3,43 +3,43 @@ pub mod structures{
 
 
     #[derive(Clone, Debug, Default)]
-    struct Enemy{
+    pub struct Enemy{
         damage_rate: u8
     }
 
     #[derive(Clone, Debug, Default)]
-    struct Player<'s>{
+    pub struct Player<'s>{
         nickname: &'s str,
         score: u16,
     }
 
     #[derive(Clone, Debug, Default)]
-    struct Col{
+    pub struct Col{
         x: u8,
         y: u8
     }
 
     #[derive(Clone, Debug, Default)]
-    struct Row{
+    pub struct Row{
         x: u8,
         y: u8
     }
 
     #[derive(Clone, Debug, Default)]
-    struct Board<'b>{
+    pub struct Board<'b>{
         col: &'b [Col],
         row: &'b [Row]
     }
 
     #[derive(Clone, Debug, Default)]
-    struct Node<T>{
+    pub struct Node<T>{
         pub value: T, 
         pub parent: Option<std::sync::Arc<std::rc::Weak<Node<T>>>>,
         pub children: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Node<T>>>>>
     }
 
     #[derive(Clone, Debug, Default)]
-    struct Graph<T>{
+    pub struct Graph<T>{
         nodes: Vec<Node<T>>
     }
 
@@ -55,17 +55,21 @@ pub mod structures{
         }
     }
 
-    pub fn build_game(){
-
-        // every node is has a board instance as its value
-        let board = Board::default();
-        let mut node = Node::<Board<'_>>::default();
-        node.value = board;
-
-    }
+    
 
 }
 
 pub mod functions{
-    
+
+    pub use super::structures::*;
+        
+    pub fn build_game(){
+
+        // every node is has a board instance as its value
+        let mut board = Board::default();
+        let mut node = Node::<Board<'_>>::default();
+        node.value = board.clone();
+
+    }
+
 }

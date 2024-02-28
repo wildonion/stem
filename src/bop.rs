@@ -450,11 +450,6 @@ use crate::*;
 
     async fn pinned_box_ownership_borrowing(){
 
-    let mut a = String::from("");
-    let mut b = String::from("");
-    a = &mut b;
-    b = &mut a;
-
 
     let mut future = async move{};
     tokio::pin!(future); // first we must pin the mutable pointer of the future object into the stack before solving/polling and awaiting its mutable pointer 
@@ -474,7 +469,7 @@ use crate::*;
 
     fn get_data<G>(param: impl FnMut() -> ()) -> impl FnMut() 
         -> std::pin::Pin<Box<dyn std::future::Future<Output=String> + Send + Sync + 'static>>
-        where G: Send + Sync + 'static + Sized + Upin{
+        where G: Send + Sync + 'static + Sized + Unpin{ // G is bounded to Unpin means it can't be pinned into the ram
         ||{
             Box::pin(async move{
                 String::from("")

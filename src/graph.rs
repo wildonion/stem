@@ -101,8 +101,8 @@ trait ArenaExt{
 
 }
 impl<T: Sized + Clone> ArenaExt for Arena<T>{
-    type Data = Box<NodeData<T>>;
-    fn set_data(&mut self, new_data: Option<Self::Data>) -> Self{
+    type Data = Option<Box<NodeData<T>>>;
+    fn set_data(&mut self, new_data: Self::Data) -> Self{
         Self { data: new_data }
     }
     fn get_data(self) -> Self::Data {

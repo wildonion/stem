@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-actix = "0.13.0"
 serde = {version = "1", features = ["derive"] }
 futures-util = "0.3"
 rayon = "1"
@@ -39,6 +38,10 @@ wallexerr = "0.3.1"
 # we need lib.rs and crate type of cdylib for none binary like .wasm, .so, .dylib and .dll files or for tests
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
+name = "gvmlib"
+
+[[bin]]
+path = "src/vm.rs"
 name = "gvm"
 
 
