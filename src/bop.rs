@@ -13,7 +13,10 @@ use crate::*;
     --------------------------------------------------------------------
     https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
     https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
-    https://github.com/wildonion/rusty/blob/main/src/llu.rs => ownership and borroing concepts
+    https://github.com/wildonion/rusty/blob/main/src/llu.rs
+    https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg2.rs#L10
+    https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg3.rs#L8
+    https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg6.rs#L6
     https://www.reddit.com/r/rust/comments/dymc8f/selfreference_struct_how_to/
     https://arunanshub.hashnode.dev/self-referential-structs-in-rust#heading-pinlesstgreater-the-objects
     https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/main.rs#L5
@@ -285,9 +288,9 @@ use crate::*;
     the Vec might outgrow its capacity and need to move its elements 
     into a new, larger buffer.
 
-           ______________________________________________
-          |                                              |   
-         _↓_____________________________     ____________|____________
+           ____________________________________________________
+          |                                                    |   
+         _↓_____________________________     __________________|______
         |                               |   |   val = 1  |  p = 0xA1  |
         |-------------------------------|   |-------------------------|
         |     0xA1      |     0xA2      |   |   0xB1     |     0xB2   |
@@ -448,8 +451,42 @@ use crate::*;
 
 */
 
-    async fn pinned_box_ownership_borrowing(){
+async fn pinned_box_ownership_borrowing(){
 
+    // ====================================
+    //          Boxing traits
+    // ====================================
+    impl std::fmt::Display for ClientError{
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result{
+            todo!()
+        }
+    }
+    #[derive(Debug)]
+    struct ClientError{}
+    fn set_number() -> i32{ 0 }
+    impl std::error::Error for ClientError{}
+    let boxed_error: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(ClientError{}); // we can return the boxed_error as the error part 
+    let boxed_cls: Box<dyn FnMut(fn() -> i32) -> ClientError + Send + Sync + 'static> = 
+        Box::new(|set_number|{
+            ClientError{}
+        }); 
+
+    // ====================================
+    //          self ref type
+    // ====================================
+    // can't have self ref types directly they should be behind some kinda pointer to be stored on the heap like:
+    // we should insert some indirection (e.g., a `Box`, `Rc`, `Arc`, or `&`) to break the cycle
+    // also as you know Rust moves heap data (traits, vec, string, structure with these fields, ?Sized types) to clean the ram 
+    // so put them inside Box, Rc, Arc send them on the heap to avoid lifetime, invalidate pointer and overflow issue
+    // also Arc and Rc allow the type to be clonned
+    type Fut<'s> = std::pin::Pin<Box<dyn futures::Future<Output=SelfRef<'s>> + Send + Sync + 'static>>;
+    struct SelfRef<'s>{
+        pub instance_arc: std::sync::Arc<SelfRef<'s>>, // borrow and is safe to be shared between threads
+        pub instance_rc: std::rc::Rc<SelfRef<'s>>, // borrow only in single thread 
+        pub instance_box: Box<SelfRef<'s>>, // put it on the heap to make a larger space behind box pointer
+        pub instance_ref: &'s SelfRef<'s>, // put it behind a valid pointer it's like taking a reference to the struct to break the cycle
+        pub fut_: Fut<'s> // future objects as separate type must be pinned
+    }
 
     let mut future = async move{};
     tokio::pin!(future); // first we must pin the mutable pointer of the future object into the stack before solving/polling and awaiting its mutable pointer 
