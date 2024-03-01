@@ -111,7 +111,7 @@ impl<T: Sized + Clone> ArenaExt for Arena<T>{
     }
 }
 
-fn create_arena_node(){
+pub fn create_arena_node(){
     let mut arena_node = Arena::<String>::new();
     let arena_node_data = arena_node.set_data(Some(
         Box::new(NodeData::<String>{
@@ -120,6 +120,14 @@ fn create_arena_node(){
             children: None
         })
     ));
+}
+
+pub fn box_arena_node<T: Sized + Clone>(node: NodeData<T>) -> Arena<T>{
+    let mut arena_node = Arena::<T>::new();
+    let arena_node_data = arena_node.set_data(Some(
+        Box::new(node)
+    ));
+    arena_node_data
 }
 
 #[derive(Clone)]
