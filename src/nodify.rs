@@ -65,7 +65,7 @@ pub mod functions{
         
     pub fn build_game(){
 
-        // every node is has a board instance as its value
+        // every node has a board instance as its value
         let mut board = Board::default();
         let mut node = Node::<Board<'_>>::default();
         node.value = board.clone();

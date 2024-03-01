@@ -11,6 +11,8 @@ use crate::*;
     --------------------------------------------------------------------
     ------------------- Ownership an Borrowing Recaps ------------------
     --------------------------------------------------------------------
+    NOTE1) share ownership using pointers: Box, Arc, Rc, &mut 
+    NOTE2) get the owned (derefing) data using * move it by passing (ownership and borrowing rules) prevent from moving with clone()
     https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
     https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
     https://github.com/wildonion/rusty/blob/main/src/llu.rs
@@ -465,7 +467,7 @@ async fn pinned_box_ownership_borrowing(){
     struct ClientError{}
     fn set_number() -> i32{ 0 }
     impl std::error::Error for ClientError{}
-    let boxed_error: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(ClientError{}); // we can return the boxed_error as the error part 
+    let boxed_error: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(ClientError{}); // we can return the boxed_error as the error part of this return type: Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     let boxed_cls: Box<dyn FnMut(fn() -> i32) -> ClientError + Send + Sync + 'static> = 
         Box::new(|set_number|{
             ClientError{}
