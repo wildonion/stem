@@ -13,8 +13,10 @@ use crate::*;
     --------------------------------------------------------------------
     NOTE1) share ownership using pointers: Box, Arc, Rc, &mut 
     NOTE2) get the owned (derefing) data using * move it by passing (ownership and borrowing rules) prevent from moving with clone()
+    NOTE3) can't move if the type is behind a pointer or its ownership is shared cause may the pointer is being used by other scopes
     https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
     https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
+    https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17
     https://github.com/wildonion/rusty/blob/main/src/llu.rs
     https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg2.rs#L10
     https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg3.rs#L8
@@ -464,12 +466,13 @@ async fn pinned_box_ownership_borrowing(){
         }
     }
     #[derive(Debug)]
-    struct ClientError{}
+    enum ClientError{}
     fn set_number() -> i32{ 0 }
-    impl std::error::Error for ClientError{}
+    impl std::error::Error for ClientError{} // the Error trait must be implemented for the enum so we can return a boxed instance of the ClientError
     let boxed_error: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(ClientError{}); // we can return the boxed_error as the error part of this return type: Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     let boxed_cls: Box<dyn FnMut(fn() -> i32) -> ClientError + Send + Sync + 'static> = 
         Box::new(|set_number|{
+            let get_number = set_number();
             ClientError{}
         }); 
 

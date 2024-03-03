@@ -12,8 +12,6 @@ mod graph;
 use crate::graph::*;
 mod bop;
 use crate::bop::*;
-mod nodify;
-use crate::nodify::*;
 
 
 /*
@@ -148,6 +146,10 @@ use crate::nodify::*;
 // s3 code order execution using sync objects: 
 // static lazy arced mutexed and pinned box future db type, send sync static
 // -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// static value must be const since we are not able to mutate its value because it's not safe
+// however sharing data between threads safely requires to borrow the data to share its ownership
+// using Arc and for mutation using Mutex, since these types are none const types we can use Lazy
+// to make them const so we can give the static type this value.
 type DbS3Type = Lazy<std::sync::Arc<tokio::sync::Mutex<
     std::pin::Pin<Box<dyn futures::Future<Output = HashMap<String, String>> + Send + Sync + 'static>>
     >>>;
