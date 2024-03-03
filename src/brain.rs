@@ -9,6 +9,7 @@ use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use daemon;
 use actix::prelude::*;
+mod nodify;
 
 
 
