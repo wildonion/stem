@@ -1,12 +1,11 @@
 -----------------------------
 interact with gem repo mmr.rs
 -----------------------------
-build dl models based on phases dataset using keras and https://github.com/wildonion/stem/
-behavioural graph virtual machine built on top of each event's `phases` field inside the game 
-for each player to match them for new game and rank them based on their in-game statuses, the 
-match making rating or ranking (**MMR**) engine, on the other hand is is a weighted tree based 
-suggestion engine that suggests players, events and other games and players based on their ranks 
-earned using **GVM** during the game.
+build dl models based on top users dataset using keras and https://github.com/wildonion/stem/
+behavioural graph virtual machine by utilising top users dataset to match them for new game 
+and event and update their stars field using the match making rating or ranking (**MMR**)
+engine, which is is a weighted tree based suggestion engine that suggests users, events 
+and other games and users based on their ranks earned using **GVM** inside the gem platform.
 
 never return poiner from method just return vec or string but pass them in slice form to not to lose 
 their ownerhsip cause can't return ref to a data owned by the method we have to either ret the type in 
