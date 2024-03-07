@@ -385,7 +385,30 @@ fn trait_as_ret_and_param_type(param: &mut impl FnOnce() -> ()) -> impl FnOnce()
 fn trait_as_ret_and_param_type1(param_instance: &mut impl Interface) -> impl FnOnce() -> (){ ||{} }
 fn trait_as_ret_type(instance_type: Instance) -> impl Interface{ instance_type }
 fn trait_as_ret_type_1(instance_type: Instance) -> impl Interface{ () }
-fn trait_as_param_type(param: impl FnOnce() -> ()){}
+fn trait_as_param_type(param: impl FnOnce() -> ()){
+
+    trait AuthExt{}
+    #[derive(Clone)]
+    struct Auth{}
+    impl AuthExt for Auth{}
+    impl Auth{
+        fn get_trait(&self) -> &(dyn AuthExt + Send + Sync + 'static){
+            let t = self as &dyn AuthExt; // use casting
+            t 
+            // &Self{}
+        }
+        fn get_trait1(&self) -> impl AuthExt{
+            Self{}
+        }
+        fn get_trait2(&self) -> Box<dyn AuthExt>{
+            let t = Box::new(self.clone());
+            t 
+        }
+    }
+    let inst = Auth{};
+    let get_trait = inst.get_trait();
+
+}
 
 
 // C must be send sync to be share between threads safely
