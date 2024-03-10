@@ -452,6 +452,72 @@ use crate::*;
     pointers to point to the right location which forces us to pin the type to not allow to be moved 
     at all cause they are inherently unsafe since they are implicitly invalidated if they are ever 
     moved we're not allowed to move them at all unless use Pin or break cycle using Arc,Rc,Mutex,RefCell
+    
+
+    -----=====-----=====-----=====-----=====-----=====-----=====-----=====-----=====-----=====-----=====
+                                                RULES:
+    -----=====-----=====-----=====-----=====-----=====-----=====-----=====-----=====-----=====-----=====
+    gc marks data actively used by the application as live heap which takes spaces during the app execution 
+    so generally when you use gc if u want to pass the type by value besides the old ownership it creates 
+    a new one inside the ram but in rust when u pass by value or pass the type itself it moves its 
+    ownership and transfer it into a new one inside the new scope and drop the old one out of the ram 
+    to clean extra spaces inside the heap hence reduce memory usage or heap allocation at runtime
+    finally updates all the pointers to point to the new owner loaction of the value to avoid getting 
+    invalidated pointers that's how rust is taking care of the ram and heap at compile time cause it 
+    doesn't have gc and it must drop it to track each type in realtime, however you can share the ownership
+    instead of moving and cloning to keep the type ownership and reduce the heap size and avoid allocating 
+    extra sapce on the heap using &, arc, rc, box or even clone the type and for self-ref data types in order 
+    to break the cycle you should pin the type into the ram so it can be at a fixed position this won't 
+    allow rust to change the location of the value after moving cause the value hence the poiners are 
+    pinned and stuck into the ram (heap) which uses the same position as it uses before even after moving into 
+    new scope which don't transfer the ownership into a new type therefore there won't be any invalidated
+    pointers, take note of the followings:
+    - memory managing model in rust is safe and fast cause it doesn't have gc and it drops data out of ram when u move them by 
+      value not and taking ref to them, since the value will be transferred into a new ownership inside the new scope and all 
+      its left pointers get updated after moving to avoid having dangled and invalidated pointers
+    - use &, Rc, Arc, Box, Pin to move the type around different parts of the app without moving into new ownership 
+      and losing ownership and cloning also &, Rc, Arc, Box, Pin also will be used to break the cycle of self-ref types 
+      by wrapping the field behind a pointers which makes another type containing the actual type.
+    - traits are dynamic sized they must be behind pointer to move them around like &dyn or Box<dyn 
+    - traits can be returned from methods like -> impl Trait, the struct needs to impl the trait so we could return the instance
+    - Box stores data on the heap so it sends the trait on the heap with a valid lifetime 
+    - if we want to return a trait object from method in either -> Box<dyn or -> impl Trait the struct must impls the trait
+    - any heap data will be moved into a new ownership once we pass it to a func so to prevent this, clone it or borrow it  
+    - async move{} moves everything u want to use them inside this scope if u want to use them later u have to borrow them as static
+      or clone them cause any lifetime in the async move{} scope is not valid and dosn'tlive long enough
+    - go on the heap, share ownership using Box pointer, traits as objects and bound them to generic 
+    - cannot move out of `*self` which is behind a mutable or shared reference
+    - looping over heap data types takes the ownership of the type thus we can iterate over &mut type or clone the type
+    - app state contians all global data that must be inited once and share their ownership between threads to avoid extra heap alloc
+    - share ownership instead of moving using rc and & in single thread and arc in multiple thread (share the rced and arced type)
+    - size of [] and str and traits can't be known at compile time thus they must be in slice form and behind pointer or box
+    - dynamic sized types like vector and string are on the heap which can be used as slice form like &[] and &str to reduce the ram size
+    - trait objs are dynamic sized types must be behind pointer we can put them on the heap using Box smart pointer or behind a valid ref
+    - Box stores data on the heap carefully and securely with a valid lifetime 
+    - trait can be as method ret type method param type and if we want to pass them around they must be boxed like Box<dyn Error>
+    - if we don't know the trait implementor means the implementor will be specified at runtime thus the trait must be boxed 
+    - can't move type if it's behind a pointer, pass by ref or clone it or deref it to return the owned data 
+    - can't ret ref from method unless we have valid lifetime, &'static, &'valid, &self 
+    - can't deref if the pointer is being used by or shared in other scopes, can't deref a shared pointer, CLONE TYPE
+    - pass by ref instead of cloning and moving also borrow must live long enough to be moved into different scopes  
+    - can't move pointer into tokio spawn cause borrowed value must live long enough like for static to be valid after moving
+      also if we're passing a ref to a type which is belong to a method body we can't:
+            - move out of the type cause it's behind a pointer 
+            - move the pointer into the tokio scope since the pointer scapes out of the method body, because tokio spawn has a longer life 
+              time than the pointer of the type and based on Rust ownership and borrowing rules once the type gets dropped out of ram or move 
+              into a new ownership we can't use any existing pointer of that due to they are dangled and invalidated albeit Rust will update 
+              them after moving to avoid abusing of old location address but can't be used in later scopes thus when we move the pointer of 
+              a type inside a method into tokio scope the pointer escapes the method body which is not allowed
+    - clone the type or borrow inside the loop to prevent from moving cause in each iteration the type gets moved
+    - share ownership using arc and mutex in multithreaded scopes and rc and refcell in single threaded 
+    - thread_local is a single thread global allocator and static lazy arc mutex can be used as a global type in multithread
+    - passing by ref or moving decreases the heap size but cloning (moving out of ref) return owned data which increases the heap size
+    - no heap data (&[], &str), if heap data pass by ref instead of cloning, if not pass by ref rust moves them to clean heap size 
+    - to specify the type of a var we need to try cast the pointer of the var to the desired type
+    - moving results updateing pointers to avoid getting invalidated pointers in case of self-ref types the type 
+      is not safe to be moved self-ref types, raw pointers and future objects must be pinned on the heap at a 
+      fixed position, tells rust don't transfer new ownership or change the location of the value if the type 
+      wants to be moved cause we've pinned it into the ram so the location remains the same as the old one
 
 */
 
@@ -483,7 +549,8 @@ async fn pinned_box_ownership_borrowing(){
     // we should insert some indirection (e.g., a `Box`, `Rc`, `Arc`, or `&`) to break the cycle
     // also as you know Rust moves heap data (traits, vec, string, structure with these fields, ?Sized types) to clean the ram 
     // so put them inside Box, Rc, Arc send them on the heap to avoid lifetime, invalidate pointer and overflow issue
-    // also Arc and Rc allow the type to be clonned
+    // also Arc and Rc allow the type to be clonned, so they're a heap data wrappers and smart pointers which must be 
+    // around self-ref fields to break the cycle 
     type Fut<'s> = std::pin::Pin<Box<dyn futures::Future<Output=SelfRef<'s>> + Send + Sync + 'static>>;
     struct SelfRef<'s>{
         pub instance_arc: std::sync::Arc<SelfRef<'s>>, // borrow and is safe to be shared between threads

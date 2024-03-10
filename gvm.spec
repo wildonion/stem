@@ -102,6 +102,18 @@ https://fasterthanli.me/articles/pin-and-suffering
 https://stackoverflow.com/questions/2490912/what-are-pinned-objects
 https://medium.com/tips-for-rust-developers/pin-276bed513fd1
 https://users.rust-lang.org/t/expected-trait-object-dyn-fnonce-found-closure/56801/2
+https://rust-unofficial.github.io/patterns/
+https://github.com/steadylearner/Rust-Full-Stack/
+https://book.avr-rust.com/001-introduction.html
+https://nnethercote.github.io/perf-book/title-page.html
+https://rust-lang-nursery.github.io/rust-cookbook/intro.html
+https://smallcultfollowing.com/babysteps/
+https://lucumr.pocoo.org/
+https://www.lpalmieri.com/
+https://blog.yoshuawuyts.com/
+https://www.i-programmer.info/programming/theory.html
+https://www.i-programmer.info/babbages-bag/
+https://without.boats/blog/
 codec, virtual machine like move and evm with allocation concepts 
     - macro dsl
     - thread_local, actor id or address, std::alloc, jemalloc, bumpalo and r3bl_rs_utils arena as a global allocator
