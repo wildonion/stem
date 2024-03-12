@@ -620,3 +620,100 @@ fn serding(){
     println!(">>>>>>> instance_from_hex_vector_using_stdstr {:?}", instance_from_hex_vector_using_stdstr.unwrap());
 
 }
+
+fn but_the_point_is(){
+
+    // type Ret = &'static str;
+    // fn add(num1: Ret, num2: Ret) -> Ret where Ret: Send{
+    //     for ch in num2.chars(){
+    //         num1.to_string().push(ch);
+    //     }
+    //     let static_str = helpers::misc::string_to_static_str(num1.to_string());
+    //     static_str
+    // }
+
+    // let addfunc: fn(&'static str, &'static str) -> &'static str = add;
+    // let res = addfunc("wild", "onion");
+
+    #[derive(Default, Debug)]
+    struct User{
+        name: String,
+        age: u8,
+    }
+
+    let mut user = User::default(); // there is no null or zero pointer in rust thus the user must be initialized
+
+    let mut mutpuser = &mut user; // mutating mutpuser mutates the user too
+    println!("user address: {:p}", mutpuser); // contains user address
+    println!("mutpuser address itself: {:p}", &mutpuser); // contains user address
+    mut_user(mutpuser);
+
+    fn mut_user(mut user: &mut User){ // passing by mutable pointer or ref to avoid moving
+
+        // mutating the user pointer with new value which contains the user address
+        // this makes an update to user instance too, can be viewable outside of the method
+        println!("before mutating with pointer: {:#?}", user);
+        user.name = "erfan".to_string();
+        println!("after mutating with pointer: {:#?}", user);
+        // or
+        println!("before derefing: {:p}", user); // same as `contains user address`
+        let mut binding = User{
+            name: String::from("wildonion"),
+            age: 0
+        };
+        // updating pointer which has the user instance value with a new binding by dereferencing pointer
+        // note that we're not binding the new instance into the pointer completely cause by dereferencing
+        // the underlying data will be changed
+        *user = binding;
+        println!("user after derefing: {:#?}", user);
+        println!("user address after derefing: {:p}", user); // same as `contains user address`
+
+    }
+
+    // println!("out after mutating with pointer: {:#?}", user);
+    let mut binding = User{
+        name: String::from("wildonion"),
+        age: 0
+    };
+    println!("mutpuser address itself: {:p}", &mutpuser); // contains user address
+    println!("mutpuser contains address before binding: {:p}", mutpuser); // same as `contains user address`
+    // binding a complete new instance to mutpuser, causes to point to new location
+    mutpuser = &mut binding;
+    // the address of mutpuser will be changed and points to new binding instance address
+    println!("mutpuser contains address after binding: {:p}", mutpuser);
+    println!("mutpuser address itself: {:p}", &mutpuser); // contains user address
+
+    // we're getting a mutable pointer to an in place User instance
+    // the in place instance however will be dropped after initialization
+    // and its ownership transferred into mutpuser, Rust won't allow us to
+    // do so cause a pointer remains after dropping the in place instance
+    // which is and invalid pointer, we must use a binding to create a longer
+    // lifetime of the User instance then borrow it mutably
+    // mutpuser = &mut User{
+    //     name: String::from(""),
+    //     age: 0
+    // }; // ERROR: temporary value is freed at the end of this statement
+
+    // SOLUTION: using a `let` binding to create a longer lived value
+    // let binding = User{
+    //     name: String::from("wildonion"),
+    //     age: 0
+    // };
+    // *mutpuser = binding;
+
+
+    // let puser = &user;
+    // println!("user address (puser): {:p} ", puser); // contains the address of user
+    // let anotherpuser = puser;
+
+    // println!("user address (anotherpointer): {:p} ", anotherpuser); // also contains the address of user
+
+    // println!("pointer address: {:p} ", &puser); // the address of the puser pointer itself
+    // println!("anotherpointer address: {:p} ", &anotherpuser); // the address of the puser pointer itself
+
+    // user address (puser): 0x7ffea5896328
+    // user address (anotherpointer): 0x7ffea5896328
+    // pointer address: 0x7ffea5896348
+    // anotherpointer address: 0x7ffea5896390
+
+}
