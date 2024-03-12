@@ -420,6 +420,12 @@ fn trait_as_param_type(param: impl FnOnce() -> ()){
             let t = Box::new(self.clone());
             t 
         }
+        pub async fn ret_cls(f: impl Fn(String) -> String) -> impl Fn(String) -> String{
+            let cls = |name: String|{
+                String::from("")
+            };
+            cls
+        }
     }
     let inst = Auth{};
     let get_trait = inst.get_trait();
