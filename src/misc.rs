@@ -5,6 +5,22 @@ use futures::future::{BoxFuture, FutureExt};
 use tokio::net::tcp;
 use serde::{Serialize, Deserialize};
 
+// static requires constant value and constant values must be only stack data like &[] and &str otherwise
+// we're not allowed to have heap data types like Vec, String, Box, Arc, Mutex in const and static as value
+// also in order to mutate an static we should wrap around the arc and mutex to do so but inside lazy
+// str is ?Sized and it must be behind pointer cause it's an slice of String, same for [] 
+// generally only &[] and &str are allowed to be in const and static value, using other types than these
+// requires a global static lazy arc mutex like so:
+type SafeMap = Lazy<std::sync::Arc<tokio::sync::Mutex<HashMap<String, String>>>>;
+pub static GLOBALMAP: SafeMap = Lazy::new(||[
+    std::sync::Arc::new(
+        tokio::sync::Mutex::new(
+            HashMap::new()
+        )
+    )
+]);
+pub static ONTHEHEAP: &[&str] = CONSTVALUE;
+pub const CONSTVALUE: &[&str] = &["wildonion"];
 pub const CHARSET: &[u8] = b"0123456789";
 
 

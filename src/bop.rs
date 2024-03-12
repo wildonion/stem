@@ -472,12 +472,18 @@ use crate::*;
     pinned and stuck into the ram (heap) which uses the same position as it uses before even after moving into 
     new scope which don't transfer the ownership into a new type therefore there won't be any invalidated
     pointers, take note of the followings:
+    - future objects are self-ref type they can't be boxed without pinning they must be pinned cause we might move them into later scopes for solvation
+    - clone them although rust takes care of heap data by transferring their ownership into the new one in the new scope by 
+      default, but you can either put them behind pointer like & or Box like &dyn Interface or Box<dyn Interface> to avoid 
+      allocating extra space on the heap by passing their clone, use slices form for Vec and String also put heap data behind 
+      poiter either & or Box to move their ref instead of cloning them 
     - memory managing model in rust is safe and fast cause it doesn't have gc and it drops data out of ram when u move them by 
       value not and taking ref to them, since the value will be transferred into a new ownership inside the new scope and all 
       its left pointers get updated after moving to avoid having dangled and invalidated pointers
     - use &, Rc, Arc, Box, Pin to move the type around different parts of the app without moving into new ownership 
       and losing ownership and cloning also &, Rc, Arc, Box, Pin also will be used to break the cycle of self-ref types 
-      by wrapping the field behind a pointers which makes another type containing the actual type.
+      by wrapping these pointers around fields which is like another type containing the actual type and has all the methods
+      of the actual type.
     - traits are dynamic sized they must be behind pointer to move them around like &dyn or Box<dyn 
     - traits can be returned from methods like -> impl Trait, the struct needs to impl the trait so we could return the instance
     - Box stores data on the heap so it sends the trait on the heap with a valid lifetime 
@@ -546,12 +552,17 @@ async fn pinned_box_ownership_borrowing(){
     //          self ref type
     // ====================================
     // can't have self ref types directly they should be behind some kinda pointer to be stored on the heap like:
-    // we should insert some indirection (e.g., a `Box`, `Rc`, `Arc`, or `&`) to break the cycle
+    // we should insert some indirection (e.g., a `Box`, `Rc`, `Arc`, or `&`) to break the cycle (they're smart 
+    // wrappers and pointers around the actual type and contain all the actual types' methods)
     // also as you know Rust moves heap data (traits, vec, string, structure with these fields, ?Sized types) to clean the ram 
     // so put them inside Box, Rc, Arc send them on the heap to avoid lifetime, invalidate pointer and overflow issue
     // also Arc and Rc allow the type to be clonned, so they're a heap data wrappers and smart pointers which must be 
-    // around self-ref fields to break the cycle 
-    type Fut<'s> = std::pin::Pin<Box<dyn futures::Future<Output=SelfRef<'s>> + Send + Sync + 'static>>;
+    // around self-ref fields to borrow their ownership and break the cycle that's why in graph structures we need to 
+    // use either Arc Mutex for multithreaded based graph or Rc RefCell for single thread based graph to wrap around the 
+    // parent and children fields since graph fields (parant and children) are of type Node itself which makes a cycle 
+    // at compile time.
+
+    type Fut<'s> = std::pin::Pin<Box<dyn futures::Future<Output=SelfRef<'s>> + Send + Sync + 'static>>; // pinning the box type on the heap at a fixed position to tell Rust don't move this from the its location when we're moving it around the scopes
     struct SelfRef<'s>{
         pub instance_arc: std::sync::Arc<SelfRef<'s>>, // borrow and is safe to be shared between threads
         pub instance_rc: std::rc::Rc<SelfRef<'s>>, // borrow only in single thread 
@@ -576,7 +587,7 @@ async fn pinned_box_ownership_borrowing(){
         Pin<Box<dyn Future<Output=String>>>
     */
 
-    fn get_data<G>(param: impl FnMut() -> ()) -> impl FnMut() 
+    fn get_data<G>(param: impl FnMut() -> G) -> impl FnMut() 
         -> std::pin::Pin<Box<dyn std::future::Future<Output=String> + Send + Sync + 'static>>
         where G: Send + Sync + 'static + Sized + Unpin{ // G is bounded to Unpin means it can't be pinned into the ram
         ||{
