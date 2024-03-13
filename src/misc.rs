@@ -627,19 +627,35 @@ fn serding(){
 
 }
 
+// convert any generic of Vec into a generic slice by leaking and consuming the 
+// memory of the vector to return an static reference to the leacked part since 
+// that part will never be freed until the lifetime of the app
+pub fn vector_slice<T>(s: Vec<T>) -> &'static [T]{
+    Box::leak(s.into_boxed_slice())
+}
+
 fn but_the_point_is(){
 
-    // type Ret = &'static str;
-    // fn add(num1: Ret, num2: Ret) -> Ret where Ret: Send{
-    //     for ch in num2.chars(){
-    //         num1.to_string().push(ch);
-    //     }
-    //     let static_str = helpers::misc::string_to_static_str(num1.to_string());
-    //     static_str
-    // }
+    type Ret = &'static str;
+    fn add(num1: Ret, num2: Ret) -> Ret where Ret: Send{
+        for ch in num2.chars(){
+            num1.to_string().push(ch);
+        }
+        let static_str = helpers::misc::string_to_static_str(num1.to_string());
+        static_str
+    }
 
-    // let addfunc: fn(&'static str, &'static str) -> &'static str = add;
-    // let res = addfunc("wild", "onion");
+    let addfunc: fn(&'static str, &'static str) -> &'static str = add;
+    let res = addfunc("wild", "onion");
+
+    let name = String::from("");
+    let mut pname = &name;
+    let mut anotehr_pname = &String::from("new content");
+    println!("pname points to location of name : {:p}", pname);
+    println!("anotehr_pname points to location of name : {:p}", anotehr_pname);
+    pname = anotehr_pname;
+    println!("pname points to location of anotehr_pname : {:p}", pname);
+    println!("pname content : {:?}", pname);
 
     #[derive(Default, Debug)]
     struct User{
@@ -659,7 +675,7 @@ fn but_the_point_is(){
         // mutating the user pointer with new value which contains the user address
         // this makes an update to user instance too, can be viewable outside of the method
         println!("before mutating with pointer: {:#?}", user);
-        user.name = "erfan".to_string();
+        user.name = "erfan".to_string(); // no need to dereference it since we're mutating only one field
         println!("after mutating with pointer: {:#?}", user);
         // or
         println!("before derefing: {:p}", user); // same as `contains user address`
@@ -670,7 +686,7 @@ fn but_the_point_is(){
         // updating pointer which has the user instance value with a new binding by dereferencing pointer
         // note that we're not binding the new instance into the pointer completely cause by dereferencing
         // the underlying data will be changed
-        *user = binding;
+        *user = binding; // dereferencing the pointer to mutate it with new binding 
         println!("user after derefing: {:#?}", user);
         println!("user address after derefing: {:p}", user); // same as `contains user address`
 
@@ -722,4 +738,86 @@ fn but_the_point_is(){
     // pointer address: 0x7ffea5896348
     // anotherpointer address: 0x7ffea5896390
 
+
+    let users = (0..10)
+        .into_iter()
+        .map(|_|{
+            User::default()
+        })
+        .collect::<Vec<User>>();
+    let slice_is_faster = &users;
+    fn get_users(users: &[User]) -> (&'static [User], Vec<User>){
+        // lifetime of users ends up here in this function 
+        // and can't be as static accordingly can't be return 
+        // from function
+        let users_vec = users.to_vec();
+        let static_users = vector_slice(users_vec.clone());
+        (static_users, users_vec)
+    }
+
+    trait Interface{
+        type This;
+        fn getName(&mut self) -> &Self;
+    }
+    #[derive(Debug, Default, Clone)]
+    struct UserPl{
+        Name: String,
+        Age: u8,
+        IsAdmin: bool,
+    }
+    impl Interface for UserPl{ // unlike Go Interface in Rust will be implemented for both pointer and none pointer instances
+        type This = Self;
+        // trait and interface methods
+        fn getName(&mut self) -> &Self { // we can return ref since the pointer is valid as long as instance is valid
+            if self.Name == "oniontori"{
+                self.Name = String::from("wildonion");
+            }
+            self
+        }
+    }
+    trait ObjectSafeTrait{}
+    impl ObjectSafeTrait for (){}
+    let mut user = UserPl{Name: String::from("oniontori"), Age: 28, IsAdmin: true};
+    let trait_object: Box<dyn ObjectSafeTrait> = Box::new(());
+    let mut mutpuser = &mut user;
+    mutpuser.getName(); // mutating the Name field of the user instance using the Interface trait and its mutable pointer
+    // println!("user is changed {:?}", user); // the user is changed using its mutable pointer
+    mutpuser.Name = String::from("change to anything else again");
+    println!("user is changed {:?}", user);
+    // println!("mutpuser is changed {:?}", mutpuser); // the mutpuser is changed also
+
+    type LargeUInt = u128;
+    type Func<A = UserPl, R> = fn(A) -> R; // A has a default type param
+    let cls = |num: LargeUInt|{
+        String::from("")
+    };
+    // `impl Trait` only allowed in function and inherent method argument 
+    // and return types, not in variable bindings
+    // let closure: impl Fn(u16) -> String = cls;
+
+    #[derive(Default, Debug)]
+    struct Player<'v, G: Default + Send + Sync + 'static, F> 
+        where F: FnMut(Box<Player<G, F>>) 
+            -> Result<
+                std::pin::Pin<Box<dyn futures::Future<Output=&'v [u8]>>>, 
+                Box<dyn std::error::Error + Send + Sync + 'static>> + Default{
+        board: Vec<&'v [G]>,
+        cls: F
+    }
+
+    trait UserExt<G, F>: Default{
+        type Context;
+        fn getCode() -> String;
+    }
+    impl<'valid, G: Default + Send + Sync + 'static, 
+        F: FnMut(Box<Player<G, F>>) 
+        -> Result<
+            std::pin::Pin<Box<dyn futures::Future<Output=&'valid [u8]>>>, 
+            Box<dyn std::error::Error + Send + Sync + 'static>> + Default
+            > UserExt<G, F> for Player<'valid, G, F>{
+        type Context = Player<'valid, G, F>;
+        fn getCode() -> String {
+            String::from("return value")
+        }
+    }
 }
