@@ -14,6 +14,10 @@ mod bop;
 use crate::bop::*;
 
 
+// generator are dangerous in rust since they return a value to the caller without waiting 
+// for function execution to completion and since after function execution all values get
+// dropped out of the ram thus generator can't be safe in this situation
+
 /*
 
      

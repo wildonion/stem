@@ -653,7 +653,7 @@ fn but_the_point_is(){
     let mut anotehr_pname = &String::from("new content");
     println!("pname points to location of name : {:p}", pname);
     println!("anotehr_pname points to location of name : {:p}", anotehr_pname);
-    pname = anotehr_pname;
+    pname = anotehr_pname; // another_pname contains a new instance of String or it can be the same one inside the name
     println!("pname points to location of anotehr_pname : {:p}", pname);
     println!("pname content : {:?}", pname);
 
