@@ -648,14 +648,48 @@ fn but_the_point_is(){
     let addfunc: fn(&'static str, &'static str) -> &'static str = add;
     let res = addfunc("wild", "onion");
 
-    let name = String::from("");
-    let mut pname = &name;
-    let mut anotehr_pname = &String::from("new content");
-    println!("pname points to location of name : {:p}", pname);
-    println!("anotehr_pname points to location of name : {:p}", anotehr_pname);
-    pname = anotehr_pname; // another_pname contains a new instance of String or it can be the same one inside the name
-    println!("pname points to location of anotehr_pname : {:p}", pname);
-    println!("pname content : {:?}", pname);
+    // ------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
+    // let name1: String; // this must be initialized
+    // let pname = &name1; // ERROR: in Rust we don't have null or zero pointer it must points to some where in memory
+    
+    let mut name = String::from("wildonion"); // the pointee
+    println!("name address : {:p}", &name);
+    
+    // NOTE: both pname and p0name have different addresses but pointes 
+    // to the same underlygin address
+    let pname = &name; // points to the location of name contains the name value
+    let mut p0name = &name; // points to the location of name contains the name value
+   
+    println!("[SAME ADDR] pname pointer points to : {:p}", pname);
+    println!("[SAME ADDR] p0name pointer points to : {:p}", p0name);
+   
+    // same address and same underlying data, cause pname points to the name address too
+    p0name = pname;
+    println!("[SAME ADDR] p0name pointer points to : {:p}", p0name);
+    
+    // however this is not safe in Rust to do this inside a function to change the
+    // address a pointer points to but keeps the same underlying data cause literally 
+    // chaning the address a pointer points to means that the underlying data must be 
+    // changed cause pointers point to the address of a data and have their value.
+    // if we want to do this we should use mutable pointer and rechange the pointer 
+    // without dereferencing it
+    let new_binding = &String::from("new onion"); 
+    p0name = new_binding;
+    println!("[CHANGED ADDR] p0name pointer points to : {:p}", p0name);
+    
+    let mut mutpname = &mut name; // points to the location of name contains the name value
+    // changing underlying data same adderess by dereferencing 
+    println!("mutpname pointer points to : {:p}", mutpname);
+    *mutpname = String::from("wildonion"); // dereferencing it only update the undelrying data not the address
+    println!("mutpname pointer points to : {:p}", mutpname); // mutpname still contains the address of the very first name variable but the value has changed
+    
+    // changing both address and underlying data by binding a new value
+    let mut new_binding = String::from("onion"); 
+    mutpname = &mut new_binding;
+    println!("[CHANGED ADDR] mutpname pointer points to : {:p}", mutpname); // mutpname now contains completely a new value binding accordingly new location of the new binding
+    // ------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
 
     #[derive(Default, Debug)]
     struct User{
