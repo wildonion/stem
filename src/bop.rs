@@ -646,7 +646,13 @@ async fn pinned_box_ownership_borrowing(){
 
 fn DynamicStaticDispatch(){
 
-    /* 
+    /*                  ---------------- dynamic dispatching allows to have polymorphism ----------------
+        since trait objs are not sized having them as object (safe of course) should behind pointer follow up with dyn keyword
+        goot to know that trait objects stores two kind of pointers one is a vtable pointers points to the trait methods
+        which are going to be called on the implementor instance and the other is a pointer to the underlying data or the 
+        implementor, accordingly Box<dyn Trait> is an object safe trait and can be as object with dynamic dispatching at runtime 
+        if we don't know the exact implementor
+
         in a programming language the generics can be handled in one of the two ways, static 
         dispatch or dynamic dispatch. In static dispatch, the various possible types of the 
         generic are inferred during the compilation and have separate assembly code blocks associated 
@@ -743,6 +749,24 @@ fn DynamicStaticDispatch(){
             println!("Meow!");
         }
     }
+
+
+    // object traits are safe and of type Box<dyn Trait> they allows us to do dynamic dispatch at runtime using dyn keyword 
+    // since we don't know the exact type of implementor they must be safe like if the return type of one of their methods is 
+    // Self it must not be bound to Sized trait cause the compiler must have no info about the type of implementor in order the
+    // dyn keyword accordingly dispatching call works, Boxing them is better than putting them behind a pointer like &dyn Trait 
+    // cause Box stores data directly on the heap and have valid lifetime on its own.
+    // trait object stores two kina pointers the one are vtable pointers which are pointers to the trait methods that are gonna 
+    // called on the instance and the other is a pointer to the instance itself, example of that would be Box<dyn Error> which
+    // allows us to dispatch the methods of the trait dynamically at runtime on any struct instance that implements the Error trait.
+    // following is like interface{} in Go:
+    // var Trait = interface{
+    //      getCode(name *string)
+    // };
+    // u := &User{};
+    // var inter Trait; = u ---> implementing the Trait interface for u or bounding you to Trait interface
+    //                           Trait interface methos can be called on u, inter is now an object interface bounded to u
+    let trait_object: Box<dyn Animal> = Box:new(Dog{}); // object safe trait of dynamic type Dog{}
 
     let dog: Dog = Dog;
     let cat: Cat = Cat;
