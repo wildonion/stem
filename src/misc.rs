@@ -161,7 +161,7 @@ impl TypeTrait for MerkleNode{
 
 struct Streamer;
 struct Context<T>{data: T}
-impl TypeTrait for Streamer{ // polymorphism
+impl TypeTrait for Streamer{ // kinda polymorphism
     
     type Value = Context<Self>; /* Context data is of type Streamer */
 

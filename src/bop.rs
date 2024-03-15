@@ -192,10 +192,10 @@ use crate::*;
     this system allows Rust to manage memory efficiently and avoid common pitfalls associated 
     with manual memory management.
 
-    can’t move pointer inside a method to tokio spawn or return it from the method unless we make it 
+    can't move pointer inside a method to tokio spawn or return it from the method unless we make it 
     static or use the lifetime of self, cause the pointer is owned by the method
     data are moved by default when they gonna go into another scope, we can take a reference to them 
-    and pass the reference but not the data itself cause it’s behind a pointer already and data behind 
+    and pass the reference but not the data itself cause it's behind a pointer already and data behind 
     pointers can be moved, or we can clone them to prevent their ownership from moving.
     compiler moves data around the ram at runtime and change their location inside the stack like when 
     an element gets poped out of a vector rust clean the memory of the vector and shift each element's 
@@ -361,9 +361,9 @@ use crate::*;
     a boxed value.
     future objects must be pinned to the ram before they can be solved or polled the reason 
     of doing this is first of all they're trait objects and traits are dynamically sized means 
-    they're size will be known at runtime second of all due to the fact that rust doesn’t have 
+    they're size will be known at runtime second of all due to the fact that rust doesn't have 
     gc which causes not to have a tracking reference counting process for a type at runtime, 
-    because it’ll move the type if the type goes out of the scope hence in order to solve and 
+    because it'll move the type if the type goes out of the scope hence in order to solve and 
     poll a future in other scopes later on, we should pin it to the ram first which can be done 
     once we await on the future but if we want to solve and poll a mutable reference of a future 
     we should stick and pin it to the ram manually, first by pinning the future into the ram using 
@@ -640,6 +640,127 @@ async fn pinned_box_ownership_borrowing(){
     */
     // let deref_boxed = *instance.data;
     instance.data = &mut Box::pin(func()); // passing the result of calling async func to the pinned box
+    
+
+}
+
+fn DynamicStaticDispatch(){
+
+    /* 
+        in a programming language the generics can be handled in one of the two ways, static 
+        dispatch or dynamic dispatch. In static dispatch, the various possible types of the 
+        generic are inferred during the compilation and have separate assembly code blocks associated 
+        with each type. This can reduce the execution time, and is the default behaviour but 
+        faces the problem of what should happen if all the types cannot be inferred or we don't 
+        want to generate separate code blocks for each generic. This is where dynamic dispatch 
+        comes into picture, which means the type of the generic will be sent over to the runtime 
+        environment in a boxed type and will be inferred during the runtime. This can be slower 
+        but often provides more flexibility like Box<dyn Trait> in which the implementor will be 
+        specified at runtime and only object safe trait methdos can be dynamically dispatched 
+        an be as a trait object.
+
+        in Rust, dispatch refers to the process of determining which implementation of a trait's method 
+        to call when working with trait objects. There are two main types of dispatch mechanisms in Rust: 
+        static dispatch and dynamic dispatch.
+
+        Static Dispatch:
+
+            static dispatch, also known as monomorphization, occurs at compile time, when using static dispatch, 
+            the compiler knows the concrete type at compile time and can directly call the implementation of the 
+            method for that type, static dispatch leads to efficient code generation as the compiler can inline 
+            and optimize the method calls based on the known types, it is commonly used when the concrete type is 
+            known at compile time, such as when working with generics or concrete types.
+        
+        Dynamic Dispatch:
+
+            dynamic dispatch occurs at runtime and is used when the concrete type is not known until runtime, such 
+            as when working with trait objects, when using dynamic dispatch, the compiler generates a vtable (virtual 
+            method table) that contains pointers to the implementations of the trait methods for each type that implements 
+            the trait and pointer to the struct instance, the vtable however is used at runtime to determine which implementation 
+            of the method to call based on the actual type of the object, dynamic dispatch allows for flexibility and 
+            polymorphism but can incur a slight runtime performance overhead compared to static dispatch.
+
+
+        for dynamic dispatch calls each trait object must be a safe trait object object safe traits are trait 
+        objects of type Box<dyn SafeTrait> and can be dispatch using Box::new(Struct{})
+        for more info refer to: https://doc.rust-lang.org/reference/items/traits.html#object-safety
+        in Rust, for a trait to support dynamic dispatch when used with trait objects, it must be an object-safe 
+        trait, object safety is a property of traits that determines whether instances of the trait can be used 
+        as trait objects, object-safe traits ensure that the compiler can determine the size and layout of trait 
+        objects at compile time, enabling dynamic dispatch to be performed efficiently.
+
+        Here are the key requirements for an object-safe trait in Rust:
+
+            No Associated Functions:
+
+                Object-safe traits cannot have associated functions (functions associated with the trait itself 
+                rather than a specific implementation).
+            
+            No Generic Type Parameters:
+
+                Object-safe traits cannot have generic type parameters. This is because the size of the trait 
+                object needs to be known at compile time, and generic types can have varying sizes.
+            
+            Self-Sized Type:
+
+                The trait cannot require that Self be a sized type. This ensures that the size of the trait object 
+                is known at compile time.
+            
+            No Generic Type Parameters in Methods:
+
+                Methods in object-safe traits cannot have generic type parameters, as this would make the size of 
+                the trait object ambiguous.
+
+            No Self Type in Return Position:
+
+                Methods in object-safe traits cannot return Self by value, as this would require knowing the size
+                of Self at compile time.
+                
+        Ensuring that a trait is object-safe allows Rust to perform dynamic dispatch efficiently when working with 
+        trait objects. By adhering to the rules of object safety, the compiler can generate vtables (virtual method 
+        tables) for trait objects, enabling polymorphism and dynamic dispatch without sacrificing performance or 
+        safety, if a trait is not object-safe, attempting to use it with trait objects will result in a compilation 
+        error. By designing object-safe traits
+    */
+
+
+    trait Animal {
+        fn make_sound(&self);
+    }
+    
+    #[derive(Clone)] // make it cloneable
+    struct Dog;
+    impl Animal for Dog {
+        fn make_sound(&self) {
+            println!("Woof!");
+        }
+    }
+    
+    #[derive(Clone)] // make it cloneable
+    struct Cat;
+    impl Animal for Cat {
+        fn make_sound(&self) {
+            println!("Meow!");
+        }
+    }
+
+    let dog: Dog = Dog;
+    let cat: Cat = Cat;
+
+    // static dispatch is used when calling dog.make_sound() as the concrete type is known at compile time.
+    // dynamic dispatch is used when calling animal.make_sound() on trait objects in a vector, where the 
+    // actual type is determined at runtime.
+
+    // Static dispatch
+    dog.make_sound(); // compiler knows the concrete type at compile time, calling the make_sound() method directly on the instance of the dog
+
+
+    // Dynamic dispatch, having a vector of trait objects
+    let animals: Vec<Box<dyn Animal>> = vec![Box::new(dog), Box::new(cat)];
+    for animal in animals {
+        // Box is a heap wrapper around the object contains all the methods of the actual object
+        animal.make_sound(); // dispatched dynamically at runtime cause we don't know what type of animal would be!
+    }
     
 
 }
