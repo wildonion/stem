@@ -14,6 +14,10 @@ use crate::*;
     NOTE1) share ownership using pointers: Box, Arc, Rc, &mut 
     NOTE2) get the owned (derefing) data using * move it by passing (ownership and borrowing rules) prevent from moving with clone()
     NOTE3) can't move if the type is behind a pointer or its ownership is shared cause may the pointer is being used by other scopes
+    NOTE4) borrow                      : same address same value
+           clone                       : different address samve value (new ownership)
+           deref mutable pointer       : different address and different value
+           update mutable pointer field: same address different value
     https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
     https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
     https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17

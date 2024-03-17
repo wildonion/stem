@@ -688,6 +688,8 @@ fn but_the_point_is(){
     let mut new_binding = String::from("onion"); 
     mutpname = &mut new_binding;
     println!("[CHANGED ADDR] mutpname pointer points to : {:p}", mutpname); // mutpname now contains completely a new value binding accordingly new location of the new binding
+    // -----> name has also changed too
+    // ....
     // ------------------------------------------------------------------------
     // ------------------------------------------------------------------------
 
