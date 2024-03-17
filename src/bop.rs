@@ -650,6 +650,83 @@ async fn pinned_box_ownership_borrowing(){
 
 fn DynamicStaticDispatch(){
 
+    // polymorphism and dynamic design with traits
+    struct GetPoint<T>{
+        pub x: T,
+        pub y: T
+    }
+    trait InterfaceExt{
+        type This;
+        fn set_points(&self) -> Self::This;
+    }
+
+    impl InterfaceExt for GetPoint<String>{
+        type This = GetPoint<String>;
+        fn set_points(&self) -> Self::This {
+            let points = self;
+            Self::This{
+                x: points.x.clone(),
+                y: points.y.clone()
+            }
+        }
+    }
+
+    impl InterfaceExt for GetPoint<u8>{
+        type This = GetPoint<u8>;
+        fn set_points(&self) -> Self::This {
+            Self::This{
+                x: self.x,
+                y: self.y
+            }
+        }
+    }
+
+    struct Math{
+        pub x: u8,
+        pub y: u8,
+        pub add_res: String,
+    }
+    trait Add<T>{
+        fn add(&mut self, value: T);
+    }
+
+    impl Add<String> for Math{
+        fn add(&mut self, value: String) { // since it's a mutable pointer the underlying instance gets mutated too 
+            self.add_res = format!("string: {}", self.x + self.y);
+        }
+    }
+
+    impl Add<Math> for Math{
+        fn add(&mut self, value: Math) {
+            self.add_res = format!("instance: {}", value.x + value.y);
+        }
+    }
+
+    // can't be object safe traits for dynamic dispatch cause `This` GAT must be specified in the treait
+    // which tells the compiler that teh trait must be sized
+    // let traits: Vec<Box<dyn InterfaceExt>> = vec![
+    //     Box::new(
+    //         GetPoint::<String>{
+    //             x: String::from("1"),
+    //             y: String::from("1")
+    //         }
+    //     ),
+    // ];
+
+    // trait objects for dynamic dispatching
+    let traits: Vec<Box<dyn Add<String>>> = vec![
+        Box::new(
+            Math{
+                x: 0,
+                y: 0, 
+                add_res: String::from("")
+            }
+        ),
+    ];
+    for mut t in traits{
+        t.add(String::from("")); // dynamic dispatching 
+    }
+    
     /*                  ---------------- dynamic dispatching allows to have polymorphism ----------------
         since trait objs are not sized having them as object (safe of course) should behind pointer follow up with dyn keyword
         goot to know that trait objects stores two kind of pointers one is a vtable pointers points to the trait methods
