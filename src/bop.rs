@@ -766,7 +766,7 @@ fn DynamicStaticDispatch(){
     // u := &User{};
     // var inter Trait; = u ---> implementing the Trait interface for u or bounding you to Trait interface
     //                           Trait interface methos can be called on u, inter is now an object interface bounded to u
-    let trait_object: Box<dyn Animal> = Box:new(Dog{}); // object safe trait of dynamic type Dog{}
+    let trait_object: Box<dyn Animal> = Box::new(Dog{}); // object safe trait of dynamic type Dog{}
 
     let dog: Dog = Dog;
     let cat: Cat = Cat;
@@ -787,4 +787,48 @@ fn DynamicStaticDispatch(){
     }
     
 
+}
+
+// only the passed in param with lifetime can be returned can't return a pointer to the local variable 
+// inside function since once the function gets executed all of them will be dropped out of the ram, with 
+// &self and &'staitc lifetime we can do this however. basically any type with longer lifetime than its 
+// scope may involve heap allocation if their size or lifetime is not known at compile time in rust when 
+// heap data pass to the function their ownership tranferred into a new one inside the function hence not 
+// allowed having access to the very first ownership after method call because the resources it uses are 
+// immediately freed and no longer valid with a lifetime which cause the compiler to update all its pointer 
+// to point to a new location later on, doing so is due to the fact that rust tells us every value must
+// have exactly one ownership specially those heap data ones unless data implements Copy trait which we can 
+// pass it by value without losing ownership, references impls Copy trait, the concept of lifetime belongs 
+// to pointers which tells rust how long a pointer can lives in that scope accordingly every type when they 
+// go out of their scope their lifetime come to end like all the types inside this function body
+pub async fn accept_str<'a>(name: &'a str) -> &'a str{
+
+    // not always heap data go on the heap, types with longer lifetime than their scopes
+    // will go on the heap too like having a tokio scope inside the a function body uses
+    // local variables of the function: either clone them to use them later or pass their
+    // borrow with a longer lifetime than their scope which is the function body to move 
+    // them into the scope without losing ownership cause once the function gets executed
+    // its scope will be ended and all its types lifetime come to end eventually will be 
+    // dropped out of the ram to clean allocated spaces.
+    fn lifetime<'v>() -> &'v [u8]{
+
+        let bytes: &'v [u8] = &[1];
+        
+        // can't move bytes into tokio scope since 'v doesn't live long enough and once the function gets 
+        // executed 'v is no longer accessible, the tokio spawn on the other hand, has a longer lifetime 
+        // than the function scope since it will start the task in the background until the future gets 
+        // completed we can tell that due to having a longer lifetime than the function scope the tokio 
+        // spawn process will go on the heap, however types with Box, Rc and Arc wrappers around them will 
+        // go on the heap too, so if we want to have a type lives longer than its scope we must define a 
+        // longer lifetime subsequently for that manually by taking a pointer to it with the defined lifetime.
+        // tokio::spawn(async move{
+
+        //     let b = bytes;
+        // });
+
+        bytes
+
+    }
+
+    name
 }
