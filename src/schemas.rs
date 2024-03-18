@@ -87,7 +87,16 @@ pub trait Reconnect{ //-- the following method must be invoked on taking mushroo
 ///////
 /// an abstract trait which can echo the feeling of pain through the neurons to the whole brain
 ///////
-pub trait Pain{}
+trait Pain<T>{
+    type Context;
+    fn set_pain(&mut self, kind: T);
+}
+struct Brain;
+struct RigthHandPain;
+impl Pain<RigthHandPain> for Brain{
+    type Context = Brain;
+    fn set_pain(&mut self, kind: RigthHandPain){}
+}
 
 
 ///////
