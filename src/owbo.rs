@@ -7,6 +7,19 @@ use crate::*;
 
 
 /* 
+    ************************************************************************************************
+    ************************** little warmup with ownership and borrowing **************************
+    ************************************************************************************************
+    → share ownership of type instead of moving and cloning and break the cycle using Rc and Arc heap based smart pointers 
+    → references (&, rc, arc, box) allow borrowing values without transferring ownership, enabling multiple parts of the code to access the same value without creating copies or new ownership just by accessing the reference of the type which is also a faster approach
+    → don't move or get the owned type if the type is behind a pointer which that pointer is being used by other scopes 
+    → if the type moves into new ownership its pointers get updated by rust but not able to use them after moving 
+    → can't return pointer from method if the type is owned by the method, only a pointer to the passed in param with valid lifetime
+    → return pointer to a data owned by the method is only possible if the lifetime of the pointers is static or belongs to the self
+    → self is valid as long as the object is valid so returning pointer with lifetime of self (&self) is valid
+    → every type has a lifetime and once the scope of the type gets ended the lifetime comes to end 
+    → moving a pointer into a scope longer then the owner scope is not valid cause once the scope of the owner gets dropped the pointer gets invalidated
+    → move if we don't need it in later scopes otherwise clone or pass by ref
     
     --------------------------------------------------------------------
     ------------------- Ownership an Borrowing Recaps ------------------
@@ -566,6 +579,7 @@ async fn pinned_box_ownership_borrowing(){
     // parent and children fields since graph fields (parant and children) are of type Node itself which makes a cycle 
     // at compile time.
 
+    // by pinning we say it's safe for the type to be moved cause it's value has stuck into a fixed position inside the ram hence its corresponding pointers which point to the value loaction 
     type Fut<'s> = std::pin::Pin<Box<dyn futures::Future<Output=SelfRef<'s>> + Send + Sync + 'static>>; // pinning the box type on the heap at a fixed position to tell Rust don't move this from the its location when we're moving it around the scopes
     struct SelfRef<'s>{
         pub instance_arc: std::sync::Arc<SelfRef<'s>>, // borrow and is safe to be shared between threads
@@ -732,7 +746,8 @@ fn DynamicStaticDispatch(){
         goot to know that trait objects stores two kind of pointers one is a vtable pointers points to the trait methods
         which are going to be called on the implementor instance and the other is a pointer to the underlying data or the 
         implementor, accordingly Box<dyn Trait> is an object safe trait and can be as object with dynamic dispatching at runtime 
-        if we don't know the exact implementor
+        if we don't know the exact type of implementor enitehr the compiler, also we've used Box to store dynamic sized data on
+        the heap, those types that their size are not known at compile time and it depends on some kinda implementor at runtime 
 
         in a programming language the generics can be handled in one of the two ways, static 
         dispatch or dynamic dispatch. In static dispatch, the various possible types of the 
