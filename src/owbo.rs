@@ -664,6 +664,98 @@ async fn pinned_box_ownership_borrowing(){
 
 fn DynamicStaticDispatch(){
 
+    // vector of closure object safe traits
+    let mut closures: Vec<Box<dyn FnMut() -> () + Send + Sync + 'static>> = vec![ // since closures are FnMut we've defined this as mutable
+        Box::new(||{}), Box::new(||{})
+    ];
+    let res = &closures[0](); // dynamic dispatching
+    let cls = (|id: u8|{
+        String::from("")
+    })(1);
+
+    pub struct Point{
+        pub x: u8,
+        pub y: u8
+    }
+    pub struct Circle{
+        pub r: String,
+        pub v: String
+    }
+    pub trait ObjectSafe<T: Send + Sync>{
+        fn set_value(&mut self, value: T);
+    }
+    // -> impl Trait
+    // param: impl Trait
+    // T: Trait 
+    // Box<dyn ---> for dynamic dipatch
+    struct Traits<T: Send + Sync>{
+        pub otraits: Vec<Box<dyn ObjectSafe<T>>> // vector of object safe trait with generic type for dynamic dipatching
+    }
+    impl ObjectSafe<Point> for Point{
+        fn set_value(&mut self, value: Point) {
+            self.x = value.x;
+            self.y = value.y;
+        }
+    }
+    impl ObjectSafe<Circle> for Circle{
+        fn set_value(&mut self, value: Circle) {
+            self.r = value.r;
+            self.v = value.v;
+        }
+    }
+    // an object safe trait is usually the instance of the implementor
+    // make sure that the trait is implemented for the struct
+    let point_traits = Traits::<Point>{
+        otraits: vec![
+            Box::new(
+                Point{
+                    x: 0,
+                    y: 0
+                }
+            ),
+            Box::new(
+                Point{
+                    x: 1,
+                    y: 10
+                }
+            ),
+        ]
+    };
+    let circle_traits = Traits::<Circle>{
+        otraits: vec![
+            Box::new(
+                Circle{
+                    r: String::from("1"),
+                    v: String::from("2")
+                }
+            ),
+            Box::new(
+                Circle{
+                    r: String::from("0"),
+                    v: String::from("10")
+                }
+            ),
+        ]
+    };
+    for mut ct in circle_traits.otraits{
+        // dynamic dispatching on every ct instance
+        ct.set_value(
+            Circle{
+                r: String::from("20"),
+                v: String::from("30")
+            }
+        );
+    }
+    for mut pt in point_traits.otraits{
+        // dynamic dispatching on every pt instance
+        pt.set_value(
+            Point{
+                x: 45,
+                y: 55
+            }
+        );
+    }
+
     // polymorphism and dynamic design with traits
     struct GetPoint<T>{
         pub x: T,
