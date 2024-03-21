@@ -634,7 +634,122 @@ pub fn vector_slice<T>(s: Vec<T>) -> &'static [T]{
     Box::leak(s.into_boxed_slice())
 }
 
+
+fn dynamic_typing(){
+
+    /* 
+        we can leverage the power of trait in rust to make a dynamic type and calls
+        using Box<dyn Trait> since there might be some situation that we don't know 
+        the exact type of some object the only thing it's worth nothing to know is 
+        that it MUST implements the Trait so we could act like an object safe trait.
+    */
+    // dynamic dispatching and typing means this type can be of type anything it only needs
+    // to implement the Any trait so we can cast its instances of the type into the actual 
+    // concrete type, we can use the idea of dynamic dispatching to create dynamic typing
+    // a type can be of Any if it implements the Any trait then we could cast it into the 
+    // concrete type since Box<dyn Trait> in Rust is like type assertion in Go used for dynamic 
+    // typing and dispatching make sure type implements Any trait in order to do the casting 
+    // it's like type assertion in Go with interface{} to cast the object of type interface{} 
+    // to its underlying concrete type the idea beind Any is the same as type assertion and
+    // dynamic dispatching process or Box<dyn Trait> which allows us to box any type that 
+    // implements Any trait so we can do the casting operation later and assert that the 
+    // underlying type of Any is what we're trying to casting it into the desired concrete
+    // type, generally we can use traits to add interfaces to structs, for dynamic typing 
+    // dispatching and polymorphism using Box<dyn Trait>, casting trait object into the type,
+    // using downcast_ref() method, casting type into the trait object using &String as &dyn Trait
+    // the Box<dyn Trait> basically means that putting the trait behind an smart pointer on the
+    // heap and since we don't know the exact type of implementor we add a dyn keyword behind 
+    // the trait it's worth noghing to say that the implementor must implements the Trait in 
+    // order to call trait methods on the instance or cast the trait into our concrete type.
+
+    use std::any::{Any, TypeId}; // TypeId is a global unique id for a type in the whole app
+    let boxed: Box<dyn Any> = Box::new(3_i32); // Any trait object, i32 implements Any trait
+
+    let mut name: Box<dyn Any>; // name can be any type that implements the Any trait, later we can cast or assert the value into the desired type
+    name = Box::new(String::from("wildonion"));
+    println!("string before casting and mutating it : {:?}", name);
+    println!("string address before casting and mutating it : {:p}", &name);
+
+    let name_id = (&*name).type_id();
+    // assert!(name_id, "{}", TypeId::of::<String>());
+
+    // assert that the name type can be casted into the String or not
+    match name.downcast_mut::<String>(){ // trying to cast the trait object into a mutable String type
+        Some(mutable_ref) => {
+            // it's mutable pointer we can change the content of the name
+            // dereferencing won't change the address it only changes the underlying data (same address but different value)
+            *mutable_ref = String::from("changed wildonion");
+        },
+        None => {
+            println!("can't cast into string");
+        }
+    };
+
+    // dereferencing won't change the address of name, it's the same as before
+    println!("string after casting and mutating it : {:?}", name);
+    println!("string address after casting and mutating it : {:p}", &name);
+
+
+}
+
 fn but_the_point_is(){
+
+    // ********------********------********------********------********------
+    // ********------********------********------********------********------
+    // -> updating pointer with new binding changes both the address and value
+    // -> dereferencing the pointer mutates the underlying value but keeps the address
+    /* -> in Go: 
+        u := User{Name: "onion"}
+        p := &u
+        println("p", p)
+
+        // changing p completely with new address and value, this won't change the u
+        p = &User{Name: "changed"} // changing address and value, breaks the pointer points to u
+
+        // since p has been changed with new binding, dereferencing it will change 
+        // the newly p value and it has nothing to do with u
+        println("p", p)
+        *p = User{Name: "wildonion"} // changing value keeps the address
+
+        println("p", p)
+
+        // this remains the same
+        println("u", u.Name)
+    */
+
+    let mut me = String::from("onion");
+    let mut mutme = &mut me;
+    println!("me address : {:p}", mutme);
+    
+    // changing the address and the underlying value completely 
+    // this logic break the pointer to the `me` and it replaces 
+    // with a new address and value so after this the `me` value
+    // won't change
+    let mut new_me = String::from("changed");
+    mutme = &mut new_me; // this won't change the `me`, breaks the pointer points to `me`
+    println!("me address : {:p}", mutme);
+    // -----> name is NOT changed after changing the mutme completely with a new binding
+    
+    // changing the underlying value only but NOT the address
+    // this logic keeps the pointer pointing to the me location
+    // and only mutate its underlying data
+    *mutme = String::from("another changed");
+    println!("me address : {:p}", mutme);
+    // -----> name is changed after dereferencing the mutme
+
+    // since `mutme` has been mutated with a new binding and address thus there is no
+    // pointer points to the `me` location and dereferencing `mutme` (*mutme) will change 
+    // the content inside the `mutme` only, which has been changed with "changed" and 
+    // now has "another changed" value, this has nothing to do with `me` cause the `mutme` 
+    // is not pointing to the `me` any more after getting a new location of new binding, 
+    // the pointer breaks the pointing once a new binding put into it, if we didn't update 
+    // the `mutme` with a new binding, after dereferencing it, the `me` would have upaded too.
+    // ...  
+
+    println!("me : {:?}", me); // onion as before
+    println!("mutme : {:?}", mutme); // another changed
+    // ********------********------********------********------********------
+    // ********------********------********------********------********------
 
     type Ret = &'static str;
     fn add(num1: Ret, num2: Ret) -> Ret where Ret: Send{
@@ -688,7 +803,7 @@ fn but_the_point_is(){
     let mut new_binding = String::from("onion"); 
     mutpname = &mut new_binding;
     println!("[CHANGED ADDR] mutpname pointer points to : {:p}", mutpname); // mutpname now contains completely a new value binding accordingly new location of the new binding
-    // -----> name has also changed too
+    // -----> name is NOT changed after changing the mutpname completely with a new binding
     // ....
     // ------------------------------------------------------------------------
     // ------------------------------------------------------------------------
@@ -737,9 +852,9 @@ fn but_the_point_is(){
     println!("mutpuser contains address before binding: {:p}", mutpuser); // same as `contains user address`
     // binding a complete new instance to mutpuser, causes to point to new location
     mutpuser = &mut binding;
-    // the address of mutpuser will be changed and points to new binding instance address
+    // the address of mutpuser got changed and now points to new binding instance address
     println!("mutpuser contains address after binding: {:p}", mutpuser);
-    println!("mutpuser address itself: {:p}", &mutpuser); // contains user address
+    println!("mutpuser address itself: {:p}", &mutpuser);
 
     // we're getting a mutable pointer to an in place User instance
     // the in place instance however will be dropped after initialization
@@ -823,7 +938,7 @@ fn but_the_point_is(){
     // println!("mutpuser is changed {:?}", mutpuser); // the mutpuser is changed also
 
     type LargeUInt = u128;
-    type Func<A = UserPl, R> = fn(A) -> R; // A has a default type param
+    type Func<A = UserPl, R> = fn(A) -> R; // A has a default type set to UserPl
     let cls = |num: LargeUInt|{
         String::from("")
     };
