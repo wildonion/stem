@@ -115,6 +115,8 @@ https://blog.yoshuawuyts.com/
 https://www.i-programmer.info/programming/theory.html
 https://www.i-programmer.info/babbages-bag/
 https://without.boats/blog/
+https://crates.io/crates/pyo3
+https://github.com/mozilla/cbindgen -> generate c bindings and .so from rust code using unsafe coding
 codec, virtual machine like move and evm with allocation concepts 
     - macro dsl
     - thread_local, actor id or address, std::alloc, jemalloc, bumpalo and r3bl_rs_utils arena as a global allocator
