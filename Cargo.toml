@@ -29,7 +29,7 @@ syn = { version = "*", features = ["full"] }
 quote = "*"
 proc-macro2 = "*"
 futures = "0.3"
-wallexerr = "0.3.1"
+wallexerr = "0.3.2"
 
 
 
