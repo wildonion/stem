@@ -546,6 +546,25 @@ use crate::*;
 
 async fn pinned_box_ownership_borrowing(){
 
+    /* 
+        self-ref, raw pointers, future objects, recursive funcs:
+        we have to put them on the heap using rc, arc, box to break the cycle pointer 
+        to themselves cause rust won't update their pointer if they want to be moved,
+        or we can pin their value into the ram at a fixed position and address
+        which forces rust not to change the location of the type even if it wants to move
+        hence any pointer of that won't get invalidated, self ref types are struct
+        with fields of their own type and recursion functions they need to behind 
+        some smart pointers which adds indirection like Box::pin, rc, arc usually 
+        Box::pin is perfectly fine to break the cycle
+    */
+    async fn help(n: u8){
+        if n == 0{
+            return;
+        }
+        
+        let boxed = Box::pin(help(n)).await; // adding some indirection to break the cycle of self calling
+    }
+
     // ====================================
     //          Boxing traits
     // ====================================
@@ -555,7 +574,7 @@ async fn pinned_box_ownership_borrowing(){
         }
     }
     #[derive(Debug)]
-    enum ClientError{}
+    struct ClientError{}
     fn set_number() -> i32{ 0 }
     impl std::error::Error for ClientError{} // the Error trait must be implemented for the enum so we can return a boxed instance of the ClientError
     let boxed_error: Box<dyn std::error::Error + Send + Sync + 'static> = Box::new(ClientError{}); // we can return the boxed_error as the error part of this return type: Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
@@ -664,7 +683,7 @@ async fn pinned_box_ownership_borrowing(){
 
 fn DynamicStaticDispatch(){
 
-    // vector of closure object safe traits
+    // vector of closure object safe traits, trait objects must be built from structs or union not enum 
     let mut closures: Vec<Box<dyn FnMut() -> () + Send + Sync + 'static>> = vec![ // since closures are FnMut we've defined this as mutable
         Box::new(||{}), Box::new(||{})
     ];

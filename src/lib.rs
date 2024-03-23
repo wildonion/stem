@@ -11,7 +11,7 @@ use crate::misc::*;
 mod graph;
 use crate::graph::*;
 mod owbo;
-use crate::bop::*;
+use crate::owbo::*;
 
 
 // generator are dangerous in rust since they return a value to the caller without waiting 
@@ -209,11 +209,6 @@ thread_local! {
 // a single thread arena allocator
 thread_local!{
 
-    fn func() -> i32{
-        0
-     }
-    let funcpointer = func as *const (); // () is function in c
-
     pub static DB: std::cell::RefCell<std::collections::HashMap<String, String>> = 
         std::cell::RefCell::new(HashMap::new());
 }
@@ -222,6 +217,11 @@ thread_local!{
 // });
 
 fn local_storage_ex(){
+
+    fn func() -> i32{
+        0
+     }
+    let funcpointer = func as *const (); // () is function in c
 
     // set() sets or initializes the contained value unlike the other methods, 
     // this will not run the lazy initializer of the thread local. instead, 
@@ -316,5 +316,3 @@ pub fn init_vm(){
     };
 
 }
-
-

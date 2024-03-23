@@ -1,9 +1,11 @@
 
 
+use core::num;
 use std::{collections::HashMap};
 use futures::future::{BoxFuture, FutureExt};
 use tokio::net::tcp;
 use serde::{Serialize, Deserialize};
+use once_cell::sync::Lazy;
 
 // static requires constant value and constant values must be only stack data like &[] and &str otherwise
 // we're not allowed to have heap data types like Vec, String, Box, Arc, Mutex in const and static as value
@@ -12,13 +14,13 @@ use serde::{Serialize, Deserialize};
 // generally only &[] and &str are allowed to be in const and static value, using other types than these
 // requires a global static lazy arc mutex like so:
 type SafeMap = Lazy<std::sync::Arc<tokio::sync::Mutex<HashMap<String, String>>>>;
-pub static GLOBALMAP: SafeMap = Lazy::new(||[
+pub static GLOBALMAP: SafeMap = Lazy::new(||{
     std::sync::Arc::new(
         tokio::sync::Mutex::new(
             HashMap::new()
         )
     )
-]);
+});
 pub static ONTHEHEAP: &[&str] = CONSTVALUE;
 pub const CONSTVALUE: &[&str] = &["wildonion"];
 pub const CHARSET: &[u8] = b"0123456789";
@@ -408,7 +410,7 @@ fn trait_as_param_type(param: impl FnOnce() -> ()){
     struct Auth{}
     impl AuthExt for Auth{}
     impl Auth{
-        fn get_trait(&self) -> &(dyn AuthExt + Send + Sync + 'static){
+        fn get_trait(&self) -> &(dyn AuthExt){
             let t = self as &dyn AuthExt; // use casting
             t 
             // &Self{}
@@ -756,7 +758,7 @@ fn but_the_point_is(){
         for ch in num2.chars(){
             num1.to_string().push(ch);
         }
-        let static_str = helpers::misc::string_to_static_str(num1.to_string());
+        let static_str = Box::leak(num1.to_string().into_boxed_str()) ;
         static_str
     }
 
@@ -808,7 +810,7 @@ fn but_the_point_is(){
     // ------------------------------------------------------------------------
     // ------------------------------------------------------------------------
 
-    #[derive(Default, Debug)]
+    #[derive(Default, Debug, Clone)]
     struct User{
         name: String,
         age: u8,
@@ -938,7 +940,7 @@ fn but_the_point_is(){
     // println!("mutpuser is changed {:?}", mutpuser); // the mutpuser is changed also
 
     type LargeUInt = u128;
-    type Func<A = UserPl, R> = fn(A) -> R; // A has a default type set to UserPl
+    type Func<R, A = UserPl> = fn(A) -> R; // A has a default type set to UserPl
     let cls = |num: LargeUInt|{
         String::from("")
     };
