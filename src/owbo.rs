@@ -555,7 +555,28 @@ async fn pinned_box_ownership_borrowing(){
         hence any pointer of that won't get invalidated, self ref types are struct
         with fields of their own type and recursion functions they need to behind 
         some smart pointers which adds indirection like Box::pin, rc, arc usually 
-        Box::pin is perfectly fine to break the cycle
+        Box::pin is perfectly fine to break the cycle,
+
+        the reason of not allowed to have async recursive func is because the function 
+        itself is a future object and future objects are traits which are dynamic sized 
+        having them as trait object requires to put them behind Box<dyn and be an object
+        safe trait, in Rust however, self ref types can't be moved around the ram easily 
+        it's not safe to do so cause any pointer of self ref can't be updated by the Rust 
+        compilre if they want to be moved and due to this, any moves gets broken in the 
+        first place, solution to this is adding some indirection to them to break the cycle 
+        like wrap them with Box, Rc, Arc or pin them into the ram at a fixed position to 
+        not allow Rust ownership and borrowing to move them between different parts of the 
+        ram cause by every move the type gets a new ownership thus new address 
+        Rust doesn't have gc and it moves data between different parts of the ram to clean
+        the heap by moving them the address gets changed too so any pointer of them which 
+        is pointing to them must be updated to be valid but Rust ignore updating the pointers
+        of self ref types which causes to break the move in the first place, pinning type 
+        tells Rust that it's safe to move the type since it has stuck into a fixed position 
+        and can't be moved thus any pointer won't get invalidated because its pointers 
+        point to the same location even after moving.
+
+        smart pointers are a wrapper around the type to put them on the heap therefore 
+        it has all the methods of their underlying data
     */
     async fn help(n: u8){
         if n == 0{
@@ -682,6 +703,10 @@ async fn pinned_box_ownership_borrowing(){
 }
 
 fn DynamicStaticDispatch(){
+
+    // trait objects must be behind pointer like & or Box, they're are dynamic sized and are abstract
+    // hence they need an implementor acting them as object, requires to put them behind dyn enables us 
+    // create an instance of the type that implements this trait, that instance would be the trait object.
 
     // vector of closure object safe traits, trait objects must be built from structs or union not enum 
     let mut closures: Vec<Box<dyn FnMut() -> () + Send + Sync + 'static>> = vec![ // since closures are FnMut we've defined this as mutable
