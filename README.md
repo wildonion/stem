@@ -1,5 +1,10 @@
 
 
-A Graph Virtual Machine for [gem](https://github.com/wildonion/gem) __ **UNDER ACTIVE DEVELOPMENT**
 
-> Rust ownership and borrowing [recaps](https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules)
+## Court Piece Game
+
+- MMQ and realtiming push notif pubsub actor with
+    - actix http, websocket, telepathy and broker 
+    - redis p2p tcp grpc
+- spacetimedb and sse 
+- ci/cd actors and middlewares

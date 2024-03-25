@@ -32,7 +32,7 @@ use crate::*;
            deref mutable pointer       : different address and different value
            update mutable pointer field: same address different value
     https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
-    https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
+    https://github.com/wildonion/courtokm/wiki/Ownership-and-Borrowing-Rules
     https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17
     https://github.com/wildonion/rusty/blob/main/src/llu.rs
     https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg2.rs#L10

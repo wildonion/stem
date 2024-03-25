@@ -1,0 +1,40 @@
+
+build dl models based on top users dataset using keras and https://github.com/wildonion/stem/
+behavioural graph virtual machine by utilising top users dataset to match them for new game 
+and event and update their stars field using the match making rating or ranking (**MMR**)
+engine, which is is a weighted tree based suggestion engine that suggests users, events 
+and other games and users based on their ranks.
+
+</> realtime pubsub streaming and push notif with aws, docker, rust and go:
+    === pubsub remote/local actor worker protocols: actix ws sessions broker telepathy, libp2p gossipsub, redis, tonic grpc
+    === actix http tokio(time,channel,spawn,tcp,select,arc,mutex,rwlock), serding, ltg pointers
+    === app state shared data 
+    === http request: stream and payload for ws and multipart 
+    === tcp request: serding bytes and ltg pointers 
+    === grpc request: protobuf streaming 
+    === pub actor worker to publish data to channel (interval, tokio spawn, channels, while let some)
+    === sub actor worker to subscribe to data on a channel (interval, tokio spawn, channels, while let some)
+    === remote actor using p2p gossipsub redis pubsub and actix telepathy and local using redis pubsub and broker
+    === push notif and realtiming using http, ws, libp2p, grpc + redis pubsub actors | local/remote pubsub channel like mpsc and tcp queue
+
+</> ram and cpu concepts: pubsub push notif with tcp(tokio::*), actor worker(actix::* [ws,http]), redispubsub and libp2p, ?async:
+    === app state, lib crates, static lazy arc mutex, ownbor wiki + ltg, zero copy, null pointer opt, serding function
+    === &'v, box, rc, refcell, arc, mutex, pin to break cycle and borrow types in graph, thread_local, unique storage key
+    === phantomdata, boxpin, &mut_, arena glob alloc, -> impl Interface, param: impl Interface, Box<dyn Trait> object safe trait
+    === realtiming, push notif, streaming over payload and multipart bytes,
+    === background scheudler for async task in tokio spawn using tokio::time, actor ctx.run_interval()
+    === spawn, select, mpsc, mutex, whileletsome, customerror, redis timecache, thread::spawn, tokio::spawn, rayon::spawn, mailbox mpsc
+    rust in game, cpu and ram ----> ltg, pointer, graph algos (ownership sharing by cloning using rc, arc, mutex, refcell, box, pin)
+    rust in web               ----> actix ws (Stream), http (Multipart), actor worker (redis pubsub, borker pubsub, gossipsub p2p rpc) 
+    rust in networking        ----> tokio(time,channel,spawn,tcp,select,arc,mutex,rwlock), libp2p, redis, tonic grpc actors
+    rust in wasm, lle and ffi ----> tauri, yew, bindgen, bpf
+    rust in cryptography      ----> wallexerr (high entropy seed -> hash seed -> generate rng from seed -> generate keypair)
+    1) app state to start s3, actors and configs
+    2) requset to reveal some data through http then update data in db
+    3) publisher actor to publish new data to redis channel inside the tokio spawn time loop until a subscriber receives it 
+    4) subscriber actor to start subscribing in the background with ctx.run_interval to receive the data
+    5) cache received data from redis some where or update the state of the actor to store the received data
+    6) http or ws over redis to get notifications data received from the subscriber related to the passed in entity id
+    7) retrieve data from the cached storage or reading the actor state by sending a message to it to fetch data 
+    8) respond the user with his fetched notifications  
+    9) create then send sse to client through /events/ route with a broadcaster chanenl struct
