@@ -21,3 +21,8 @@ sudo make install
 # install themis on MacOS M1
 brew install libthemis
 ```
+## 🧱 WIPs
+
+- update crates, new rust edition, 
+- schemas.rs, mathista, informationr.rs
+- compile to .so, .wasm
