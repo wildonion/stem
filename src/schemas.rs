@@ -11,6 +11,7 @@
     https://drive.google.com/file/d/1K2uO8D_qLhXWcAHDpICmbfFx3hfQ4Sah/view?usp=share_link -> Models of the Mind
     https://drive.google.com/file/d/17aF74xeydgx_BulPknWv6NiU4wgTBwfQ/view?usp=share_link -> Descartes' Error
     https://www.biorxiv.org/content/10.1101/703801v1.full.pdf -> neuralink
+    https://github.com/wildonion/gvm/
     https://github.com/wildonion/cs-concepts
     TODO - a neuron sends message to its closest neuron using slot, epoch and graph concepts
     TODO - all data for communication between neuron actors must be serialized with capn'p proto to call each other methods directly inside the brain
