@@ -1,9 +1,5 @@
 
 
+A Graph Virtual Machine for STEM __ **UNDER ACTIVE DEVELOPMENT**
 
-## Court Piece Game
-
-- realtiming pusub push notif for mmq
-- sse, ci/cd actors
-- middlewares
-- spacetimedb 
+> Rust ownership and borrowing [recaps](https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules)

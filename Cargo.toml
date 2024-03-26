@@ -1,5 +1,5 @@
 [package]
-name = "courtokm"
+name = "gvm"
 version = "0.1.0"
 edition = "2021"
 
@@ -36,3 +36,7 @@ syn = { version = "*", features = ["full"] }
 quote = "*"
 proc-macro2 = "*"
 futures = "0.3"
+
+[[bin]]
+name = "gvm"
+path = "src/main.rs"

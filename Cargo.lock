@@ -372,37 +372,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "courtokm"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "chrono",
- "dotenv",
- "env_logger 0.10.2",
- "futures",
- "futures-util",
- "gvmlib",
- "hex",
- "log",
- "log4rs",
- "once_cell",
- "pretty_env_logger",
- "proc-macro2",
- "quote",
- "rand",
- "rand_chacha",
- "rayon",
- "serde",
- "serde_json",
- "syn 2.0.53",
- "tokio",
- "uuid",
- "wallexerr",
- "wasmer 4.2.6",
- "wasmer-wasi",
-]
-
-[[package]]
 name = "cpufeatures"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1025,6 +994,37 @@ name = "gimli"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
+
+[[package]]
+name = "gvm"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger 0.10.2",
+ "futures",
+ "futures-util",
+ "gvmlib",
+ "hex",
+ "log",
+ "log4rs",
+ "once_cell",
+ "pretty_env_logger",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "serde",
+ "serde_json",
+ "syn 1.0.109",
+ "tokio",
+ "uuid",
+ "wallexerr",
+ "wasmer 4.2.6",
+ "wasmer-wasi",
+]
 
 [[package]]
 name = "gvmlib"
