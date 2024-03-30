@@ -10,7 +10,7 @@ use crate::*;
     ************************************************************************************************
     ************************** little warmup with ownership and borrowing **************************
     ************************************************************************************************
-    → share ownership of type instead of moving and cloning and break the cycle using Rc and Arc heap based smart pointers 
+    → share and transfer ownership of type instead of moving and cloning, break the cycle of self-ref types and reference counting using Rc, Arc, RefCell, Mutex, Box, Pin heap based smart pointers and wrappers
     → references (&, rc, arc, box) allow borrowing values without transferring ownership, enabling multiple parts of the code to access the same value without creating copies or new ownership just by accessing the reference of the type which is also a faster approach
     → don't move or get the owned type if the type is behind a pointer which that pointer is being used by other scopes 
     → if the type moves into new ownership its pointers get updated by rust but not able to use them after moving 
@@ -18,7 +18,9 @@ use crate::*;
     → return pointer to a data owned by the method is only possible if the lifetime of the pointers is static or belongs to the self
     → self is valid as long as the object is valid so returning pointer with lifetime of self (&self) is valid
     → every type has a lifetime and once the scope of the type gets ended the lifetime comes to end 
-    → moving a pointer into a scope longer then the owner scope is not valid cause once the scope of the owner gets dropped the pointer gets invalidated
+    → moving a pointer into a scope longer then the owner scope is not valid cause once the scope of the owner gets dropped the pointer gets invalidated 
+      like moving a pointer into a tokio spawn scope inside a function since the function gets executed all its local variables will be dropped thus any
+      pointers of them will get invalidated
     → move if we don't need it in later scopes otherwise clone or pass by ref
     
     --------------------------------------------------------------------
@@ -728,8 +730,8 @@ fn DynamicStaticDispatch(){
     pub trait ObjectSafe<T: Send + Sync>{
         fn set_value(&mut self, value: T);
     }
-    // -> impl Trait
-    // param: impl Trait
+    // -> impl Trait for static dispatch, actual type is hidden from the caller
+    // param: impl Trait for static dispatch, actual type is hidden from the caller
     // T: Trait 
     // Box<dyn ---> for dynamic dipatch
     struct Traits<T: Send + Sync>{
