@@ -548,6 +548,26 @@ use crate::*;
 
 async fn pinned_box_ownership_borrowing(){
 
+    // we can handle the lifetime of types dynamically on the heap using smart pointers
+    // cause they have their own lifetime
+    
+    /////// deref
+    let mut var = String::from("");
+    println!("var is : {:?}", var);
+    let pmut = &mut var;
+    let boxed_pmut = Box::new(pmut);
+    **boxed_pmut = String::from("updated"); // mutate the underlying data of the box pointer with a new value, this changes the var too
+    println!("var is : {:?}", var);
+    
+    /////// new binding 
+    let mut var = String::from("");
+    println!("var is : {:?}", var);
+    let pmut = &mut var;
+    let mut boxed_pmut = Box::new(pmut);
+    *boxed_pmut = &mut String::from("updated"); // change the box with a new binding 
+    println!("var is : {:?}", var);
+
+
     /* 
         self-ref, raw pointers, future objects, recursive funcs:
         we have to put them on the heap using rc, arc, box to break the cycle pointer 
@@ -1059,6 +1079,24 @@ pub async fn accept_str<'a>(name: &'a str) -> &'a str{
 
         //     let b = bytes;
         // });
+
+        // fn test_spawn(){
+
+        //     let mut name = String::from("");
+        //     let pmut = &mut name;
+        //     let boxed_pmut = Box::new(pmut);
+            
+        //     tokio::spawn(async move{
+                // mutating the underlying data of the boxed value by double derefing
+        //         **boxed_pmut = String::from("updated");
+
+        //     });
+
+        //     println!("name is : {:?}", name);
+        //     println!("boxed_pmut is : {:?}", boxed_pmut); // can't have boxed_pmut here since it's been moved into tokio spawn
+
+
+        // } // name will be dropped here by calling the drop() method but its pointer is being used in tokio scope, it requires to be static
 
         bytes
 
