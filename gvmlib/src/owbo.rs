@@ -639,7 +639,6 @@ async fn pinned_box_ownership_borrowing(){
         reference to it to continue using the pinned pointer `pinned_name`.
     */
     
-
     // Boxing mutable pointer of the type has access to the underlying value of the data
     // so mutating the boxed value mutates the actual data, by pinning the mutable pointer
     // of the type we're actually pin its value mutably into the ram means we can mutate 
@@ -651,12 +650,12 @@ async fn pinned_box_ownership_borrowing(){
     // be used in here to move the future around different scopes and threads
     let boxed_fut = Box::pin(&mut async move{}); // pinning the mutable pointer to the future, Box handles the allocation and lifetime of the type dynamically on the heap
     
-    
+    // **************************************************************
+    // ************************* SCENARIO 1 *************************
+    // **************************************************************
     let mut name = String::from("");
     let mut pinned_name = Box::pin(&mut name); // box and pin are pointers so we can print their address
     **pinned_name = String::from("wildonion");
-    
-    
     // passing name to this method, moves it from the ram
     // transfer its ownership into this function scope with
     // new address, any pointers (&, Box, Pin) will be dangled
@@ -666,13 +665,31 @@ async fn pinned_box_ownership_borrowing(){
     fn try_to_move(name: String){ 
         println!("name has new ownership and address: {:p}", &name);
     }
-    
     try_to_move(name);
-    
     // then what's the point of pinning it into the ram if we can't 
     // access the pinned pointer in here after moving the name?
     // we can't access the pinned pointer in here cause name has moved
     // println!("address of pinned_name {:p}", pinned_name);
+    // **************************************************************
+    // ************************* SCENARIO 2 *************************
+    // **************************************************************
+    // i've used immutable version of the name to print the 
+    // addresses cause Rust doesn't allow to have immutable 
+    // and mutable pointer at the same time.
+    let mut name = String::from("");
+    println!("name address itself: {:p}", &name);
+    let mut pinned_name = Box::pin(&name); // box and pin are pointers so we can print their address
+    println!("[MAIN] pinned type has fixed at this location: {:p}", pinned_name);
+    // box is an smart pointer handles dynamic allocation and lifetime on the heap
+    // passing the pinned pointer of the name into the function so it contains the 
+    // pinned address that the name has stuck into same as outside of the function
+    // scope.
+    fn move_me(name: std::pin::Pin<Box<&String>>){
+        println!("name content: {:?}", name);
+        println!("[FUNCTION] pinned type has fixed at this location: {:p}", name);
+        println!("pinned pointer address itself: {:p}", &name);
+    }
+    move_me(pinned_name);
     //===================================================================================================
     //===================================================================================================
     //===================================================================================================
