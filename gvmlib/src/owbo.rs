@@ -22,7 +22,12 @@ use crate::*;
       like moving a pointer into a tokio spawn scope inside a function since the function gets executed all its local variables will be dropped thus any
       pointers of them will get invalidated
     → move if we don't need it in later scopes otherwise clone or pass by ref
-    
+    → can't move pointer of into a new scope longer than the pointee cause if the scope of the pointee gets ended its pointer gets invalidated
+    → a pointer can be valid and none dangled if its underlying type didn't got moved and dropped out of the ram and its scope is still valid
+    → a pointer can be moved into a new scope if its underlying type has an scope longer than the one we want to move its pointer into
+    - lifetime of a pointer depends on its underlying data lifetime and should valid as long as the actual data has not dropped out yet
+    - futures are self-ref object safe traits and must be appear as a pinned version of their Box but other traits can be Box<dyn
+
     --------------------------------------------------------------------
     ------------------- Ownership an Borrowing Recaps ------------------
     --------------------------------------------------------------------
@@ -548,8 +553,137 @@ use crate::*;
 
 async fn pinned_box_ownership_borrowing(){
 
+    //===================================================================================================
+    //===================================================================================================
+    //===================================================================================================
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// if Future<T> is an async version of T then it must be Send Sync 'static and pinned into the ram /////
+    ///// heap smart pointers and wrappers around the type ownership: Arc, Rc, Box, Pin ///// 
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /*  
+        traits are interfaces which are dynamically sized cause they don't have size on their own they need 
+        implementor to get size at compile time otherwsie we could use them as object trait with Box<dyn or 
+        &dyn, Box is better cause it handles dynamic allocation and lifetime on the heap but pointer needs a 
+        valid lifetime also pointer of self-ref traits or Box must be pinned into the ram cause rust don't update 
+        their pointers once they moved into a new scope by pinning we tell rust that the value has stuck into 
+        a fixed position into the ram so don't worry about new ownership and addresss, pointers won't get invalidated.
+        ---------------------------
+        rust updates all pointers of the type after moving but doesn't allow to use them since the type has been 
+        moved out of the ram and has a new address and ownership, pin is good for pinning the type value into the 
+        ram to avoid dropping it and keep it at a fixed position, the location of the value will be fixed so any 
+        pointer of that would be valid cause the ownership of the value has not transferred into a new one, rust 
+        doesn't have gc so it moves heap data types around the ram once they go out of the scope like by passing 
+        them into a function, the drop() method will be called for the old owner before it get passed so we don't 
+        have it after moving and any pointer of that can't be used however rust update them with a new location of 
+        the moved value which contains the new address cause once the type goes into a new scope it gets a new ownership 
+        in that scope hence it address will be changed thus to avoid having invalidated pointers rust updates all 
+        pointer after moving to point to the right location but can't use them!, this is not true about self-ref 
+        types like future objects or structure with their own type fields the solution is pinning them into the ram 
+        on the heap using Box::pin which has dynamic allocation and lifetime, pinning a mutable pointer of the type 
+        pins the actual value of the type cause passing the value to pin method moves the type we can pin either the 
+        pointer or mutable pointer of that to have the type in later scopes.
+        ---------------------------
+        Pin pins tell Rust to pin the value in an stable memory address and tell Rust don't move it from 
+        that position cause we want to deal with pointers of pinned value and we need a fixed memory address 
+        to avoid having dangling pointers like pointing to self-ref types, we do this by pinning the self-ref
+        type into the ram so any pointer of that be valid while we're passing the pinned object into other scopes
+        and functions cause we know that the pinned value has a fixed memory address and not afraid of having
+        dangling pointers of that, note that the Rust ownership rules precedence over this meaning that if 
+        the pinned value moves then the pinned pointer itself will be invalid!
+        ---------------------------
+        In Rust, the concept of pinning a value with `Pin` does not mean fixing the memory address of the value. 
+        Instead, pinning ensures that the value remains at a stable memory location and does not move in memory, 
+        even when the surrounding data is moved. This is crucial for certain scenarios where the stability of 
+        memory addresses is required, such as when dealing with self-referential structs or when working with 
+        asynchronous code.
+        Here are the key points to understand about pinning in Rust:
+
+            1. **Preventing Unintended Movement:** When a value is pinned with `Pin`, it means that the value will 
+                not be moved in memory by Rust's normal ownership rules. This is important for scenarios where the 
+                stability of memory addresses is critical, such as when dealing with references that point to the 
+                pinned value.
+
+            2. **Stability for References:** Pinning ensures that references to the pinned value remain valid and 
+                do not become dangling references, even if the surrounding data is moved. This is particularly useful 
+                in asynchronous programming, where references to data may need to be preserved across asynchronous 
+                boundaries.
+
+            3. **Interaction with Drop Trait:** Pinned values can still be dropped like any other value in Rust. 
+                However, the `Drop` trait implementation for a pinned value should not move the value, as moving 
+                a pinned value can lead to undefined behavior.
+
+            4. **Memory Safety:** By using `Pin`, Rust provides a safe way to work with self-referential data 
+                structures and ensures that references to the pinned value remain valid and do not lead to memory 
+                unsafety.
+
+        generally pinning a value with `Pin` in Rust does not fix the memory address of the value but rather 
+        ensures that the value remains stable in memory and does not move unintentionally. This stability is 
+        crucial for maintaining the validity of references and ensuring memory safety in scenarios where the 
+        movement of data could lead to issues with references and memory management.
+        ---------------------------
+        In Rust, the `Pin` type is used to ensure that a value remains at a fixed memory location, preventing it 
+        from being moved or deallocated. However, it's important to understand that pinning a value with `Pin` 
+        does not prevent the value from being moved by ownership transfers. When you pass ownership of a value 
+        to a function or another scope, the original value is moved, and any pointers to that value, including 
+        `Box::pin` pointers, become invalid (dangling).
+        when you pass the `name` variable to the `try_to_move` function, ownership of the `String` is transferred 
+        to the function, and the original `name` variable is no longer valid in the current scope. This means that
+        any pointers or references to `name`, including the `Box::pin` pointer `pinned_name`, become dangling 
+        references and cannot be used safely.
+        The purpose of pinning a value with `Pin` is to ensure that the value remains at a fixed memory location 
+        when working with asynchronous code or self-referential structs. However, pinning does not prevent the 
+        value from being moved by ownership transfers, as ownership rules in Rust take precedence over pinning.
+        If you need to access the pinned value after an ownership transfer, you would typically need to re-establish 
+        a valid reference or pointer to the value in the new scope. In your example, once `name` is moved to the 
+        `try_to_move` function, you would need to return the value back to the original scope or re-create a valid 
+        reference to it to continue using the pinned pointer `pinned_name`.
+    */
+    
+
+    // Boxing mutable pointer of the type has access to the underlying value of the data
+    // so mutating the boxed value mutates the actual data, by pinning the mutable pointer
+    // of the type we're actually pin its value mutably into the ram means we can mutate 
+    // its content later by using its pinned box
+    
+    // pin future enables us to move it around the ram cause it's a self-ref types 
+    // and these types must be pinned be wrapped around smart pointers like Rc, Box, Arc
+    // also the future might get solved later in other scopes so pin is better options to 
+    // be used in here to move the future around different scopes and threads
+    let boxed_fut = Box::pin(&mut async move{}); // pinning the mutable pointer to the future, Box handles the allocation and lifetime of the type dynamically on the heap
+    
+    
+    let mut name = String::from("");
+    let mut pinned_name = Box::pin(&mut name); // box and pin are pointers so we can print their address
+    **pinned_name = String::from("wildonion");
+    
+    
+    // passing name to this method, moves it from the ram
+    // transfer its ownership into this function scope with
+    // new address, any pointers (&, Box, Pin) will be dangled
+    // after moving and can't be used 
+    // SOLUTION  : pass name by ref so we can use any pointers of the name after moving
+    // CONCLUSION: don't move a type if it's behind a pointer
+    fn try_to_move(name: String){ 
+        println!("name has new ownership and address: {:p}", &name);
+    }
+    
+    try_to_move(name);
+    
+    // then what's the point of pinning it into the ram if we can't 
+    // access the pinned pointer in here after moving the name?
+    // we can't access the pinned pointer in here cause name has moved
+    // println!("address of pinned_name {:p}", pinned_name);
+    //===================================================================================================
+    //===================================================================================================
+    //===================================================================================================
+
     // we can handle the lifetime of types dynamically on the heap using smart pointers
     // cause they have their own lifetime
+    // Box<&mut Type> manage the lifetime and allocation of types dynamically using smart pointer on the heap
+    // they can be used to share the ownership of type dynamically between scopes behind their 
+    // own valid lifetime and dynamic allocation handlers besides dynamic dispatching by boxing traits.
+    // to move the future around between different scopes and threads we need to break the self ref types using box pin 
+    // and tell rust pin this into a fixed position then we can move the future around the ram easily
     
     /////// deref
     let mut var = String::from("");
@@ -769,8 +903,19 @@ fn DynamicStaticDispatch(){
             self.v = value.v;
         }
     }
+
+    // constructing a vector of trait objects, they can be initialized 
+    // withing the Box smart pointer instead of &dyn since Box has its 
+    // dynamic allocation and lifetime handlers also the value of each 
+    // type must be a new instance of those types who are implemented
+    // the Trait
     // an object safe trait is usually the instance of the implementor
-    // make sure that the trait is implemented for the struct
+    // make sure that the trait is implemented for the struct and the trait
+    // must be object safe and its must not be known for the compiler,
+    // it must not have Self in its sigature cause Self referes to the 
+    // implementor and object safe are used for dynamic dispatching at
+    // runtime therefore there must be no specific size at compile time
+    // related to the implementor
     let point_traits = Traits::<Point>{
         otraits: vec![
             Box::new(
@@ -900,6 +1045,11 @@ fn DynamicStaticDispatch(){
     }
     
     /*                  ---------------- dynamic dispatching allows to have polymorphism ----------------
+        for a trait to be "object safe" it needs to allow building a vtable to allow 
+        the call to be resolvable dynamically by calling function pointer on the trait
+        object using dynamic dispatch logic at runtime if it's not the case means that 
+        the trait is not obejct safe trait
+
         since trait objs are not sized having them as object (safe of course) should behind pointer follow up with dyn keyword
         goot to know that trait objects stores two kind of pointers one is a vtable pointers points to the trait methods
         which are going to be called on the implementor instance and the other is a pointer to the underlying data or the 

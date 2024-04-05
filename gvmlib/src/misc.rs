@@ -644,6 +644,8 @@ fn dynamic_typing(){
         using Box<dyn Trait> since there might be some situation that we don't know 
         the exact type of some object the only thing it's worth nothing to know is 
         that it MUST implements the Trait so we could act like an object safe trait.
+        Any trait is an object safe trait allows us to be Boxed and its methods get 
+        dispatched dynamically at runtime on any type that implements the Any trait.
     */
     // dynamic dispatching and typing means this type can be of type anything it only needs
     // to implement the Any trait so we can cast its instances of the type into the actual 
