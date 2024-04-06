@@ -2,6 +2,8 @@
 
 
 // TODO - implementation of vision algorithms
+// https://github.com/visioncortex/vtracer
+// parallel image scanning algorithms for stem neurons
 
 
 pub mod visioner{
