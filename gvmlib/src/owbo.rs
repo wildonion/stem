@@ -683,13 +683,19 @@ async fn pinned_box_ownership_borrowing(){
     // box is an smart pointer handles dynamic allocation and lifetime on the heap
     // passing the pinned pointer of the name into the function so it contains the 
     // pinned address that the name has stuck into same as outside of the function
-    // scope.
+    // scope, the stable address of name value is inside of the pinned_name type
+    // that's why is the same before and after function, acting as a valid pointer
     fn move_me(name: std::pin::Pin<Box<&String>>){
         println!("name content: {:?}", name);
         println!("[FUNCTION] pinned type has fixed at this location: {:p}", name);
         println!("pinned pointer address itself: {:p}", &name);
     }
-    move_me(pinned_name);
+    // when we pass a heap data into function Rust calls drop() on the type 
+    // which drop the type out of the ram and moves its ownership into a new one 
+    // inside the function scopes, the ownership however blogns to the function
+    // scope hence returning pointer to the type owned by the function is impossible.
+    move_me(pinned_name); // pinned_name is moved
+    println!("accessing name in here {:?}", name);
     //===================================================================================================
     //===================================================================================================
     //===================================================================================================
@@ -715,7 +721,7 @@ async fn pinned_box_ownership_borrowing(){
     println!("var is : {:?}", var);
     let pmut = &mut var;
     let mut boxed_pmut = Box::new(pmut);
-    *boxed_pmut = &mut String::from("updated"); // change the box with a new binding 
+    *boxed_pmut = &mut String::from("updated"); // change the box with a new binding / need only one derefing
     println!("var is : {:?}", var);
 
 
@@ -758,6 +764,19 @@ async fn pinned_box_ownership_borrowing(){
         
         let boxed = Box::pin(help(n)).await; // adding some indirection to break the cycle of self calling
     }
+
+    // to move around self-ref types like async and fut objs between different scopes and parts of the ram
+    // they must be pinned into the ram at an stable memory address to tell Rust that any pointer of them 
+    // won't be invalid cause you can't drop the value later on. a variable of type Box<dyn Future<Output=()>>
+    // is an object safe trait that can be used for dynamic dispatching however futures are self-ref types 
+    // we need to break their self direction by adding some indirection using smart pointers wrappers like
+    // Rc, Arc, Box, Pin and since they want to be solved later they must get pinned into the ram enables us
+    // to put .await on them notify the waker to poll the result out and update the placeholder of the caller.
+    let fut = Box::pin({
+        async fn get_me(){}
+        get_me
+    });
+    let res = fut().await;
 
     // ====================================
     //          Boxing traits
