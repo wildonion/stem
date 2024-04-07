@@ -12,7 +12,8 @@ mod graph;
 use crate::graph::*;
 mod owbo;
 use crate::owbo::*;
-
+mod raptor;
+use crate::raptor::*;
 
 // generator are dangerous in rust since they return a value to the caller without waiting 
 // for function execution to completion and since after function execution all values get
