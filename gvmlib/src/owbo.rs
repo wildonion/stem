@@ -890,7 +890,55 @@ async fn pinned_box_ownership_borrowing(){
     */
     // let deref_boxed = *instance.data;
     instance.data = &mut Box::pin(func()); // passing the result of calling async func to the pinned box
+
+
+    async fn futfunc(){}
+    let fut = futfunc;
+    let pinned = Box::pin(&fut);
+
+    println!("[IN MAIN] fut pinned at an stable address {:p}", pinned); // pin is a pointer by default
+    fn get_fut<R: std::future::Future<Output = ()>>
+        (fut: fn() -> R){
+    }
+    get_fut(fut); // fut moves here but we have it's pinned value at an stable memory address
     
+    // future as a trait object and for dynamic dispatching must be pinned into ram
+    // fut objs are self-ref types, these types are not safe to be moved by Rust 
+    // cause Rust can't update their pointers as soon as they moved into a new scope
+    // and get new ownership so it breaks the move in the first place and can't have
+    // them directly inside the code, struct with fields point to its own type and 
+    // future objects are all kind of self-ref types, to break the cycle and add
+    // indirection and make them safe to be moved we can put them in smart pointer
+    // wrappers like Box, Pin, Arc, Mutex, Rc, RefCell or even &, Box has a dynamic
+    // allocation and lifetime handler on its own, all these wrappers store data on 
+    // the heap, in case of future objects we should use Pin since it guarantees that
+    // the value will be pinned into an stable memory address and can't be moved by 
+    // Rust compiler ensures we can solve the future later in different scopes and threads.
+    // trait can be appeared as an object only if they're safe, enables us moving 
+    // them around different parts, comps and methods as an object safe trait, they 
+    // must be behind Box<dyn allows us to do dynamic dispatching means we don't know 
+    // the exact type of the implementor but rather it'll specify at runtime so their 
+    // type is an object safe trait enables us to call trait method on their instances
+    // we must use Pin to pin the value of future object in memeory at an stable address
+    // to ensure that memory location of the future object remains stable during moving 
+    // the pinned object into different scopes and threads for future solvation.
+    fn ret_fut_object() 
+        // we can pass future object as a boxed trait only to the functions and methods
+        // but returning a future as an object from method needs to be pinned into the ram
+        // perhaps we want to solve it later not right after calling the method
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>{
+            let boxed_fut1 = Box::new({
+                async fn a_fut(){}
+                a_fut
+            });
+            Box::pin(async move{
+                // anything
+                // ...
+            })
+        }
+    let res = ret_fut_object().await;
+
+
 
 }
 
