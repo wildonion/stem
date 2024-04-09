@@ -26,6 +26,6 @@ brew install libthemis
 ```
 ## 🧱 WIPs
 
-- update crates, new rust edition, 
+- update crates, new rust edition, [wasm32 updation](https://blog.rust-lang.org/2024/04/09/updates-to-rusts-wasi-targets.html)
 - schemas.rs, mathista, informationr.rs
 - compile to .so, .wasm
