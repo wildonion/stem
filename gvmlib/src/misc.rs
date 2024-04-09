@@ -678,6 +678,8 @@ fn dynamic_typing(){
     // assert!(name_id, "{}", TypeId::of::<String>());
 
     // assert that the name type can be casted into the String or not
+    // it's like type assertion in Go: 
+    // if e, ok := name.(*string); ok{}
     match name.downcast_mut::<String>(){ // trying to cast the trait object into a mutable String type
         Some(mutable_ref) => {
             // it's mutable pointer we can change the content of the name

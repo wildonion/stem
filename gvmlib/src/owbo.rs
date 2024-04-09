@@ -553,6 +553,27 @@ use crate::*;
 
 async fn pinned_box_ownership_borrowing(){
 
+    /* ---------------------------------------------------------------------------------------
+     ╰┈➤  
+        unlike Go in Rust we don't have GC values move often between different parts of 
+        the ram like when we pass heap data into a function or resizing a vector, because
+        the this nature Rust gives us the concept of lifetime for every type means that 
+        every type has its own lifetime and comes to end once the object is moved into a
+        new scope cause after moving it gets a new ownership in the new scope hence its 
+        address gets changed, we can't use any pointer of that type after moving however 
+        Rust updates all its pointer to point to the new address of the new ownership of 
+        type but can't use them. besides borrowing using & we got some smart and wrapper 
+        pointers allows us to share the ownership of type between scopes and threads like
+        Box, Rc, Arc and if we want to mutate the underlying data (shared mutable state) 
+        we use &mut, RefCell, Mutex and RwLock, Box be used to put traits in it cause 
+        traits are dynamically sized and can't be as a separate object they must behind
+        &dyn or Box<dyn.
+        in order to return future as an object from method call we need to pin the future 
+        into an stable memory address, by doing so Rust understand that the value must not 
+        be moved cause we need its pinned value later in other scopes so we can put .await 
+        on it and fill the placeholder of the caller by the polled value. 
+    --------------------------------------------------------------------------------------- */
+
     //===================================================================================================
     //===================================================================================================
     //===================================================================================================
@@ -699,6 +720,29 @@ async fn pinned_box_ownership_borrowing(){
     //===================================================================================================
     //===================================================================================================
     //===================================================================================================
+
+
+    // Fn, FnMut and FnOnce are triats, having them as separate type requires to 
+    // put them behind &dyn or Box<dyn 
+    type Pointer2Func<'v> = &'v dyn Fn() -> ();
+    trait Interfacev1{
+        fn getName(&self) -> String;
+    }
+    struct Contract;
+    impl Interfacev1 for Contract{
+        fn getName(&self) -> String {
+            todo!()
+        }
+    }
+
+    // pinning a box of trait is pinning the instance of the struct who impls
+    // the trait itself it's like pinning a trait object and if we want to do 
+    // dynamic dispatching later the trait must be object safe trait, however
+    // in the our following case we can call the getName() method on pinned_trait
+    // object.
+    let pinned_trait: std::pin::Pin<Box<dyn Interfacev1>> = Box::pin(Contract{});
+    pinned_trait.getName();
+
 
     // we can handle the lifetime of types dynamically on the heap using smart pointers
     // cause they have their own lifetime
