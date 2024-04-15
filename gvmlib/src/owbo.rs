@@ -1334,6 +1334,26 @@ fn DynamicStaticDispatch(){
 // to pointers which tells rust how long a pointer can lives in that scope accordingly every type when they 
 // go out of their scope their lifetime come to end like all the types inside this function body
 pub async fn accept_str<'a>(name: &'a str) -> &'a str{
+    
+    // ways to return pointer from method:
+    // can't return pointer to heap data owned by the function
+    // cause they will move and dropped out of the ram once the
+    // function gets executed.
+    fn ret_pointer<'p>() -> &'p str{
+        let name: &'p str = "";
+        name // not heap data
+    }
+    
+    // can't return ref to data owned by the method not even with a valid lifetime!
+    // due to Rust ownership and borrowing rules once the underlying type of the pointer
+    // gets dropped out its lifetime comes to die then its pointers would be a dangled ones
+    // even though Rust updaes them but can't use them.
+    fn ret_pointer1<'v>(name: &'v String) -> &'v String{
+        // we're not allocating name inside method thus name is not owned by the method and we can return its pointer
+        // there is a defined lifetime for the name outside of the function scope which won't allow to have dangling 
+        // pointer
+        name 
+    }
 
     // not always heap data go on the heap, types with longer lifetime than their scopes
     // will go on the heap too like having a tokio scope inside the a function body uses

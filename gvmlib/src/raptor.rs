@@ -69,6 +69,12 @@ impl<'g, G: Clone + Default + Send + Sync + 'static> Event for Struct<'g, G>{
         };
         callback(get_name);
 
+        fn get_cls0<F, R>(cls: F) -> F where 
+            F: FnOnce() -> R + Send + Sync + 'static, // FnOnce() -> R is the whole closure trait which is bounded to other traits and lifetime
+            R: Send + Sync + 'static{
+                cls
+            }
+
         type Closure = Box<dyn FnOnce() -> ()>;
         fn get_cls(cls: Closure) -> (){ () }
         fn get_cls1(cls: impl FnOnce() -> ()) -> (){ () }
