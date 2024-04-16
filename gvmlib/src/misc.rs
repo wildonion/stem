@@ -796,7 +796,7 @@ fn but_the_point_is(){
     // if we want to do this we should use mutable pointer and rechange the pointer 
     // without dereferencing it
     let new_binding = &String::from("new onion"); 
-    p0name = new_binding;
+    p0name = new_binding; // the actual name won't be changed cause this is not a mutable poitner
     println!("[CHANGED ADDR] p0name pointer points to : {:p}", p0name);
     
     let mut mutpname = &mut name; // points to the location of name contains the name value

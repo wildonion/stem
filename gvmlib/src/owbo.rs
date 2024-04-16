@@ -721,6 +721,22 @@ async fn pinned_box_ownership_borrowing(){
     //===================================================================================================
     //===================================================================================================
 
+    // only Box pin can be used with future to break cycle of self ref types
+    // future object safe traits must be pinned into the heap using either Rc, Arc or Box,
+    // object safe traits are unsized thus can't be in Mutex or RefCell also they must be 
+    // behind either &'valid dyn or smart pointers like Rc<dyn, Arc<dyn or Box<dyn
+    // Rc, Arc, Box pointer can be wrapped around object safe trait 
+    // initialization value would be the struct instance who impls the trait 
+    // closures, FnOnce, FnMut, Fn and Future are all traits
+    // NOTE: future objects as return type or a separate type must be a pinned box 
+    //       we can't use Rc or Arc for them cause they can't be unpinned they're !Unpin
+    trait Interface{}
+    let mut displayable: std::sync::Arc<dyn Interface>;
+    let mut future1: std::pin::Pin<std::rc::Rc<dyn std::future::Future<Output = String>>>;
+    struct CErr{}
+    impl Interface for CErr{}
+    displayable = std::sync::Arc::new(CErr{});
+
 
     // Fn, FnMut and FnOnce are triats, having them as separate type requires to 
     // put them behind &dyn or Box<dyn 
