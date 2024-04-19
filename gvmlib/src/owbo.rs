@@ -2,6 +2,8 @@
 
 
 
+use std::any::Any;
+
 use crate::*;
 
 
@@ -1002,7 +1004,147 @@ async fn pinned_box_ownership_borrowing(){
 
 }
 
-fn DynamicStaticDispatch(){
+
+fn dynamic_static_dispatching1(){
+
+    // can't put traits inside RefCell or Mutex cause they need the type to be sized
+    // we can put traits inside Box, Rc and Arc cause they're heap smart pointers used to points to the underlying type
+    // trait can be implemented for multiple types at the same time we can store a set of trait objects which are the instances
+    // of each type who implements the trait 
+    // future objects as separate types need to be a pinned box on the heap
+
+    #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+    struct Player<D>{
+        pub nickname: String,
+        pub info: D
+    }
+    
+    #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+    struct PlayerInfo{
+        pub rank: u8,
+        pub damage: u8
+    }
+
+    #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+    struct RuntimeInfo{
+        pub mode: u8,
+        pub is_halted: bool
+    }
+    
+    trait Extractor<D>
+    where D: Send + Sync + Clone
+    { // supports generic for polymorphism
+        type Data; // dynamic typing
+        fn extract(&mut self, data: D);
+    }
+    
+    impl Extractor<String> for Player<PlayerInfo>{
+        type Data = String;
+        fn extract(&mut self, data: String){
+            let decoded_data = serde_json::from_str::<PlayerInfo>(&data).unwrap();
+            self.info = decoded_data;
+        }
+    }
+
+    impl Extractor<RuntimeInfo> for Player<RuntimeInfo>{
+        type Data = RuntimeInfo;
+        fn extract(&mut self, data: RuntimeInfo){
+            self.info = data;
+        }
+    }
+
+    let mut player1 = Player::<RuntimeInfo>{
+        nickname: String::from("some player info"),
+        info: RuntimeInfo{
+            mode: 1,
+            is_halted: false
+        }
+    };
+    let pmut_player1 = &mut player1;
+    pmut_player1.extract(
+        RuntimeInfo { mode: 1, is_halted: true }
+    );
+    (*pmut_player1).info.mode = 0;
+    // or 
+    pmut_player1.info.mode = 0;
+    
+    let mut player0 = Player::<PlayerInfo>{
+        nickname: String::from("wildonion"),
+        info: PlayerInfo{
+            rank: 200,
+            damage: 0
+        }
+    };
+    let mut player = Player::<PlayerInfo>{
+        nickname: String::from("wildonion"),
+        info: PlayerInfo{
+            rank: 100,
+            damage: 0
+        }
+    };
+    println!("player info\n {:?}", player);
+    let mut pmut_player = &mut player;
+    
+    // mutating underlying data: same address using * and direct field accessing
+    pmut_player.nickname = String::from("wildonion1");
+    (*pmut_player).nickname = String::from("wildonion2");
+    println!("player info\n {:?}", player);
+    
+    // new binding, changing address 
+    pmut_player = &mut player0;
+    
+    pmut_player.extract(
+        serde_json::to_string(
+            &PlayerInfo{
+                rank: 255,
+                damage: 200
+            }
+        ).unwrap()
+        .to_string()
+    );
+    
+    println!("player info after mutation\n {:?}", pmut_player.info);
+    
+    
+    // dynamic dispatch
+    // mutable trait objects with default type param for GAT
+    // it's like specifiyng the Output in Future<Output= object
+    // Output is the GAT in Future trait.
+    // since extract() method takes mutable instance all the 
+    // trait objects must be mutable
+    let mut traits: Vec<Box<dyn Extractor<String, Data = String>>> // we have GAT and the type must be initialized
+        = vec![
+            Box::new(player0),
+            Box::new(player)
+        ];
+    
+    // dispatching dynamically at runtime, every Player instance 
+    // needs to implements the Extractor trait
+    for tobj in &mut traits{ // a mutable pointer to a trait object
+        tobj.extract(
+            serde_json::to_string(
+                &PlayerInfo{
+                    rank: 1,
+                    damage: 1
+                }
+            ).unwrap()
+            .to_string()
+        );
+    }
+
+    // static dispatching
+    fn get_trait_as_param(param: impl Extractor<String, Data = String>) 
+        -> impl Extractor<String, Data = String>{
+        let p = Player::<PlayerInfo>{
+            nickname: String::from("wildonion here"),
+            info: PlayerInfo { rank: 0, damage: 0 }
+        };
+        p // Extractor<String> trait is implemented for Player<PlayerInfo>
+    }
+
+}
+
+fn dynamic_static_dispatching2(){
 
     // trait objects must be behind pointer like & or Box, they're are dynamic sized and are abstract
     // hence they need an implementor acting them as object, requires to put them behind dyn enables us 
