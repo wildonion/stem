@@ -719,6 +719,28 @@ async fn pinned_box_ownership_borrowing(){
     // scope hence returning pointer to the type owned by the function is impossible.
     move_me(pinned_name); // pinned_name is moved
     println!("accessing name in here {:?}", name);
+    // **************************************************************
+    // ************************* SCENARIO 3 *************************
+    // **************************************************************
+    // the address is change because a pinned pointer contains 
+    // an stable address in the ram for the pinned value, second 
+    // it’s the stable address of the new data cause pin pointer 
+    // contains the stable address of the pinned value
+    let name = String::from("");
+    let mut pinned_name = Box::pin(&name);
+    println!("pinned at an stable address {:p}", pinned_name);
+    let mut mutp_to_pinned_name = &mut pinned_name;
+    let new_val = String::from("wildonion");
+    // here mutating the underlying data of mutp_to_pinned_name pointer
+    // mutates the data inside pinned_name name pointer cause mutp_to_pinned_name 
+    // is a mutable pointer to the pinned_name pointer, so putting a new value
+    // in place of the old one inside the pin pointer will change the address
+    // of the pinned pointer to another stable address inside the ram cause 
+    // Box::pin(&new_val) is a new value with new address which causes its 
+    // pinned pointer address to be changed 
+    *mutp_to_pinned_name = Box::pin(&new_val);
+    println!("pinned_name at an stable address {:p}", pinned_name);
+    println!("pinned_name content {:?}", pinned_name);
     //===================================================================================================
     //===================================================================================================
     //===================================================================================================
