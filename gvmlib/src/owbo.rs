@@ -1129,6 +1129,8 @@ fn dynamic_static_dispatching1(){
     
     
     // dynamic dispatch
+    // building a trait object requires to specify its GAT 
+    // if it has already one.
     // mutable trait objects with default type param for GAT
     // it's like specifiyng the Output in Future<Output= object
     // Output is the GAT in Future trait.
@@ -1501,6 +1503,15 @@ fn dynamic_static_dispatching2(){
 
 }
 
+/* ✦•┈๑⋅⋯ ⋯⋅๑┈•✦ 
+    ➤⫘⫘⫘ don't move if it's behind pointer because: can't use pointer after moving and rust doesn't allow in the first place although it updates the pointers after moving 
+    ➤⫘⫘⫘ don't return reference from method because: types all are owned by the method body an once the method gets executed all of them will be dropped unless you use a valid lifetime to do so
+    ➤⫘⫘⫘ we can't generally return a pointer to a heap data owned by the function even with a valid lifetime 
+    ➤⫘⫘⫘ use pin and other smart pointers to break the cycle of self-ref types like future 
+    ➤⫘⫘⫘ use Box::pin(async move{}) to put futures in it if you want to move them around as separate
+    ➤⫘⫘⫘ moving pointer into tokio spawn requires the pointer to live longer than or equal to the tokio spawn lifetime like passing &'static str to tokio spawn is ok
+    ➤⫘⫘⫘ rust don't have gc if you use heap data without borrowing or cloning it moves out data from the ram and drop it
+  ✦•┈๑⋅⋯ ⋯⋅๑┈•✦ */
 // only the passed in param with lifetime can be returned can't return a pointer to the local variable 
 // inside function since once the function gets executed all of them will be dropped out of the ram, with 
 // &self and &'staitc lifetime we can do this however. basically any type with longer lifetime than its 
@@ -1514,6 +1525,26 @@ fn dynamic_static_dispatching2(){
 // to pointers which tells rust how long a pointer can lives in that scope accordingly every type when they 
 // go out of their scope their lifetime come to end like all the types inside this function body
 pub async fn accept_str<'a>(name: &'a str) -> &'a str{
+
+    struct StringUnit(pub String);
+    let instance = StringUnit(String::from("wildonion"));
+    let string = instance.0;
+
+    struct Name<'valid, T: 'valid  + Send + Sync + Clone>{
+        name: &'valid T
+    }
+
+    let instance = Name::<String>{
+        name: &String::from("")
+    };
+    
+
+    match instance{
+        Name::<String>{name: esm} if !esm.is_empty() => {
+
+        },
+        _ | _ => {}
+     };
     
     // ways to return pointer from method:
     // can't return pointer to heap data owned by the function
