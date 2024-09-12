@@ -41,7 +41,7 @@ use crate::*;
            deref mutable pointer       : different address and different value
            update mutable pointer field: same address different value
     https://github.com/wildonion/cs-concepts?tab=readme-ov-file#-wikis
-    https://github.com/wildonion/gvm/wiki/Ownership-and-Borrowing-Rules
+    https://github.com/wildonion/ovm/wiki/Ownership-and-Borrowing-Rules
     https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17
     https://github.com/wildonion/rusty/blob/main/src/llu.rs
     https://github.com/wildonion/rusty/blob/a42b11dc96b40b059c60efa07513cdf4b93c5fab/src/ltg2.rs#L10
@@ -574,6 +574,78 @@ async fn pinned_box_ownership_borrowing(){
         into an stable memory address, by doing so Rust understand that the value must not 
         be moved cause we need its pinned value later in other scopes so we can put .await 
         on it and fill the placeholder of the caller by the polled value. 
+        when a type moves into a new scope Rust automatically call drop() on it and transfers the ownership 
+        of the type into the new scope and drop the old one it won't keep multiple references and owners of 
+        a type, there must be only one owner for each type cause that's what gc doesn't which is not in Rust 
+        also Rust updates any pointer of that type to point to the new location after moving but can't use 
+        them after moving, also can't move the pointer of a type into a new scope like moving a pointer into 
+        tokio spawn cause the lifetime of the underlying type might no lived long enough to move its pointer 
+        in this case the type has smaller lifetime thatn the tokio spawn scope or returning poitner from function 
+        without a valid lifetime is not possible cause type inside function get dropped once the function 
+        gets executed, an static lifetime could be a better solution to move the the pointer around cause 
+        pointers after all depends on their underlying type lifetime, for futute objects we must pin their 
+        box into the ram and use the pinned pointer to move them between scopes cause it has an stable 
+        memory address in all scopes.
+
+    ▶ in some cases we can't pass the borrow due to having lifetime issue with the underlying type
+    ▶ in gc based lang pointers are mutable by default since gc takes care of reference counting at runtime
+    ▶ in none gc based like rust pointers are immutable and mutable since a data can only have one mutable pointer and multiple immutable ones (!at the same time) and only one ownership at a time.
+    ▶ Rust by default moves type around the ram if they don't implement Copy trait or if they're are heap data types we can avoid this by passing them around by borrowing them or cloning them
+    ▶ can't move out of type if it's behind a shared ref (mutable/immutable) cause ref get dangled and point to a location which is not existed
+    ▶ derefing needs to implemente the Copy trait cause Rust must have to make sure there would be owned version of the type 
+      in there after dereferencing the pointer and for the heap data dereferencing them move the data and takes the ownership 
+      which forces us to clone them, also can't deref if the ref is being used by other scopes as a shared ref.
+    ▶ rust don't update the pointer of self-ref types so the move breaks and we need to break the cycle using smart wrapper pointers like Box::pin
+    ▶ self-ref types like future objects and recursive function need to get Box::pin to breack their cycle
+    ▶ &mut, arc, mutex, refcell, rc, box, pin, G: 'valid + Send + Trait, trait object: static, dynamic typing, dispatching, polymorphism
+    ▶ underlying data of pointers must have valid lifetime so we can share their ref between scopes otherwise a dangled pointer is all we have
+    ▶ pointer address itself considered as reference_id cause it's unique in ram and the entire lifetime of the app
+    ▶ trait object can be behind pointer (&dyn or Box<dyn ), their value are the instance of the struct who impls the trait, their size depends on the implementor at runtime
+    ▶ future trait as a boxed object (return it some where) must be pinned if the value get pinned at an stable memory address enables us to use the pinned pointer around the scopes without loosing the address
+    ▶ the underlying data must be valid and long enough to move the pointer into a new scope like tokio spawn
+    ▶ due to the lack of having gc Rust considerred lifetime for each type, once the type gets moved and dropped its lifetime comes to end 
+    ▶ due to the lack of having gc Rust often moves heap data around the ram to clean extra spaces on the heap and reduce the allocated size
+    ▶ due to the lack of having gc Rust it stores data on the heap seamlessly cause later it moves data to clean extra spaces 
+    ▶ due to the lack of having gc Rust calls drop() method and pass the type it want to drop it at the end of each scope automatically 
+    ▶ due to the lack of having gc Rust future objects must be pinned into an stable memory address
+    ▶ if we don't want to lose heap data ownership we can share their ownership by borrowing them using &, Box, Pin, Rc, Arc or clone them
+    ▶ traits are unsized and they must be behind pointer (&'valid dyn Box<dyn, Arc<dyn, Rc<dyn) but future objects (self-ref) as separate type must be a pinned box or Box::pin(fut)
+    ▶ -> impl Trait and param: impl Trait for static dispatch + F: FnOnce() -> () bounding to trait + Pin<Box<dyn SelfRefTrait>>, Box<dyn Trait>, Rc<dyn Trait>, Arc<dyn Trait> for dyanmic dispatch
+    ▶ based on the lifetime of a type we can avoid having dangling pointers, once the type gets dropped its pointer won't be valid anymore
+    ▶ there is no such thing as global type we should define static type and to mutate it we need to put in mutex or rwlock to sync 
+    ▶ don't move a type if it's behind a pointer, Rust updates pointers after moving to point to new address but can't use them
+    ▶ dropping the type simply is possible by calling drop() method and pass the heap daga type to it
+    ▶ can't move pointer of a type into a new scope unless the lifetime of underlying data is longer than the new scope
+    ▶ to pass & references between different scopes the lifetime of the underlying type must be longer than the scopes 
+      or the reference must have valid lifetime during the execution of the scope 
+    ▶ &mut in single thread and mutex in multiple threads and scopes + app data vs static/local arc mutex with/without channels
+    ▶ all the types inside function are owned by the function scopes and once the function gets executed all of them will be dropped 
+      out of the ram thus can't return a pointer to a type owned by the function cause as soon as the type gets dropped the pointer 
+      can't be updated to point to new location cause unless we use a lifetime 
+    ▶ in gc based langs like Go there is not need to clone the type or share its ownership using smart pointers like box 
+      and arc which counts the references of a type came from different scopes and threads in Go it's gc's duty to do so
+    ▶ lockers to avoid duplicate writing into db in a single node by mutex and in cluster by redlock and zookeeper, it ensures only one client can mutate a data at the same time and store inside the db 
+    ▶ borrow the type using &mut for single thread cause &mut can't be sent unless their referent be Send we can put referent in smart pointers and wrappers like Mutex or RwLock
+    ▶ pointers (&mut + *, binding and derefing, heap data wrappers[Rc, Arc, RefCell, Mutex, Box, fut self-ref Box::pin(async move{})])
+    ▶ traits (object safe, static and dynamic typing and dispatch, generic bounding, ret &'lifetime Type, macro plugins)
+    ▶ every async task must be executed in separate execution of thread to avoid blocking like locking on mutex 
+    ▶ actor worker to talk with services over rpc or message brokers and queues like redis and rmq (pubsub, prodcons mpsc based chan and q)
+    ▶ fetch actor state by sending message which uses mpsc jobq channel behind the scene inside it own threadpool
+    ▶ rmq uses the idea of mpsc jobq channel but in a remote way, the idea is implemented in actor mailbox message sending to fetch their state
+    ▶ rust dp: callback, builder and trait based interface plugings and proxies with dynamic typing, dispatchingg and polymorphism
+    ▶ Box::pin(async{}) + Rc<dyn , Arc<dyn, &mut + ltg with default type param in trait and structure
+    ▶ Vec<Box<dyn ObjectSafeTrait>> vector of interface objects + cast trait object into type using Any trait + poly and dyn typing
+    ▶ create a trait object to call its method at runtime on any type that impls the trait interface
+    ▶ store on the heap using Box, Rc, Arc, vtable pointers to execute trait methods on the obj, 
+    ▶ -> impl Trait for static and Box<dyn ObjectSafeTrait> for dynamic dispatch
+    ▶ rust calls drop automatically when the the type goes out of scope like moving heap data into a new scope
+    ▶ big data types like string, vector and complex types need to be stored on the heap using Box cause it has dynamic allocation
+    ▶ every type has only one ownership we can share it using Rc, Arc, Box, & or we can move it to a new one by moving 
+      the type into a new scope or we can clone it also can't move pointer of a type if the type is about to be dropped 
+      like moving pointer into a tokio spawn if the lifetime of the underlying type is shorter than the lifeimte of tokio 
+      spawn scope or when the type is owned by the funciton mainly we can't return pointer from method however doing so 
+      can be successful if we use an static or the self lifetime to return the pointer cause the self lifetime is valid 
+      as long as the object is valid.
     --------------------------------------------------------------------------------------- */
 
     //===================================================================================================
@@ -660,7 +732,33 @@ async fn pinned_box_ownership_borrowing(){
         a valid reference or pointer to the value in the new scope. In your example, once `name` is moved to the 
         `try_to_move` function, you would need to return the value back to the original scope or re-create a valid 
         reference to it to continue using the pinned pointer `pinned_name`.
+
+        trait objects need to behind a pointer like &dyn or Box<dyn cause they're ?Sized like recursive
+        methods need to behind a pointer so that the state of the future isn't infinitely large, Box
+        puts the data on the heap and allocate lifetime and space dynamically.
+        if a type need to reference itself it must not be able to gets moved and pin can fix this 
+        by pinning the type into an stable address inside the ram, awaiting a future behind a pointer 
+        needs to pin the future cause the address must be stable and since future traits are dynamic 
+        we should have something like Box::pin(fut), having futures as separate object needs to pin 
+        their box into the ram, like constructing futures and pin!{} them before falling into 
+        the loop of select!{} as well as self ref types can't get moved by the rust compiler if their
+        pointer has not been broken by some indirection yet, in general having self ref types as a separate 
+        objects need to break the cycle by adding some indirection like putting them behind a pointer 
+        or pin them into the ram or wrap them using smart pointers. the most important self ref types
+        are future objects that needs to get pinned into the ram when we want to have them with an 
+        stable address on the ram and don't allow them to get moved cause they can't move at all!
+        iterating over stream which is a collection of future objects requires to pin the stream first 
+        then call the next method.
     */
+
+    // object safe trait must behind Box && future as object must behind Box::pin so Box::pin(async move{}) is good to go!
+    type FutureObject = Box<dyn std::future::Future<Output = String>>;
+    let buffer: Vec<FutureObject> = vec![];
+    struct FutureVector<F: Send + Sync> where 
+    F: std::future::Future<Output = String>{
+        pub futures: Vec<F>,
+        pub pinned_futures: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = String>>>>
+    }
     
     // Boxing mutable pointer of the type has access to the underlying value of the data
     // so mutating the boxed value mutates the actual data, by pinning the mutable pointer
@@ -676,6 +774,11 @@ async fn pinned_box_ownership_borrowing(){
     // **************************************************************
     // ************************* SCENARIO 1 *************************
     // **************************************************************
+    // if the type implements Unpin it means it can be moved easily 
+    // cause it uses the Unpin trait to unpin the type from the ram
+    // to move it easily, for type to be able not to move easily the
+    // Unpin trait must not be implemented for that or it must impls
+    // the !Unpin trait.
     let mut name = String::from("");
     let mut pinned_name = Box::pin(&mut name); // box and pin are pointers so we can print their address
     **pinned_name = String::from("wildonion");
@@ -761,6 +864,97 @@ async fn pinned_box_ownership_borrowing(){
     impl Interface for CErr{}
     displayable = std::sync::Arc::new(CErr{});
 
+    ////---------+++++++++---------+++++++++---------+++++++++---------+++++++++
+    // we can use heap based smart pointers like Box and Arc to store 
+    // traits as objects on the heap for dynamic dispatch otherwise use 
+    // impl Trait in return type or method param.
+    // note that in object safe trait we can't return Self as return type and
+    // as well as can't have GAT since: for a trait to be "object safe" it 
+    // needs to allow building a vtable to allow the call to be resolvable dynamically
+    trait InterfaceFuture{
+        fn getCode(&self);
+        }
+    let arced: Arc<dyn InterfaceFuture>;
+    let boxed: Box<dyn InterfaceFuture>;
+    let futured: std::pin::Pin<Box<dyn std::future::Future<Output=String>>>;
+    
+    // unpacking in function calls 
+    pub struct Data1<T>(pub T);
+    pub struct Data<T>{
+        pub data: T
+    };
+    // fn get_data(Data(data): Data<String>){}
+    fn get_data1(Data{data}: Data<String>){}
+    fn get_data2(Data1(data): Data1<String>){}
+    pub trait Component<P>{
+        fn render(&self, props: P);
+    }
+
+    pub struct App{}
+    impl Component<String> for App{
+        fn render(&self, params: String){}
+    }
+
+    struct QueryParameter<T, const REQUIRED: bool>{
+        pub q: T,
+    }
+    impl<T, const REQUIRED: bool> QueryParameter<T, REQUIRED>{
+        fn get_param(&self, mut is_req: bool, QueryParameter { q }: QueryParameter::<String, true>){
+            let qu = QueryParameter::<String, true>{
+                q
+            };
+            is_req = REQUIRED;
+        } 
+    }
+
+    // smart pointers contian all the infos of their underlying types 
+    // cause they're are wrappers around the actual type
+    let components: Vec<Box<dyn Component<String>>> = vec![Box::new(App{})];
+    for comp in components{
+        comp.render(String::from("{{p1}}|{{p2}}|{{p3}}"));
+    }
+    ////---------+++++++++---------+++++++++---------+++++++++---------+++++++++
+
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    //-=-=-=-=-= into service trait -=-=-=-=-=
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    trait ArrExt{
+        fn getCode(&self) -> &Self;
+    }
+    type Arr = [String];
+    impl ArrExt for Arr{
+        // returning the borrowed form of [String] with the lifetime of &self 
+        // since [String] has no fixed size at compile time
+        fn getCode(&self) -> &Self{
+            todo!()
+        }
+    }
+
+    let hex: u8 = 0xff; // hex
+    let oct = 0o777; // octal
+    let bin = 00001110; // bin
+
+    let arr_str: &Arr = &[String::from("")]; // slices need to behind the & due to their unknown size at compile time
+    _ = arr_str.getCode();
+    
+    struct MyService;
+    pub trait IntoService<T>{
+        fn into_serivice(&self, config: T) -> MyService;
+    }
+    // static dispatch
+    fn get_node<'valid, N: Clone + Send + Sync + IntoService<N> + 'static>(n: N) 
+        -> (impl IntoService<N>, std::pin::Pin<Box<dyn std::future::Future<Output = N>>>){
+            // note that N must live long enough as static cause we're using it
+            // as the result of the future object which must be pinned into the ram
+            // so we can solve it later by accessing its stable address
+        (n.clone(), Box::pin(async move{n})) 
+    }
+    fn get_node_service<'valid, N: Clone + Send + Sync + IntoService<N>>(n: N) -> MyService{
+        n.into_serivice(n.clone())
+    }
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
     // Fn, FnMut and FnOnce are triats, having them as separate type requires to 
     // put them behind &dyn or Box<dyn 
@@ -783,6 +977,42 @@ async fn pinned_box_ownership_borrowing(){
     let pinned_trait: std::pin::Pin<Box<dyn Interfacev1>> = Box::pin(Contract{});
     pinned_trait.getName();
 
+    // returning a future as the method return type with box::pin
+    // later on we can await on it to get the result in other scopes
+    // and threads
+    fn ret_fut<O: Send + Sync + 'static>(param: O) -> std::pin::Pin<Box<dyn std::future::Future<Output = O>>>{
+        Box::pin(async move{
+            param
+        })
+    }
+    let res = ret_fut(String::from("wildonion")).await;
+
+    //========================= pinned with mutex
+    // generally all the pinned types has an stable address across scopes
+    // ...
+    // move it between threads then:
+    // check that the address must be stable and be fixed at a memory location
+    let pinned_safe: std::pin::Pin<Box<std::sync::Arc<std::sync::Mutex<String>>>> = 
+        Box::pin(
+            std::sync::Arc::new(
+                std::sync::Mutex::new(
+                    String::from("")
+                )
+            )
+        );
+    println!("stable address: {:p}", pinned_safe);
+    fn get_boxed_version(pinned_safe: std::pin::Pin<Box<std::sync::Arc<std::sync::Mutex<String>>>>){
+        
+        println!("stable address: {:p}", pinned_safe);
+        pinned_safe.lock().unwrap(); // locking by blocking!
+        also_stable_here(pinned_safe);
+        
+    }
+    fn also_stable_here(pinned_safe: std::pin::Pin<Box<std::sync::Arc<std::sync::Mutex<String>>>>){
+        println!("stable address: {:p}", pinned_safe);
+    }
+    get_boxed_version(pinned_safe);
+    //=========================
 
     // we can handle the lifetime of types dynamically on the heap using smart pointers
     // cause they have their own lifetime
@@ -848,6 +1078,45 @@ async fn pinned_box_ownership_borrowing(){
         
         let boxed = Box::pin(help(n)).await; // adding some indirection to break the cycle of self calling
     }
+
+    ////////////// -------------- recursive ex
+    // https://lunatic.solutions/blog/rust-without-the-async-hard-part/
+    /*
+        ---- reasons that we can't have async recursive?!
+        the compiler can't pre determine how many recursive 
+        calls you're going to have and can't reserve the perfect
+        amount of space to preserve all local variables during 
+        the context switching that's why we have to put the 
+        the async function on the heap and since future objects
+        are self-ref types that move gets broken when they're 
+        doing so, we need to pin them into the heap.
+    */
+    async fn check_base(param: u8){
+        if param == 0{
+            return;
+        } else{
+            // since the check_base is a future object and pointing 
+            // to self ref types needs to add some indirection using Box 
+            // or any other smart pointers putting future inside the 
+            // Box requires to pin the future since they must be in an
+            // stable memory address during their execution.
+            Box::pin(async move{
+                check_base(param * 2).await;
+            });
+        }
+    }
+
+    trait SpecialExt{
+        type Gat: Send + Sync;
+    }
+    type Fut1<G> = Box<dyn std::future::Future<Output = G>>;
+    struct Special<'n, F, G: SpecialExt<Gat: Send + Sync>> where F: std::future::Future<Output = G>, 
+        G: FnOnce() -> () + Send + Sync + 'static{
+        pub fut: F,
+        pub name: &'n mut str,
+        pub indir_cyclic: std::pin::Pin<Fut1<G>>
+    }
+    ////////////// --------------
 
     // to move around self-ref types like async and fut objs between different scopes and parts of the ram
     // they must be pinned into the ram at an stable memory address to tell Rust that any pointer of them 
@@ -1024,10 +1293,106 @@ async fn pinned_box_ownership_borrowing(){
 
 
 
+    let name = String::from("");
+    loop{
+        // it's better to move a unique type in each iteration
+        // Rust enforces us to do us in the first place  
+        let cloned_name = name.clone();
+        tokio::spawn(async move{
+            // if  we use name in here means we moved the name into this scope 
+            // and don't have it after tokio spawn scope so it's better to clone 
+            // it if you want to use it later or borrow it with a lifetime longer 
+            // than the tokio spawn scope like static  
+            let n = cloned_name;
+        });
+    }
+
+
 }
 
 
-fn dynamic_static_dispatching1(){
+async fn dynamic_static_dispatching1(){
+
+
+    /// -------========-------========-------========-------========-------========-------========
+    /// -------========-------========-------========-------========-------========-------========
+    /// -------========-------========-------========-------========-------========-------========
+    // -> implt Future    : the future type must be known at compile time 
+    // -> Box<dyn Future> : it can be any future object that implements the Future trait 
+    // dynamic dispatch use vtable indirection to call trait methods on the 
+    // instance who impls the Trait alreadyl, Box dyn Trait is for dynamic dispatch 
+    // and impl Trait is for static dispatch  
+
+    // ----------- STATIC DISPATCH 
+    /* 
+        Return Type: The return type is an impl std::future::Future<Output = String>, which means the exact type of the future is determined at compile time.
+        Performance: Since the compiler knows the exact type, it can optimize the future's state machine more effectively, leading to better performance.
+        Size and Allocation: This approach does not require heap allocation. The future is stored directly on the stack, which can be more efficient.
+        Flexibility: Less flexible in terms of returning different types of futures from the same function. Every future returned must have the same concrete type.
+        Use Case: Preferable when the function always returns the same type of future, and performance is critical.
+    */
+    fn ret_fut_static_dispatch() -> impl std::future::Future<Output = String>{
+        async move{
+            String::from("")
+        }
+    }
+
+    async fn getFut(fut: impl std::future::Future<Output = String> + Send + Sync + 'static){ // static dispatch
+        // fut.await;
+        tokio::spawn(async move{
+            fut.await;
+        });
+    }
+    async fn getFut1(fut: std::pin::Pin<Box<dyn std::future::Future<Output = String> + Send + Sync + 'static>>){ // dynamic dispatch for self ref traits
+        // future object as separate type must be pinned into the ram before 
+        // they get moved into new scope or threads
+        tokio::spawn(async move{
+            fut.await;
+        });
+    }
+
+
+    type Fut1<O> = std::pin::Pin<Box<dyn std::future::Future<Output = O> + Send + Sync + 'static>>;
+    struct Futuristic<F, O>
+    where F: std::future::Future<Output = O> + Send + Sync + 'static + Clone,
+          O: Send + Sync + 'static + Clone{
+        pub fut: F, // future trait to gets executed inside another thread directly
+        pub fut1: Fut1<O>, // future as object safe trait for dynamic dispatching  
+    }
+
+    // ------------ DYNAMIC DISPATCH
+    /*
+        Return Type: The return type is std::pin::Pin<Box<dyn std::future::Future<Output = String>>>, which means the future is allocated on the heap and its type is erased at runtime.
+        Performance: Dynamic dispatch involves a slight performance overhead due to heap allocation and vtable indirection (dynamic dispatch).
+        Size and Allocation: Requires heap allocation to store the future. This can introduce overhead.
+        Flexibility: More flexible as it allows returning different types of futures from the same function. The actual type of the future is not fixed at compile time.
+        Use Case: Preferable when the function might return different types of futures depending on runtime conditions, and flexibility is more important than the slight performance overhead.
+    */
+    fn ret_fut_dynamic_dispath() -> std::pin::Pin<Box<dyn std::future::Future<Output = String>>>{
+        Box::pin(
+            async move{
+                String::from("")
+            }
+        )
+    }
+    
+    /* 
+        Static Dispatch (impl Future):
+            Pros: Better performance due to compile-time optimizations, no heap allocation.
+            Cons: Less flexible, must return a future of the same concrete type.
+            When to Use: When you need maximum performance and your function always returns the same type of future.
+        
+        Dynamic Dispatch (Box<dyn Future>):
+            Pros: More flexible, can return different types of futures.
+            Cons: Slightly worse performance due to heap allocation and dynamic dispatch.
+            When to Use: When you need flexibility to return different types of futures.
+    */
+    let res0 = ret_fut_static_dispatch().await;
+    let res1 = ret_fut_dynamic_dispath().await;
+    /// -------========-------========-------========-------========-------========-------========
+    /// -------========-------========-------========-------========-------========-------========
+    /// -------========-------========-------========-------========-------========-------========
+
 
     // can't put traits inside RefCell or Mutex cause they need the type to be sized
     // we can put traits inside Box, Rc and Arc cause they're heap smart pointers used to points to the underlying type
@@ -1127,7 +1492,33 @@ fn dynamic_static_dispatching1(){
     
     println!("player info after mutation\n {:?}", pmut_player.info);
     
+    struct UserRecord{
+        row: String
+    }
+    trait UserRecordExt{
+        fn get_row(&self) -> &str;
+    }
+    impl UserRecordExt for UserRecord{
+        fn get_row(&self) -> &str {
+            &self.row
+        }
+    }
     
+    // default type param for trait GAT
+    struct IterOverMe;
+    trait IterateOverHim{
+        type Item;
+        fn next() -> Self;
+        }
+    impl IterateOverHim for IterOverMe{
+        type Item = IterOverMe;
+        fn next() -> Self {
+            todo!()
+        }
+        }
+    // creating an object from the trait requires to specify the 
+    // GAT type using default type param syntax
+    type Iters = Box<dyn IterateOverHim<Item = IterOverMe>>;
     // dynamic dispatch
     // building a trait object requires to specify its GAT 
     // if it has already one.
@@ -1166,9 +1557,472 @@ fn dynamic_static_dispatching1(){
         p // Extractor<String> trait is implemented for Player<PlayerInfo>
     }
 
+    // ------------------------------===
+    // ------------------------------===
+    trait IhaveDefaultTypeParam{
+        type Output;
+        type Error;
+        fn get_resp(&self) -> Self::Output;
+    }
+    struct SimpleStruct{}
+    impl IhaveDefaultTypeParam for SimpleStruct{
+        type Error = String;
+        type Output = String;
+        fn get_resp(&self) -> Self::Output { todo!() }
+    }
+    // vector of object traits with default type parameters
+    let default_type_param_objects: Vec<Box<dyn IhaveDefaultTypeParam<Output=String, Error=String>>> = vec![];
+    trait Otp{
+        fn get_code(&self);
+    }
+    struct OtpLogin;
+    impl Otp for OtpLogin{
+        fn get_code(&self){}
+    }
+    fn set_otp_provider(param: impl Otp, callback: impl FnOnce(Box<dyn Otp>) -> String){}
+    set_otp_provider(OtpLogin, |otp|{
+        otp.get_code();
+        return String::from("");
+    });
+    // ------------------------------===
+    // ------------------------------===
+
+    // -==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==
+    //                  Error handler
+    // -==-==-==-==-==-==-==-==-==-==-==-==-==-==-==-==
+    pub struct GenericError<E: Send + Sync>{ // let it be safe to share
+        e: E
+    }
+    /* --------------------------
+        async methods or future objects capture generics and lifetimes 
+        so each generic must be bounded to Send and Sync in order to 
+        be shared across threads and scopes and live long enough for 
+        future solvation, make sure you're pinning the boxed future 
+        into the ram if you want to share it as a separate object.
+        cause trait objects must be boxed to be shared and for self 
+        ref data they must be pinned into the ram.
+    */
+    trait GenericErrorExt<B: Send + Sync, E: Send + Sync + Into<Self::Output<B>>>{
+        type Output<O: Send + Sync>;
+        type Fut;
+        async fn getError<O: Send + Sync>(&self, e: E) -> Self::Output<O>; // the E is defined in GenericErrorExt signature 
+    }
+    impl<B: Send + Sync, E: Send + Sync> GenericErrorExt<B, String> for GenericError<E>{
+        
+        type Output<O: Send + Sync> = Box<dyn std::error::Error + Send + Sync + 'static>;
+        type Fut = std::pin::Pin<Box<dyn std::future::Future<Output = String>>>;
+        
+        async fn getError<O: Send + Sync>(&self, e: String) -> Self::Output<O>{
+            // converts this type into the (usually inferred) input type, 
+            // this conversion is whatever the implementation of From<T> for U chooses to do
+            e.into() // convert the String into the return type of the getError() method which a dynamic dispatch to the Error trait, Error trait is obejct safe trait
+        }
+    }
+
+    // ------------------------------=== Rust 1.79
+    // ------------------------------===
+    /* 
+        https://boats.gitlab.io/blog/post/async-methods-i/
+        gats can now generic params which allows us to have async 
+        method in traits cause the future returned by an async function 
+        captures all lifetimes inputed into the function, in order 
+        to express that lifetime relationship, the Future type needs 
+        to be generic over a lifetime, so that it can capture the 
+        lifetime from the self argument on the method.
+        rust has async methods simply with future objects 
+        they can be used to execute in a lightweight thread
+        of execution without blocking the thread they're in 
+        use object safe trait for dynamic dispatch with Box<dyn Trait> 
+        it allows to call trait methdos on the object that impls the 
+        Trait which is not known till the runtime, object safe traits 
+        must be unsized! so we can't have Self and GAT in object safe traits
+    */
+    trait CollectionExt{
+        type Collection<'valid>: Send + Sync + Clone;
+        async fn get_by_owner(&self);
+    }
+    impl CollectionExt for (){
+        type Collection<'valid> = Self;
+        async fn get_by_owner(&self) {
+            
+        }
+    }
+
+    let name = [const{
+        "wildonion"
+    }; 10];
+
+    // multi type passing support with static dispatch
+    fn static_trait<T>(param: T) where T: FnOnce() -> String + Send + Sync{}
+    fn static_trait1(param: impl FnOnce() -> String + Send + Sync) -> impl CollectionExt{ () }
+    // trait as object with dynamic dispatch
+    fn dynamic_trait(param: Box<dyn FnOnce() -> String + Send + Sync>){}
+    fn dynamic_trait_self_ref(param: std::pin::Pin<Box<dyn std::future::Future<Output = String> + Send + Sync>>){}
+
+    // lifetime extended, we can return pointer from the scope {} 
+    // but still can't return pointer from function without having 
+    // valid lifetime cause executing a function causes all the types
+    // inside function body which are owned by the function to get 
+    // executed hence dropping them out of the ram and no access to 
+    // their address thus any pointer to them after executing function 
+    // are invalidated and dangled. which rust doesn't allow to have 
+    // them in the first place.
+    let result = if true{
+        &String::from("")
+    } else{
+        &String::from("wildonion")
+    };
+    
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    struct User;
+    pub trait Any1{} // this is need to be object safe trait for dynamic dispatch 
+    pub trait Any{
+        fn getValue(&self) -> Self;
+    }
+    impl Any for String{
+        fn getValue(&self) -> String{
+            
+            // dereffing requires the type impls Copy trait well 
+            // in here we can't since the self is behind shared ref
+            // and the secondly String is not Copy we need to
+            // clone or convert it to its owned version 
+            self.to_owned()
+        }
+    }
+    impl Any for u8{
+        fn getValue(&self) -> u8{
+            // only stack data can be derefferenced since they impl Copy trait
+            // for dereffing Copy trait needs to be implemented for the type
+            *self 
+        }
+    }
+    impl Any for User{
+        fn getValue(&self) -> User{
+            User{}
+        }
+    }
+    // static dispatch
+    fn passAny(param: impl Any + Send + Sync + 'static){
+        let value = param.getValue();
+    }
+    passAny(String::from("wildonion"));
+    passAny(100);
+    passAny(User{});
+
+    // dynamic dispatch
+    impl Any1 for String{} 
+    impl Any1 for User{} 
+    impl Any1 for u8{} 
+    let any: Vec<Box<dyn Any1>> = vec![
+        Box::new(100),
+        Box::new(User{}),
+        Box::new(String::from("wildonion"))
+    ];
+
+    /////// passing async future object to method
+    //////@@@@@@@@@@@@@@@@@@@@@--------@@@@@@@@@@@@@@@@@@@@@--------@@@@@@@@@@@@@@@@@@@@@--------
+    // future objects can be either an async method or an object safe trait using:
+    // Box::pin or static dispatching with impl Future (dynamic and static dispatch) or
+    // bounding to generic like so F: std::future::Future<Output=()>
+    // we have to ensure the closure's return type matches the expected impl Future<Output = u8>
+    // as the compiler would expect it, having so can be done in a way what i've done 
+    // exactly which is passing |name: String| async move{ String::from("wildonion") }; 
+    async fn writeFile<FO, G, C: FnOnce(I) -> G + Send + Sync + 'static, I, O>
+        (data: &[u8], cb: fn(I) -> O, param: I, 
+            cb1: C
+        ) 
+            where 
+            G: std::future::Future<Output = String> + Send + Sync + 'static,
+            I: Clone + Send + Sync + 'static, 
+            O: Send + Sync + 'static, 
+            O: std::future::Future<Output = FO> + Send + Sync + 'static,
+            FO: Send + Sync + 'static, 
+            O::Output: Send + Sync + 'static{
+
+        let res = cb1(param.clone()).await;
+        let output = cb(param).await;
+    }
+
+    let buffer = vec![];
+    async fn callMeLater(name: String) -> u8{ 0 } // this method is a future object returns 0 as u8
+    let cls = |name: String| async move{ String::from("wildonion") };
+
+    writeFile(
+        &buffer, 
+        callMeLater, 
+        String::from("wildonion"), 
+        cls
+    );
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+    // how multiple types can be inside a vector???? (dynamic dispatch using traits)
+    trait UserInterface<V>{
+        type Gat<C>: Send + Sync;
+    }
+    trait UserInterface2<V>{}
+    struct AppUser;
+    struct AppUser2;
+    impl<V> UserInterface2<V> for AppUser{}
+    impl<V> UserInterface2<V> for AppUser2{}
+    impl<V> UserInterface2<V> for String{}
+    fn getUsers<G, V, T: UserInterface<V, Gat<G>: Send + Sync>>(param: T) 
+        where <T as UserInterface<V>>::Gat<G>: Clone, 
+    {
+        // dynamic dispatch is used to have trait objects implemented for 
+        // different types, useful for dependency injection 
+        let traits: Vec<Box<dyn UserInterface2<V>>> = vec![
+            Box::new(
+                AppUser{}
+            ),
+            Box::new(
+                AppUser2{}
+            ),
+            Box::new(
+                String::from("")
+            )
+        ];
+    }
+    
+    fn setCollection_form1<'valid, T: CollectionExt>() 
+        where <T as CollectionExt>::Collection<'valid>: Send + Sync{} // bound GAT to Send Sync indirectly
+    fn setCollection_form2<'valid, T: CollectionExt<Collection<'valid>: Send + Sync>>(){} // bound GAT to Send Sync directly
+    fn setCollection_form3<'valid, T: CollectionExt<Collection<'valid> = String>>() // default type param and value for GAT
+        where <T as CollectionExt>::Collection<'valid>: Send + Sync{}
+
+    fn setConstArr<T, const N: usize>() -> [Option<T>; N]{
+        struct Player<const Id: usize>(pub usize);
+        let foo = [const {None::<String>}; 100];
+        let cnt = const{None::<String>};
+        [const{None::<T>}; N]
+    }
+    // another const{}
+    let foo = const{
+        "wildonion"
+    };
+    let arr = const{
+        [const{None::<String>}; 2]
+    };
+    let vector = const{
+        [const{"wildonion"}; 2] // 2 elements of "wildonion"
+    };
+    // type Function<G: Send + Sync> = fn(String) -> G; // the bound will not be checked in type alias
+    type Function<G> = fn(String) -> G;
+    fn get_name(param: String) -> u32{0}
+    let func: Function<u32> = get_name;
+    // ===>>>===>>>===>>>===>>>===>>>===>>>===>>>===>>>===>>>===>>>
+    // dependency injection using traits poly, dyna stat dispatch
+    // ===>>>===>>>===>>>===>>>===>>>===>>>===>>>===>>>===>>>===>>>
+    struct Time;
+    impl TimeoutInterface for Time{ fn set_time(&self){} }
+    trait TimeoutInterface{ fn set_time(&self); }
+    fn handle_timeout<F, T: Send + Sync + 'static + TimeoutInterface, R>(timeout_logic: F, time_instance: T) 
+        where F: Fn(T) -> R + Send + Sync + 'static,{
+            time_instance.set_time(); // it contains &self which is a reference to the instance
+            timeout_logic(time_instance);
+    }
+
+    #[derive(Default)]
+    struct useState<T: Send + Sync + Clone + 'static, F: Send + Sync + Clone + 'static>(pub T, pub F) 
+        where F: Fn(T) -> T + Send + Sync + Clone + 'static;
+    let use_state_instance = useState(0, |age|{ 0 });
+    let setAge = use_state_instance.1;
+    let newAge = setAge(0);
+
+    struct Param<T: Send + Sync + Fn() -> (), const REQUIRED: bool>{
+        pub data: T,
+    }
+
+    impl<T: Send + Sync + Fn() -> ()> Param<T, true>{} // the true implementation
+    impl<T: Send + Sync + Fn() -> ()> Param<T, false>{} // the false implementation
+
+    trait Interface<G>{
+        type Object<'o>: Send + Sync;
+        async fn get_object<'o>(&self, param: G) -> Self::Object<'o>;
+    }
+    struct Object<T>{
+        pub data: T
+    }
+    impl Interface<String> for Object<String>{
+        type Object<'o> = Self;
+        async fn get_object<'o>(&self, param: String) -> Self::Object<'o>{
+            Object{
+                data: param
+            }
+        }
+    }
+    impl Interface<String> for &[u8]{
+        type Object<'o> = &'o [u8];
+        async fn get_object<'o>(&self, param: String) -> Self::Object<'o>{
+            // self // don't return self in here cause the lifetime of self is '1 but we need to rerturn 'o
+            &[0]// returning an slice or a pointer in here is valid since we're using a valid lifetime for that which is 'o
+        }
+    }
+    impl Interface<Vec<String>> for Vec<String>{
+        type Object<'o> = Self;
+        async fn get_object<'o>(&self, param: Vec<String>) -> Self::Object<'o>{
+            vec![
+                String::from("some-data")
+            ]
+        }
+    }
+    fn injectDependency<G>(service: impl Interface<G>){}
+    let obj = Object::<String>{
+        data: String::from("some-data")
+    };
+
+    obj.get_object(String::from("some-data-in-here"));
+    // note that for a trait to be "object safe" it needs to allow building 
+    // a vtable to allow the call to be resolvable dynamically so having GAT
+    // or returning Self in return type won't make the trait an object safe trait
+    let data: &[u8] = &[1]; // it must be of type &[u8]
+    injectDependency(data); // service is of type &[u8] (need to behind ref cause [u8] is not Sized)
+    injectDependency(vec![String::from("")]); // service is of type Vec<String>
+    injectDependency(obj); // service is of type Object<String>
+    trait ObjectSafeTraitInterface{
+        fn getObject(&self) -> Result<(), ()>;
+    }
+    struct ObjectSafeTrait{}
+    impl ObjectSafeTraitInterface for String{
+        fn getObject(&self) -> Result<(), ()> {
+            Ok(())
+        }
+    }
+    impl ObjectSafeTraitInterface for ObjectSafeTrait{
+        fn getObject(&self) -> Result<(), ()> {
+            Ok(())
+        }
+    }
+    let trait_objects: Vec<Box<dyn ObjectSafeTraitInterface>> = vec![
+        Box::new(ObjectSafeTrait{}), 
+        Box::new(String::from(""))
+    ];
+    for t in trait_objects{
+        t.getObject();
+    }
+
+    trait GameObjectInterface{}
+    impl GameObjectInterface for GameObject{}
+    struct GameObject;
+
+    trait AxisPointPivot<T>{
+        type Object<G>: Send + Sync;
+        async fn buildGameObject<G>(&mut self) -> Self::Object<G>;
+        async fn returnGameObject(&self) -> impl GameObjectInterface;
+    }
+
+    impl AxisPointPivot<u8> for GameObject{
+        
+        type Object<String> = Self;
+        async fn buildGameObject<String>(&mut self) -> Self::Object<String> {
+            
+            GameObject{}
+        }
+
+        async fn returnGameObject(&self) -> impl GameObjectInterface{
+            
+            GameObject{}
+        }
+
+    }
+
+
+    /// ---=====-======-======-=-=-=-=-=-= dependency injection example
+    /// ---=====-======-======-=-=-=-=-=-=
+    /// ---=====-======-======-=-=-=-=-=-=
+    pub trait Service<G: Send + Sync + 'static>{
+        type Output;
+        type Err;
+        type Result;
+        async fn execute(&self, state: G) -> Self::Result;
+    }
+    struct Dependency<T>(pub T);
+    
+    // Boxing trait objects for dynamic dispatch and pinning for self ref types like future objs
+    // don't use dynamic dispatch if the trait is not object safe trait instead use static dispatch 
+    // since G is send sync use an atomic type for thread safe syncing 
+    // like atomic u8 or arc mutex or rwlock 
+    impl Service<std::sync::atomic::AtomicU8> for Dependency<String>{
+        type Output = Dependency<String>;
+        type Err = Box<dyn std::error::Error + Send + Sync + 'static>;
+        type Result = std::pin::Pin<Box<dyn std::future::Future<Output = Self::Output>>>;
+
+        async fn execute(&self, state: std::sync::atomic::AtomicU8) -> Self::Result{
+            Box::pin(async move{
+                Dependency(String::from("executing..."))
+            })
+        }
+    }
+    async fn injectService(service: impl Service<std::sync::atomic::AtomicU8>){
+        let state = std::sync::atomic::AtomicU8::new(0);
+        service.execute(state).await;
+    }
+    injectService(Dependency(String::from("executing command"))).await;
+    /// ---=====-======-======-=-=-=-=-=-=
+    /// ---=====-======-======-=-=-=-=-=-=
+    
+
+    // executing async tasks
+    async fn execute<
+        F: std::future::Future<Output = String> + Send + Sync + 'static,
+        B: FnOnce() -> () + Send + Sync + 'static
+    >(f: F, b: B){
+        tokio::spawn(f); // tokio executes the future object in the background on its own
+        tokio::spawn(async move{
+            b()
+        });
+    }
+    // ------------------------------===
+    // ------------------------------===
+
 }
 
 fn dynamic_static_dispatching2(){
+
+    // -------------------------------------------
+    // ------------|callback function|------------
+    // -------------------------------------------
+    /*
+        Rust won't allow to have self-ref types cause they can't get moved since
+        their pointer won't be updated by the Rust after moving to point to their
+        new ownership thus new address therefore we should break the cycle of self-ref 
+        types using smart pointers and &. use Arc to share the ownership of the 
+        type between threads safely also Arc stores data on the heap, every type 
+        has only one ownership so moving the type around scopes moves it out of 
+        ram and change its owner thus the address so any pointer to that get invalidated, 
+        we should pass it by reference or we could pin it into the ram so we can 
+        use the pinned pointer which has an stable address inside the ram. 
+    */
+    #[derive(Clone, Default)]
+    struct Context1<C>{
+        pub this: C
+    }
+    #[derive(Clone, Default)]
+    struct Config{
+        pub ctx: std::sync::Arc<Context1<Self>> // use Arc to break the cycle of self-ref Config type
+    }
+
+    impl Config{
+        pub fn usingRmq(&self, cls: impl FnOnce(Self, std::sync::Arc<Context1<Self>>)){
+            let ctx = self.ctx.clone();
+            cls(self.clone(), ctx);
+        }
+    }
+
+    let cfg = Config::default();
+    cfg.usingRmq(|cfg, ctx|{
+
+        // if the type doesn't impl Copy then we should either borrow or clone
+        // it when we're moving out of it or into a nother scope like ctx.this
+        // which doesn't impl Copy and we should either borrow it like &ctx.this
+        // or clone it like ctx.this.clone()
+        let cfg_ctx = cfg.ctx;
+        let cfg = ctx.this.clone();
+
+    });
+    // -------------------------------------------
+    // -------------------------------------------
+    // -------------------------------------------
 
     // trait objects must be behind pointer like & or Box, they're are dynamic sized and are abstract
     // hence they need an implementor acting them as object, requires to put them behind dyn enables us 
@@ -1339,7 +2193,7 @@ fn dynamic_static_dispatching2(){
     //         }
     //     ),
     // ];
-
+ 
     // trait objects for dynamic dispatching
     let traits: Vec<Box<dyn Add<String>>> = vec![
         Box::new(
@@ -1353,6 +2207,59 @@ fn dynamic_static_dispatching2(){
     for mut t in traits{
         t.add(String::from("")); // dynamic dispatching 
     }
+
+
+    trait OSTExt{}
+    type ObjectSafeTrait0 = Box<dyn FnMut() -> () + Send + Sync>;
+    type ObjectSafeTrait1 = Box<dyn OSTExt>;
+    // trait to be returned as object must be object safe trait and 
+    // returning as a separate object needs to box them which can be
+    // used for dynamic dispatching also if the trait is a future
+    // object then returning it needs to pin its boxed form into the ram 
+    // so we can await on it later with its stable memory address.
+    // dyn keyword means that this would be a dynamic dispatch at runtime
+    // and we'll return an instance of the object who impls the trait 
+    // as well as call the trait methods on that object.
+    type FutureObjectPinned = std::pin::Pin<Box<dyn std::future::Future<Output = ObjectSafeTrait0>>>;
+    // in order the trait be as object safe trait we should have &self 
+    // as the first param in its methods since it helps to call the trait
+    // methods on the object using the vtable
+    trait ColExt<G>{
+        type This;
+        fn set_val(&mut self, val: G) -> Self::This;
+    }
+    struct Col{ 
+        nickname: String, 
+        future: FutureObjectPinned
+    }
+    impl ColExt<String> for Col{
+        type This = Self;
+        fn set_val(&mut self, val: String) -> Self::This {
+            self.nickname = val;
+            // NOTE: Rust don't have gc to track the number of owners in code 
+            // cause everything in Rust has only one owner and due to this if 
+            // a type wants to move into another scopes if it's not an stack 
+            // data it'll lose its ownership and Rust allocate a new ownership
+            // for that in the new scope hence we can't move types if they're behind
+            // pointers, we can share their ownership using & and smart pointers
+            // Rc and RefCell for single and Mutex and Arc for multi threaded ctx.
+            // we can return types in here since it's behind pointer and Rust
+            // doesn't allow to move out of it to prevent having dangling pointers
+            // also Copy based types can move without losing ownership but 
+            // Copy is not implemented for heap data and thus our structure
+            // so in here we need to clone the self or: 
+            // (*self) 
+
+            // traits as object for dynamic dispatching must be boxed
+            let cls: ObjectSafeTrait0 = Box::new(||{}); // explicity mention that this closure is of type ObjectSafeTrait0
+            
+            // use and pass by pointer and reference to prevent 
+            // from moving and chaning ownership and address!
+            let nickname = &self.nickname;
+            Self{ nickname: nickname.to_owned(), future: Box::pin( async move{ cls } ) }
+        }
+    }
+
     
     /*                  ---------------- dynamic dispatching allows to have polymorphism ----------------
         for a trait to be "object safe" it needs to allow building a vtable to allow 
@@ -1443,6 +2350,50 @@ fn dynamic_static_dispatching2(){
         error. By designing object-safe traits
     */
 
+    // polymorphism in method param
+    struct User{}
+    type UserName = String;
+    impl Poly for UserName{
+      fn execute(&self){}
+    }
+    impl Poly for User{
+      fn execute(&self){}
+    }
+    trait Poly{
+      fn execute(&self);
+    }
+    async fn pass_multiple_form(param: impl Poly){
+      param.execute();
+    }
+    
+    // polymorphism with trait, passing different types to a single method
+    // it uses the concept of polymorphism with static disptach approach
+    // it can be mainly used for dependency injection to pass a service into 
+    // a function, with trait static dispatch we can pass multiple params 
+    // with different type cause the actual type of the method param is a trait
+    // and trait objects can be implemented for types that we want to pass them
+    // into the method
+    tokio::spawn(async move{ // execute async task in a thread
+      pass_multiple_form(String::from("")).await;
+      pass_multiple_form(User{}).await;
+    });
+
+    // dynamic and static dispatching with object safe trait
+    trait Interface2{
+        fn get_name(&self);
+        }
+    struct Up{}
+    impl Interface2 for Up{
+        fn get_name(&self){}
+        }
+    fn get_static(param: impl Interface2){}
+    fn get_dynamic(param: &dyn Interface2){}
+    fn get_dynamicB(params: Vec<Box<dyn Interface2>>){
+        for p in params{
+            p.get_name()
+        }
+        }
+    get_dynamicB(vec![Box::new(Up{})]);
 
     trait Animal {
         fn make_sound(&self);
@@ -1499,32 +2450,105 @@ fn dynamic_static_dispatching2(){
         // Box is a heap wrapper around the object contains all the methods of the actual object
         animal.make_sound(); // dispatched dynamically at runtime cause we don't know what type of animal would be!
     }
+
+
+    // dynamic dispatching with mutating object status during app execution
+    struct Object{ status: Status}
+    #[derive(Debug, Default)]
+    enum Status{
+        #[default]
+        Alive,
+        Dead
+    }
+    trait ObjExt{
+        fn execute(&mut self); // if we had Self in return type then it couldn't be object safe trait and used for dynamic dispatch cause we have Self
+    }
+    let objs: Vec<Box<dyn ObjExt>> = vec![Box::new(Object{status: Status::Alive})];
+    impl ObjExt for Object{
+        fn execute(&mut self) {
+            self.status = Status::Dead;
+        }
+    }
     
 
 }
 
-/* ✦•┈๑⋅⋯ ⋯⋅๑┈•✦ 
-    ➤⫘⫘⫘ don't move if it's behind pointer because: can't use pointer after moving and rust doesn't allow in the first place although it updates the pointers after moving 
-    ➤⫘⫘⫘ don't return reference from method because: types all are owned by the method body an once the method gets executed all of them will be dropped unless you use a valid lifetime to do so
-    ➤⫘⫘⫘ we can't generally return a pointer to a heap data owned by the function even with a valid lifetime 
-    ➤⫘⫘⫘ use pin and other smart pointers to break the cycle of self-ref types like future 
-    ➤⫘⫘⫘ use Box::pin(async move{}) to put futures in it if you want to move them around as separate
-    ➤⫘⫘⫘ moving pointer into tokio spawn requires the pointer to live longer than or equal to the tokio spawn lifetime like passing &'static str to tokio spawn is ok
-    ➤⫘⫘⫘ rust don't have gc if you use heap data without borrowing or cloning it moves out data from the ram and drop it
-  ✦•┈๑⋅⋯ ⋯⋅๑┈•✦ */
-// only the passed in param with lifetime can be returned can't return a pointer to the local variable 
-// inside function since once the function gets executed all of them will be dropped out of the ram, with 
-// &self and &'staitc lifetime we can do this however. basically any type with longer lifetime than its 
-// scope may involve heap allocation if their size or lifetime is not known at compile time in rust when 
-// heap data pass to the function their ownership tranferred into a new one inside the function hence not 
-// allowed having access to the very first ownership after method call because the resources it uses are 
-// immediately freed and no longer valid with a lifetime which cause the compiler to update all its pointer 
-// to point to a new location later on, doing so is due to the fact that rust tells us every value must
-// have exactly one ownership specially those heap data ones unless data implements Copy trait which we can 
-// pass it by value without losing ownership, references impls Copy trait, the concept of lifetime belongs 
-// to pointers which tells rust how long a pointer can lives in that scope accordingly every type when they 
-// go out of their scope their lifetime come to end like all the types inside this function body
-pub async fn accept_str<'a>(name: &'a str) -> &'a str{
+/* ▬▬ι═══════ﺤ 
+|   ╰┈➤ Rust doesn't have gc it moves data around the ram or drop heap data automatically after they get moved into
+|    new scope and transferred into new ownership, it also moves data around the ram usually for extra heap allocation 
+|    by itself but when you decide to move it into a new ownserhisp and scope it updates the poitners but don't allow 
+|    to use them after moving that's why we can't move out of a data if it's behind a shared pointer or it's pointer is
+|    being used by other scopes, for self-ref types like futures it breaks the move cause it can't update pointers at all
+|    forces us to use some smart pointers or & to break the cycle like Pin the boxed value into the ram to use the 
+|    pinned pointer instead of the actual value cause the pinned pointer has an stable and fixed memoery address during
+|    the lifetime of the app and Rust don't move it to change its address.
+|    ➤⫘⫘⫘ don't move if it's behind pointer because: can't use pointer after moving and rust doesn't allow in the first place although it updates the pointers after moving 
+|    ➤⫘⫘⫘ don't return reference from method because: types all are owned by the method body an once the method gets executed all of them will be dropped unless you use a valid lifetime to do so
+|    ➤⫘⫘⫘ we can't generally return a pointer to a heap data owned by the function even with a valid lifetime 
+|    ➤⫘⫘⫘ use pin and other smart pointers to break the cycle of self-ref types like future 
+|    ➤⫘⫘⫘ use Box::pin(async move{}) to put futures in it if you want to move them around as separate
+|    ➤⫘⫘⫘ moving pointer into tokio spawn requires the pointer to live longer than or equal to the tokio spawn lifetime like passing &'static str to tokio spawn is ok
+|    ➤⫘⫘⫘ rust don't have gc if you use heap data without borrowing or cloning it moves out data from the ram and drop it
+|    ➤⫘⫘⫘ some methods take the ownership of type cause they have self instead of &self, just clone the type or use as_ref() before calling them
+| ▬▬ι═══════ﺤ 
+*/
+/* 
+    let p = &mut object.unwrap(); here we're creating a mutable pointer to the object and since the unwrap()
+    takes the ownership of the type this syntax is wrong we have to create another type which has unwrapped
+    then take a mutable pointer to that, can't pass pointer to tokio spawn if the underlying type doesn't 
+    liven long enough which has a shorter lifetime than the tokio spawn.
+    can't use a type which doesn't live long enough to be passed into tokio scope 
+    cause the type will be dropped out of the ram once the function gets executed 
+    since it's owned by the function body.
+    sometimes use clone instead of pointer cause pointer might not live long enough because 
+    their underlying type might get dropped out of the ram and have shorter lifetime.
+    everything in rust has only one ownership we can count references to a type using rc and 
+    taking reference can be done via &, Box, Rc, Arc and if its behind pointers rust updates 
+    them to point to the right location as soon as the ownership of the type gets transferred 
+    into a new one, lifetime is a concept belongs pointer to know how much they're gonna live
+    long and must be shorter or equal to their underlying data lifetime to avoid situations like 
+    having dangled pointer when their underlying data is no longer accessible or valid cause 
+    it has been moved or dropped out of the ram or its lifeimte has came to end. if we want
+    to move one of the pointer into a new scope like tokio spawn the lifetime of the underlying 
+    data must be longer than, equal to or static the lifetime of the new scope.
+    only the passed in param with lifetime can be returned can't return a pointer to the local variable 
+    inside function since once the function gets executed all of them will be dropped out of the ram, with 
+    &self and &'staitc lifetime we can do this however. basically any type with longer lifetime than its 
+    scope may involve heap allocation if their size or lifetime is not known at compile time in rust when 
+    heap data pass to the function their ownership tranferred into a new one inside the function hence not 
+    allowed having access to the very first ownership after method call because the resources it uses are 
+    immediately freed and no longer valid with a lifetime which cause the compiler to update all its pointer 
+    to point to a new location later on, doing so is due to the fact that rust tells us every value must
+    have exactly one ownership specially those heap data ones unless data implements Copy trait which we can 
+    pass it by value without losing ownership, references impls Copy trait, the concept of lifetime belongs 
+    to pointers which tells rust how long a pointer can lives in that scope accordingly every type when they 
+    go out of their scope their lifetime come to end like all the types inside this function body
+*/
+pub async fn accept_ref<'a>(name: &'a str) -> &'a str{
+
+
+    // as soon as a type moves from its previous location inside the ram to a new one
+    // its lifetime comes to end and any pointer of that get invalidated, this moves
+    // can be passing it without cloning or borrowing it or getting dropped out of the
+    // ram which destroy the type completely.
+    // since the lifetime of binding which is an String on the heap is smaller
+    // than the tokio scope (it's not lived long enough) hence we can't move 
+    // its pointer (name_) into the tokio scope cause in Rust once the type gets dropped
+    // out of the ram its pointer can't be usable any more and String will be dropped
+    // at the end of the tokio scope spawn which is not what we want cause tokio scope 
+    // executes in the background asyncly by the tokio runtime scheduler, in cases that
+    // a type moves into a new scope Rust updates all its pointers (if there is any)
+    // to point to the right location after moving but can't use them casue the type
+    // is moved and its old lifetime is not valid any more and has a new ownership 
+    // that's why we shouldn't move the type if it's behind a pointer we could pass 
+    // by reference or clone it which is an anti pattern approach!
+    let binding = String::from("");
+    let name_ = &binding;
+    tokio::spawn(async move{
+        
+        // let get_name = name;
+
+    });
 
     struct StringUnit(pub String);
     let instance = StringUnit(String::from("wildonion"));
@@ -1577,6 +2601,12 @@ pub async fn accept_str<'a>(name: &'a str) -> &'a str{
 
         let bytes: &'v [u8] = &[1];
         
+        // lifetime belong pointers, must be used to tell rust that the lifetime of the pointer depends on
+        // its underlying type and it doesn't live longer than the underlying type cause when the type
+        // gos out of the scope all its pointer must come to die to avoid having dangling poitners.
+        // borrow checker is to ensure that the ref to data doesn't outlive that data that's why we can't 
+        // move the pointer into a tokio spawn if the underlying doesn't live long enough this mechanism 
+        // ensures that pointers are not dangled when the underlying type goes out of the scope.
         // can't move bytes into tokio scope since 'v doesn't live long enough and once the function gets 
         // executed 'v is no longer accessible, the tokio spawn on the other hand, has a longer lifetime 
         // than the function scope since it will start the task in the background until the future gets 
@@ -1612,4 +2642,290 @@ pub async fn accept_str<'a>(name: &'a str) -> &'a str{
     }
 
     name
+}
+
+pub async fn any_type_dyn_stat_dispatch(){
+
+    // spawn a tokio thread for every request in a lightweight
+    async fn getCode<O: Send + Sync + 'static>(param: O) 
+        -> impl std::future::Future<Output=O> + Send + Sync + 'static{
+        // the return type is a type which impls the trait directly through 
+        // static dispatch
+        async move{
+            param
+        }
+    }
+    tokio::spawn(getCode(String::from("wildonion")));
+
+    /* 
+        Access different types through a single interface to use common method of traits with either default 
+        or trait implementations we can impl the trait broadly for any possible types using impl Trair for T{} 
+        instead of implementing for every single type manually box pin, box dyn trait impl trait for dyn stat 
+        and poly implementations.
+        is, the type has been erased. As such, a dyn Trait reference contains two pointers. One pointer goes 
+        to the data (e.g., an instance of a struct). Another pointer goes to a map of method call names to 
+        function pointers (known as a virtual method table or vtable).
+        At run-time, when a method needs to be called on the dyn Trait, the vtable is consulted to get the 
+        function pointer and then that function pointer is called.
+        See the Reference for more information on trait objects and object safety.
+        Trade-offs
+        The above indirection is the additional runtime cost of calling a function on a dyn Trait. Methods 
+        called by dynamic dispatch generally cannot be inlined by the compiler.
+        However, dyn Trait is likely to produce smaller code than impl Trait / generic parameters as the 
+        method won't be duplicated for each concrete type.
+    */
+    trait AnyTypeCanBe1<T>: Send + Sync + 'static{
+        fn getNickName(&self) -> String{
+            String::from("")
+        }
+    }
+    impl<T: Send + Sync + 'static> AnyTypeCanBe1<T> for T{}
+    struct InGamePlayer{}
+    let player = InGamePlayer{};
+    player.getNickName(); // don't need to impl AnyTypeCanBe1 for InGamePlayer cause it's already implemented for any T
+
+    
+    // handling pushing into the map using trait polymorphism
+    trait AnyTypeCanBe{}
+    impl<T> AnyTypeCanBe for T{} // impl AnyTypeCanBe for every T, reduces the time of implementing trait
+    let any_map1: std::collections::HashMap<String, Box<dyn AnyTypeCanBe + Send + Sync + 'static>>;
+    let mut any_map1 = std::collections::HashMap::new();
+    any_map1.insert(String::from("wildonion"), Box::new(0));
+    // or 
+    // any_map1.insert(String::from("wildonion"), Box::new(String::from("")));
+
+    // to have any types we can dynamically dispatch the Any trait which is an object safe trait
+    type AnyType = Box<dyn std::any::Any + Send + Sync + 'static>;
+    let any_map: std::collections::HashMap<String, AnyType>; // the value can be any type impls the Any trait
+    let boxed_trait_object: Box<dyn AnyTypeCanBe>; // Boxed trait object
+    let arced_trait_object: std::sync::Arc<dyn AnyTypeCanBe>; // thread safe trait object
+
+    fn getTrait(t: &(dyn AnyTypeCanBe + Send)){ // dynamic dispatch
+
+    }
+    fn getTrait1(t: impl AnyTypeCanBe + Send){ // static dispatch
+        
+    }
+
+
+}
+
+pub async fn solid_design_pattern(){
+    
+    /* ---------------------------------------------
+        return future from none async context when we need its result:
+            put future inside Box::pin and use channels to return the result from the tokio spawn threads 
+            later the caller of the function must await on it later but the logic inside the async context 
+            will be executed already
+        traits are interfaces that can be implemented for any types mainly allows 
+        extending and accessing all types through a single interface also we could 
+        store them as obejct safe trait through dynamic dispatching process 
+        with &dyn Trait or smart pointers like Arc<dyn Trait or Box<dyn Trait, this 
+        is called dep injection, they can also be used for static dispatch which supports 
+        passing multiple types to a function another usefull logic is supporting 
+        polymorphism through a single interface
+
+        a nice abstract and solid based codes:
+        traits and macrocosm and features:
+        traits are all about extending interface of struct and 
+        designing the real world absatract problems which don't 
+        need to be implemented directly on the object itself. 
+        dynamic dispatch: the trait must be object safe trait and since traits are not sized hence it would be: Box<dyn Trait> as the separate type
+        static dispatch : the trait must be implemented directly for the type and we're returning the trait using `impl Trait` syntax
+        polymorphism    : passing different types to trait to support different implementation through a single interface
+        dep injection   : combine all of the aboves
+
+        since futures are object safe trait hence they have all traits 
+        features we can pass them to the functions in an static or dynamic 
+        dispatch way using Arc or Box or impl Future or event as the return 
+        type of a closure trait method:
+            std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>
+            Arc<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
+            Box<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
+            Arc<Mutex<dyn Fn() -> R + Send + Sync + 'static>> where R: std::future::Future<Output = ()> + Send + Sync + 'static
+            F: std::future::Future<Output = ()> + Send + Sync + 'static
+            param: impl std::future::Future<Output = ()> + Send + Sync + 'static
+
+        NOTE: mutex requires the type to be Sized and since traits are 
+        not sized at compile time we should annotate them with dyn keyword
+        and put them behind a pointer with valid lifetime or Box and Arc smart pointers
+        so for the mutexed_job we must wrap the whole mutex inside an Arc or annotate it
+        with something like &'valid tokio::sync::Mutex<dyn Fn() -> R + Send + Sync + 'static>
+        the reason is that Mutex is a guard and not an smart pointer which can hanlde 
+        an automatic pointer with lifetime 
+    */
+
+    // use Box<dyn AnyType> for dynamic typing and dispatch
+    // use impl AnyType for static typing and dispatch 
+    // use trait for polymorphism like wallet payment portal
+    // pass Box<dyn AnyType in struct for dep injection  
+    // use Box::pin() to pin the future trait objects into the ram
+    // use onion, macrocosm and features to create plugin
+    trait ServiceExt{
+        fn getInstance(&self) -> &Box<dyn ServiceExt>;
+    }
+    struct Service{
+        pub instance: Box<dyn ServiceExt> // injecting ServiceExt trait dependency 
+    }
+    impl ServiceExt for Service{
+        fn getInstance(&self) -> &Box<dyn ServiceExt> {
+            &self.instance
+        }
+    }
+    fn getService(service: impl ServiceExt){
+        let instance1 = service.getInstance();
+        let instance2 = instance1.getInstance();
+        instance2.getInstance();
+    }
+    
+    enum PortalError{
+        Success,
+        Failed
+    }
+
+    // buffer transaction events
+    struct Buffer<T>{
+        pub events: std::sync::Arc<std::sync::Mutex<Vec<T>>>,
+        pub size: usize
+    }
+    struct Event;
+    struct Transaction{
+        pub events: Buffer<Event>,
+    }
+
+    // the ZarinPalPortal struct
+    struct ZarinPalPortal;
+
+    // account structure for ZarinPalPortal gateway
+    struct Account<ZarinPalPortal>{
+        pub txes: Vec<Transaction>,
+        pub payment_portals: Vec<Box<dyn Portal<ZarinPalPortal, Gate = String>>>, // dynamic dispatch, will be triggered at runtime | default type param for the GAT
+    }
+
+    // main struct: wallet which contains different accounts
+    struct Wallet<P>{
+        pub accounts: Vec<Account<P>>,
+    }
+
+    // portal trait
+    trait Portal<P>{ // polymorphism, access different types through a single interface
+        type Gate: Send + Sync + 'static;
+        fn pay(&self, portal: P) -> Result<(), PortalError>;
+    }
+    
+    // wallet must support different portals
+    impl Portal<ZarinPalPortal> for Wallet<ZarinPalPortal>{
+        type Gate = String;
+        fn pay(&self, portal: ZarinPalPortal) -> Result<(), PortalError> {
+            Ok(())
+        }
+    }
+
+    trait Interface: std::fmt::Debug{}
+    struct DynamicDisptachDepInjection<'valid>{
+        pub dep: Option<&'valid dyn Interface>,
+    }
+    #[derive(Debug)]
+    struct UseMe{}
+    impl Interface for UseMe{}
+    let depInjection = &UseMe{} as &dyn Interface; // cast the instance to the trait
+    let instance = DynamicDisptachDepInjection{
+        dep: Some(depInjection)
+    };
+    if let Some(interface) = instance.dep{
+        println!("interface: {:#?}", interface);
+    }
+
+    #[derive(Clone)]
+    pub struct setState<T>(pub T);
+    
+    pub trait useState<G>{
+        type StateType<S: Send + Sync + 'static>;
+        fn getState(&self) -> G;
+    }
+    impl<String: Clone> useState<String> for setState<String>{
+        type StateType<S: Send + Sync + 'static> = String;
+        fn getState(&self) -> String {
+            self.clone().0
+        }
+    }
+    let state = setState(String::from("wildonion"));
+    let value = state.getState();
+
+    struct useRef<'valid>(pub &'valid [u8]);
+    let bytes = useRef(String::from("wildonion").as_bytes());
+
+
+    // dependency injection using Arc<dyn Trait, Box<dyn Trait, Arc<Mutex<dyn Trait
+    type Fut = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+    struct Contract<R: std::future::Future<Output = ()> + Send + Sync + 'static>{
+        pub mintFunctions: std::sync::Arc<tokio::sync::Mutex<Vec<Box<dyn Fn() -> R + Send + Sync>>>>,
+        pub futures: std::sync::Arc<tokio::sync::Mutex<Vec<Fut>>>,
+        pub eventloops: Vec<std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Fut>>>>
+    }
+    impl<R: std::future::Future<Output = ()> + Send + Sync + 'static> Contract<R>{
+        pub async fn executeMintFunctions(&self){
+            let getFuncs = self.mintFunctions.lock().await;
+            for func in getFuncs.iter(){
+                func().await;
+            }
+        }
+    }
+
+    // Arc<dyn Future>
+    // Arc<Mutex<dyn Future>>
+    // param: impl Future
+    // Pin<Box<dyn Future>>
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use std::pin::Pin;
+    struct DepInjectionSubscribers<T, R, O>
+    where 
+        O: Clone + Send + Sync + 'static,
+        T: Clone + Send + Sync + 'static,
+        R: std::future::Future<Output = O> + Send + Sync + 'static{
+        pub boxed_subs: Arc<Mutex<Vec<Box<dyn Fn(T) -> R + Send + Sync + 'static>>>>,
+        pub arced_subs: Arc<Mutex<Vec<Arc<dyn Fn(T) -> R + Send + Sync + 'static>>>>,
+        pub pinned_fut_io_task: Pin<Box<dyn std::future::Future<Output = O> + Send + Sync + 'static>> 
+    }
+    impl<T, R, O> DepInjectionSubscribers<T, R, O> 
+    where 
+    O: Clone + Send + Sync + 'static,
+    T: Clone + Send + Sync + 'static,
+    R: std::future::Future<Output = O> + Send + Sync + 'static{
+        pub fn set(&mut self, fut: impl std::future::Future<Output = O> + Send + Sync + 'static){
+            self.pinned_fut_io_task = Box::pin(fut);   
+        }
+        pub fn get(&self) -> &Self{
+            &self
+        }
+    }
+
+    //// ------- ///// ------- ///// ------- ///// 
+    type BoxedError = Box<dyn std::error::Error + Send + Sync + 'static>;
+    type ArcedError = std::sync::Arc<dyn std::error::Error + Send + Sync + 'static>;
+    type Function<R> = Box<dyn Fn() -> R + Send + Sync + 'static>; 
+    async fn getFunc<O, R: std::future::Future<Output = O>>(function: Function<R>) -> O
+        where R: Send + Sync + 'static,
+                O: Send + Sync + 'static{
+            let res = function().await;
+            res
+        }
+    type Function1<T, R> = std::sync::Arc<tokio::sync::Mutex<dyn FnOnce(T) -> R + Send + Sync + 'static>>;
+    fn buildClosure<T, R>(
+        param: T, fut: R,
+        fut1: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send  + Sync + 'static>>, 
+    ) 
+    -> Function1<T, R>
+    where T: Clone + Send + Sync, 
+          R: std::future::Future<Output = ()> + Send  + Sync + 'static,
+    {
+        // R would expect the closure body to be future object
+        std::sync::Arc::new(
+            tokio::sync::Mutex::new(
+                |param| { fut }
+            )
+        )
+    }
+    
 }

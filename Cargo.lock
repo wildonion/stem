@@ -996,67 +996,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
-name = "gvm"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "chrono",
- "dotenv",
- "env_logger 0.10.2",
- "futures",
- "futures-util",
- "gvmlib",
- "hex",
- "log",
- "log4rs",
- "once_cell",
- "pretty_env_logger",
- "proc-macro2",
- "quote",
- "rand",
- "rand_chacha",
- "rayon",
- "serde",
- "serde_json",
- "syn 1.0.109",
- "tokio",
- "uuid",
- "wallexerr",
- "wasmer 4.2.6",
- "wasmer-wasi",
-]
-
-[[package]]
-name = "gvmlib"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "chrono",
- "dotenv",
- "env_logger 0.10.2",
- "futures",
- "futures-util",
- "hex",
- "log",
- "log4rs",
- "once_cell",
- "pretty_env_logger",
- "proc-macro2",
- "quote",
- "rand",
- "rayon",
- "serde",
- "serde_json",
- "syn 1.0.109",
- "tokio",
- "tokio-cron-scheduler",
- "uuid",
- "wallexerr",
- "wasmer 4.2.6",
- "wasmer-wasi",
-]
-
-[[package]]
 name = "h2"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1732,6 +1671,68 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "ovm"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger 0.10.2",
+ "futures",
+ "futures-util",
+ "hex",
+ "indexmap 2.2.6",
+ "log",
+ "log4rs",
+ "once_cell",
+ "ovmlib",
+ "pretty_env_logger",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "serde",
+ "serde_json",
+ "syn 1.0.109",
+ "tokio",
+ "uuid",
+ "wallexerr",
+ "wasmer 4.2.6",
+ "wasmer-wasi",
+]
+
+[[package]]
+name = "ovmlib"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger 0.10.2",
+ "futures",
+ "futures-util",
+ "hex",
+ "log",
+ "log4rs",
+ "once_cell",
+ "pretty_env_logger",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "syn 1.0.109",
+ "tokio",
+ "tokio-cron-scheduler",
+ "uuid",
+ "wallexerr",
+ "wasmer 4.2.6",
+ "wasmer-wasi",
 ]
 
 [[package]]

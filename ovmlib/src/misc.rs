@@ -405,6 +405,12 @@ fn trait_as_ret_type(instance_type: Instance) -> impl Interface{ instance_type }
 fn trait_as_ret_type_1(instance_type: Instance) -> impl Interface{ () }
 fn trait_as_param_type(param: impl FnOnce() -> ()){
 
+    struct Button<T: FnOnce() -> String + Send + Sync>{
+        pub onclick: Box<dyn FnOnce() -> T>, // dynamic dispatch using object safe trait by boxing the trait 
+    }
+    let b = Button{onclick: Box::new(||{ ||{String::from("")} })};
+    (b.onclick)();
+
     trait AuthExt{}
     #[derive(Clone)]
     struct Auth{}
@@ -695,10 +701,167 @@ fn dynamic_typing(){
     println!("string after casting and mutating it : {:?}", name);
     println!("string address after casting and mutating it : {:p}", &name);
 
+    struct Player{
+        pub nickname: String,
+    }
+    let player = Player{nickname: String::from("")};
+    let mut casted: Box<dyn std::any::Any> = Box::new(player);
+    match casted.downcast_mut::<Player>(){
+        Some(player) => {
+            (*player).nickname = String::from("wildonion");
+        },
+        None => {}
+    };
+
+}
+
+
+fn but_the_point_is1(){
+    
+    let fut = async move{};
+    let pinned = Box::pin(fut);
+    println!("fut pinned address {:p}", pinned);
+    fn getFutPinned(fut: std::pin::Pin<Box<dyn std::future::Future<Output=()>>>){
+        println!("[getFutPinned] - fut pinned address {:p}", fut);    
+    }
+    getFutPinned(pinned);
+    
+    let mut name = String::from("");
+    // two different address
+    let pname = &name;
+    let pname1 = &name;
+    // let mut pmutname = &mut name;
+    let pinned = std::pin::Pin::new(Box::new(name.clone()));
+
+    println!("name address with pname: {:p}", pname);
+    println!("name address with pname1: {:p}", pname1);
+    println!("name address with pinned: {:p}", pinned);
+    
+    move_pinned(pinned);
+    fn move_pinned(pinned: std::pin::Pin<Box<String>>){
+        println!("[move_pinned] - name address with pinned: {:p}", pinned);    
+    }
+    
+    fn move_name(name: String){
+        println!("[move_name] - name address : {:p}", &name);
+    }
+    
+    fn move_name1(name: &String){
+        println!("[move_name1] - name address : {:p}", name);
+    }
+    
+    // pass by type or cloning or moving: every type in method has new owner thus new address
+    move_name(name.clone());
+    // pass by reference: type will have the same address as it's ousdie of the method
+    move_name1(&name);
+    
+    
+    
+    let mut name = String::from("");
+    let mut pname = &mut name;
+    change_name(&mut name, &mut String::from("new value"));
+
+    // we should use a same lifetime for each mutable pointer
+    // cause we're updating name with new_name1 which requires 
+    // same valid lifetime
+    fn change_name<'valid_lifetime>(
+        mut name: &'valid_lifetime mut String, 
+        new_name1: &'valid_lifetime mut String
+    ){
+        // ------ same address different value
+        println!("address before mutating: {:p}", name);
+        *name = String::from("wildonion");
+        println!("address after mutating: {:p}", name);
+        // ------
+        
+        // ------ new address new value binding
+        println!("address before new binding: {:p}", name);
+        let mut new_name = String::from("new value");
+        name = new_name1;
+        println!("address after new binding: {:p}", name);
+        // ------
+        
+        println!("final value of name: {}", name);
+    }
+    
+}
+
+fn but_the_point_is2(){
+
+    // can't have immutable and mutable ref at the same time
+    let mut init = String::from("wildonion");
+    let mut init2 = String::from("wildonion");
+    let pname = &init;
+    let pname1 = &init;
+    
+    let mut mutpname = &mut init2; 
+    println!("address of mutpname: {:p}", &mutpname);
+    println!("mutpname points to init2: {:p}", mutpname);
+
+    // same address but different value
+    *mutpname = String::from("new wildonion");
+    println!("value of init2: {}", init2);
+    
+    // new address and new value
+    let mut new_binding = String::from("new wildonion1");
+    mutpname = &mut new_binding;
+    println!("address of mutpname: {:p}", &mutpname);
+    println!("mutpname now points to new binding location: {:p}", mutpname);
+    println!("value of mutpname: {}", mutpname);
+
+    // same val different address
+    // address of pname: 0x7ffd7875b570
+    // address of pname1: 0x7ffd7875b578
+    println!("address of pname: {:p}", &pname);
+    println!("address of pname1: {:p}", &pname1);
+    
+    // both are pointing to the name
+    // pname points to: 0x7ffd7875b558
+    // pname1 points to: 0x7ffd7875b558
+    println!("pname points to : {:p}", pname);
+    println!("pname1 points to : {:p}", pname1);
 
 }
 
 fn but_the_point_is(){
+
+
+    // rust often moves heap data around the ram for better allocation and 
+    // optimisation like when a vector is growing at runtime it moves it in 
+    // other locations and update all its pointers behind the scene.
+    let mut vector = vec![1, 3, 5];
+    
+    println!("vec address: {:p}", &vector);
+    
+    // moving vector into a new scope with new ownership 
+    // cause everthing must have only one owner
+    fn get_vector_ownership(vec: Vec<u8>){
+        
+        // new address cause data will be moved into the function scopes after passing it
+        println!("vec address in func: {:p}", &vec);
+    }
+
+    fn borrow_vector_ownership(vec: &Vec<u8>){
+        
+        // contains the same address of the outside vector
+        // cause we've passed the vector by its pointer
+        // and its point to the same location of the vector
+        println!("vec address in func: {:p}", vec);
+    }
+    
+    fn borrow_vector_ownership_mutable(vec: &mut Vec<u8>){
+        
+        vec.push(100);
+        
+        // contains the same address of the outside vector
+        // cause we've passed the vector by its pointer
+        // and its point to the same location of the vector
+        println!("vec address in func: {:p}", vec);
+    }
+    
+    // get_vector_ownership(vector);
+    // borrow_vector_ownership(&vector);
+    borrow_vector_ownership_mutable(&mut vector);
 
     // ********------********------********------********------********------
     // ********------********------********------********------********------
@@ -811,6 +974,46 @@ fn but_the_point_is(){
     println!("[CHANGED ADDR] mutpname pointer points to : {:p}", mutpname); // mutpname now contains completely a new value binding accordingly new location of the new binding
     // -----> name is NOT changed after changing the mutpname completely with a new binding
     // ....
+    // pointers are immuatable by default 
+    // {:p} requires the type implements AsRef trait, pointers implement this
+    let name = String::from("wildonion");
+    let pname = &name;
+    println!("name address                       : {:p}", &name);
+    println!("name address (pname)               : {:p}", pname);
+    println!("address of pointer itself          : {:p}", &pname);
+    println!("pname points to name address       : {:p}", pname);
+    
+    println!("------------------------------------");
+    println!("--------same val | new addr---------");
+    println!("------------------------------------");
+    let mut pname1 = &String::from("oniontori");
+    println!("pname1 points to new address       : {:p}", pname1);
+    pname1 = pname;
+    println!("pname1 now points to name address  : {:p}", pname1);
+    println!("pname1 vale                        : {:?}", pname1);
+    println!("pname1 address itself              : {:p}", &pname1);
+    let new_binding = &String::from("layer1");
+    pname1 = new_binding;
+    println!("pname1 now points to a new address : {:p}", pname1);
+    
+    println!("------------------------------------");
+    println!("--------same addr | new val---------");
+    println!("--------new addr  | new val---------");
+    println!("------------------------------------");
+    let mut new_name = String::from("erfan");
+    println!("new_name address                                 : {:p}", &new_name);
+    println!("new_name value: {:?}", new_name);
+    let mut pnamemut = &mut new_name;
+    println!("pnamemut points to new_name address              : {:p}", pnamemut);
+    println!(">>> dereferencing mutable pointer...");
+    *pnamemut = String::from("completely new name");
+    println!("new_name new value                               : {:?}", new_name); // also pnamemut has changed too
+    let mut new_binding = String::from("new val");
+    pnamemut = &mut new_binding;
+    println!("pnamemut new value is                            : {:?}", pnamemut);
+    println!("pnamemut now points to new address of new binding: {:p}", pnamemut);
+    // pnamemut is no longer pointing to new_name
+    // ...
     // ------------------------------------------------------------------------
     // ------------------------------------------------------------------------
 
@@ -977,4 +1180,50 @@ fn but_the_point_is(){
             String::from("return value")
         }
     }
+}
+
+pub fn fillSchema(){
+    use std::collections::{BTreeMap, HashMap};
+    use indexmap::IndexMap;
+
+    // serde_json uses BTreeMap to decode the json string, in order the following 
+    // logic works we should maintain the order of the keys in the order they are 
+    // inserted into the map of the json string while we're decoding it. we should
+    // enable the preserve_order feature in the serde_json crate. to keep the order
+    // of the keys as exactly they're appearing in the json string
+    let schema = String::from("server,2,1,3,4#");
+    let json_str = r#"{"setip": "85.9.107.203", "setcode": "0", "setport": "7013", "setcode1": "0"}"#;
+    let actions: serde_json::Value = serde_json::from_str(json_str).unwrap();
+
+    // now serde json preserve the order of keys but BTreeMap doesn't due to building the
+    // map based on the hash of each key, we're using IndexMap which maintain the state 
+    // of the keys as they're inserted into the json string.
+    let map = serde_json::from_value::<IndexMap<String, String>>(actions).unwrap();
+    let values = map.values()
+        .map(|v| v.to_string())
+        .collect::<Vec<String>>();
+
+    let mut splitted_chars: Vec<String> = schema.split_terminator(&[',', ':', '|', '.'][..])
+        .map(|c| c.to_string())
+        .collect();
+    let mut spec_chars: std::collections::HashMap<usize, String> = std::collections::HashMap::new();
+
+    for i in 0..splitted_chars.len(){
+        if splitted_chars[i].contains('#') || splitted_chars[i].contains('*'){
+            spec_chars.insert(i, splitted_chars[i].clone());
+        }
+        let index = splitted_chars[i].trim_matches(|c| c == '#' || c == '*').parse::<usize>().unwrap_or(0); // don't use "" to char, char is inside '' 
+        if index > 0 && index <= values.len(){ // make sure that the index isn't out of bound 
+            splitted_chars[i] = values[index - 1].clone();
+        }
+    }
+
+    for (key, val) in spec_chars{
+        // inject the val at position key into the splitted_chars vector
+        splitted_chars.insert(key, val);
+    }
+
+    // keeps the # or *, use hte spec_chars map to insert them
+    println!("updated schema => {:?}", splitted_chars);
+
 }

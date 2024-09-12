@@ -67,6 +67,7 @@ https://developerlife.com/2022/02/24/rust-non-binary-tree/#naive-approach-using-
 https://developerlife.com/2022/03/12/rust-redux/
 https://bevyengine.org/learn/book/introduction/  
 https://godotengine.org/
+https://docs.ton.org/learn/tvm-instructions/tvm-overview
 https://nannou.cc/
 https://crates.io/crates/rg3d
 https://amethyst.rs/
@@ -97,6 +98,7 @@ https://stackoverflow.com/questions/2490912/what-are-pinned-objects
 https://medium.com/tips-for-rust-developers/pin-276bed513fd1
 https://users.rust-lang.org/t/expected-trait-object-dyn-fnonce-found-closure/56801/2
 https://rust-unofficial.github.io/patterns/
+https://without.boats/blog/
 https://github.com/steadylearner/Rust-Full-Stack/
 https://book.avr-rust.com/001-introduction.html
 https://nnethercote.github.io/perf-book/title-page.html
