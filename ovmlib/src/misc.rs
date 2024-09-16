@@ -1182,7 +1182,7 @@ fn but_the_point_is(){
     }
 }
 
-pub fn fillSchema(){
+pub fn fillSchemaParser(){
     use std::collections::{BTreeMap, HashMap};
     use indexmap::IndexMap;
 
