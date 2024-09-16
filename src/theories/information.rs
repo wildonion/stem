@@ -21,7 +21,7 @@
 // NOTE - randomness is an unordered set so if we could make it bigger by adding more entropy we could generate an ordered set since complexity produce a contiguous environment which contains ordered sets
 // NOTE - small world and the strength of weak ties effect is based on the butterfly effect
 
-
+// https://docs.timescale.com/ai/latest/
 // https://drive.google.com/drive/folders/18yLzjMke-FD_onY-ayqDo03uqxUS-cHc => Google Drive Books
 // https://github.com/atcold/pytorch-Deep-Learning/ => DL tutorial
 // https://github.com/ritchieng/deep-learning-wizard => DL tutorial
