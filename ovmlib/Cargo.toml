@@ -30,6 +30,9 @@ quote = "*"
 proc-macro2 = "*"
 futures = "0.3"
 wallexerr = "0.3.2"
+sha2 = "0.10"
+is_type = "0.2.1"
+indexmap = "2.4"
 
 
 [lib]

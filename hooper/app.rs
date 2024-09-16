@@ -104,7 +104,6 @@ use once_cell::sync::Lazy;
 use std::rc::Weak;
 use tokio::sync::RwLock;
 use crate::grpc::event::server::EventServer;
-use migration::{Migrator, MigratorTrait};
 use tonic::{transport::Server, Request as TonicRequest, Response as TonicResponse, Status};
 use event::{EventResponse, EventRequest, event_pubsub_service_server::{EventPubsubService, EventPubsubServiceServer}, 
         event_pubsub_service_client::EventPubsubServiceClient
@@ -168,23 +167,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
         panic!();
     }
 
-    /* -ˋˏ✄┈┈┈┈ migrating on startup
-        >_ ORM checks on its own that the db is up to create the pool connection
-        it won't start the app if the db is off, makes sure you've started
-        the pg db server
-    */
-    let connection = sea_orm::Database::connect(
-        std::env::var("DATABASE_URL").unwrap()
-    ).await.unwrap();
-    let fresh = args.fresh;
-    // if fresh{
-    //     Migrator::fresh(&connection).await.unwrap();
-    //     Migrator::refresh(&connection).await.unwrap();
-    // } else{
-    //     Migrator::up(&connection, None).await.unwrap(); // executing database tasks like creating tables on startup
-    // }
-    
-    // Migrator::status(&connection).await.unwrap();
     
     /* ******************************* IMPORTANT *******************************
        there must be some sleep or loop{} to keeps the app awake
