@@ -9,7 +9,7 @@
     https://www.reddit.com/r/rust/comments/xec77k/rayon_or_tokio_for_heavy_filesystem_io_workloads/
 
     
-    What is an Actor? 
+    What is an Actor (modern threadpool)? 
     Actor is a threadpool or a single threaded structure which has its own mailbox and cron scheduler 
     to receive and execute tasks inside its thread of execution it can use tokio or os threads to execute 
     async io or cpu tasks, they talk through message sending patterns like mpsc in local and grpc remotely

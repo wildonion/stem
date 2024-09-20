@@ -63,10 +63,16 @@ wasmer-wasi = "3.1.1"
 [build-dependencies]
 tonic-build = "0.10.2"
 
+[dependencies.capnp]
+version = "0.19.0"
 
 [[bin]]
 name = "ovm"
 path = "src/main.rs"
+
+[[bin]]
+name = "playground"
+path = "src/playground/app.rs"
 
 [[bin]]
 name = "hooper"

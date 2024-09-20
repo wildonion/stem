@@ -603,6 +603,15 @@ async fn ltg(){
 }
 
 fn serding(){
+
+
+    #[derive(Serialize, Deserialize)]
+    struct NotifData{}
+    let buf: Vec<u8> = vec![0, 1];
+    let res1 = std::str::from_utf8(&buf).unwrap();
+    let res = serde_json::to_string(&buf).unwrap();
+    let data = serde_json::from_str::<NotifData>(&res).unwrap();
+    let data1 = serde_json::from_str::<NotifData>(&res1).unwrap();
     
     #[derive(Serialize, Deserialize, Debug)]
     struct DataBucket{data: String, age: i32}
@@ -4129,7 +4138,6 @@ pub async fn solid_design_pattern(){
         polymorphism through a single interface
 
         a nice abstract and solid based codes:
-        traits and macrocosm and features:
         traits are all about extending interface of struct and 
         designing the real world absatract problems which don't 
         need to be implemented directly on the object itself. 
@@ -4171,7 +4179,6 @@ pub async fn solid_design_pattern(){
     // use trait for polymorphism like wallet payment portal
     // pass Box<dyn AnyType in struct for dep injection  
     // use Box::pin() to pin the future trait objects into the ram
-    // use onion, macrocosm and features to create plugin
     trait ServiceExt{
         fn getInstance(&self) -> &Box<dyn ServiceExt>;
     }

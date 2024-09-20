@@ -1,6 +1,30 @@
 
 
 ▶ ownership, borrowing, interface and Rust lang concepts:
+        concurrency tools & notes   : 
+        → an eventloop is a thread safe receiver queue of the mpsc channel which receives tasks and execute them in free background thread
+        → actor with Box::pin(async{}), tokio::select, tokio::spawn, tokio::sync::{Mutex, mpsc, RwLock}, std::sync::{Condvar, Arc, Mutex}
+        → cpu tasks are graph and geo calculations as well as cryptography algorithms which are resource intensive
+        → async io tasks are io and networking calls which must be handled simultaneously in order to scale resources
+        → async io task execution inside light threadpool: wait on the task but don't block the thread, continue with executing other tasks
+        → cpu task execution inside os threadpool: suspend the thread of execution by blocking it, avoid executing other tasks 
+        → use await on the async io task to not to block the thread and let the thread execute other tasks meanwhile the task is waiting to be solved
+        → await pauses and suspends the function execution not the thread and tells the eventloop to pop out another task while the function is awaited
+        → use join on the cpu task to block the thread to suspend the thread execution with all tasks and wait for the result of the thread
+        → use Condvar to wait and block the thread until some data changes then notify the blocked thread
+        → don't use os threadpool in the context of light threadpool, they block the execution thread as well as the entire async runtime
+        → std mutex block the caller thread if the lock is busy it stops the thread from executing all tasks until it acquires the lock
+        → tokio mutex suspend the async task if the lock is busy it suspend the io task instead of blocking the executor thread
+        → std stuffs block and suspend the thread and stop it from executing other tasks while it doing some heavy operations inside the thread like mutex logics
+        → tokio stuffs suspend the async io task process instead of blocking the thread and allows the thread executing other tasks simultaneously
+        → use channels for atomic syncing between threads instead of using mutex in both async and none async context, send the mutated/updated data to channel instead of using mutex or condvar
+        → if we want some result of an either async io or cpu task we have the options of either using of mutex, channels or joining on the thread (would block cpu threads) 
+        → as soon as the future or async io task is ready to yeild a value the runtime meanwhile of handling other tasks would notify the caller about the result
+        → as soon as the the result of the task is ready to be returned from the os thread the os thread will be stopped blocking and continue with executing other tasks
+        → actors have their own os or ligh thread of execution which uses to spawn tasks they've received via message passing channels or mailbox
+        → actors receive messages asyncly using their receiver eventloop of their jobq mpsc mailbox, they execute them one at a time to ensure the internal state remains consistent cause there is no mutex
+        → to share a data between threads it must be Send Sync and live valid
+        → initialize storage and actors data structures once and pack them in AppContext struct then share this between threads
         → pass &'valid pointer instead of clone like passing slice form of dynamic and heap types like String and Vec
         → dep injection by boxing an object safe trait but for future trait their box must get pinned into the ram at an stable address 
         → bound and cast generic to traits and lifetime, break self-ref cycle with: Box, Arc, Arc<Mutex, &'valid, Box::pin 
@@ -12,14 +36,25 @@
         → alwasy use &mut to mutate data, same addr new val by *, new addr same val by 2 &, new addr new binding 
         → future task or job async move{}: Box</Arc<dyn Fn() -> R> where R: Future<Output=()> and Box::pin(async move{})
         → await, !await, mutex, arc, spawn, select, channels, condvar, fut task, Box::pin(async move{}), os vs light threads
+        → actor: receives messages asyncly using its receiver eventloop of its jobq mpsc mailbox, it then execute them one at a time to ensure the internal state remains consistent cause there is no mutex 
         → actor: jobq chan mailbox, cronScheduler (tokio time spawn + loop{}, ctx, redis pubsub exp key) 
         → actor: notif streaming with p2p:tcp,udp,ws,quic,noise,gossipsub redis, bidi grpc+capnpc, ws, kafka, rmq, pg streamer 
         → actor: mutators/accessors controllers and components
         → actor: NotifBrokerActor supports local and tcp based eventloop and jobq based chan using mpsc, rmq, redis, kafka, grpc
+        → in http api: receive tasks as they're getting extracted from req then send them to jobq mpsc channel then receive them in NotifBrokerActor using the receiver then send them to rmq broker
+        → above step can be done by sending message to NotifBrokerActor for producing into rmq (jobq mpsc in Rust instead of celery)
         → arc mutex receiver eventloop joq or task queue: mpsc channel, tcp based channels like rmq, bidi capnpc&grpc, redis, kafka, ws
-        → receive long running notifications FROM brokers with jobId, shortPolling, websocket streaming
+        → what are objects: are an isolated thread objects contains light thread for executing tasks, cron scheudling and jobq mailbox 
+        → talk between two objects using job/task/msg queue with mpsc and rpc based channels like rmq, redis, kafka 
+        → receive tasks from the channel by streaming over eventloop with while let Some() = rx.recv().await{}
+        → what eventloop does: executing received tasks inside a light thread of execution 
+        → receive long running notifications FROM brokers with shortPolling jobId or websocket streaming
+        → stream is an eventloop receiver channel of some jobq that can be iterated over to get data as they're coming from the channel 
+        → workers are threads that execute set of jobs in their context scheduled by the runtime and can talks through jobq channels 
+        → streaming over eventloop receiver of jobq with while let some inside worker/actor/thread/task to receive jobs and execute them 
         → serverless smart contract worker: pub async fn handler(req: Req, streamer: Streamer, broker: Broker, depot: Depot, ctx: Context){} 
         → threadpools (Vec<JoinHandle>), condvar, arc and mutex for mutating the buffer of events
+        → object: Box<dyn Trait> cause it can be any type that impl Trait used for adding an ability (iterator for an object that can switch to next state), poly, dyn disptach and dep injection
         → traits for poly, dyn stat dispatch generic bounding and dep injection used to create custom error handler
         → talking to actor means talking to light thread by using chan cuz each actor is a light thread
         → each actor can execute tasks by using cron scheduling in the background thread 
@@ -98,6 +133,7 @@
                         https://medium.com/@harshiljani2002/building-stock-market-engine-from-scratch-in-rust-ii-0c7b5d8a60b6
                         https://github.com/MikeECunningham/rust-trader-public/tree/main 
                         https://github.com/salvo-rs/salvo/tree/main/examples
+        - ci/cd jobs stages for automatic deployment and version bumping: update the version in cargo.toml automatically based on commit-branch convention in cicd and bump config file 
         - Serverless smart contract and function handlers on cloudflare, aws, azure to compile to wasm to run on v8 and binary to run in linux sandboxes  
         - Every function handler is an smart contract which is an actor that gets deployed on distributed p2p based cloud with graph algos enables us to call its methods through (JSON/G/Capnp)RPC calls
         - dsl macrocosm for shop framework (contract!{}, product!{}, atomic_purchase!{}, contract!{}) and component!{} actor macro over onion arch which contains the notif streamer actor setup
@@ -223,9 +259,9 @@
                         ▶ finally it forwards all the traffic to that session to the local port it created
                         ▶ ngrok and ssh vps will starts a server on a random part then forward all the packets 
                         ▶ coming from outside to the localhost it's like: 
-                        ngrok is like a gateway, proxy, ingress or a listener allows packets go to it first then to the actual server
-                        it acts like turn server allows packets to get redirected to destination if the destination is behind NAT
-                        outside <---packet---> ngrok or ssh vps server act like proxy or listener <---packet---> localhost session
+                                ngrok is like a gateway, proxy, ingress or a listener allows packets go to it first then to the actual server
+                                it acts like turn server allows packets to get redirected to destination if the destination is behind NAT
+                                outside <---packet---> ngrok or ssh vps server act like proxy or listener <---packet---> localhost session
                 ▶ cloudflare warp vpn
                         ▶ boringtun protocol which is based on wireguard protocol
                         ▶ uses noise protocol with ed25519 encryption
@@ -249,6 +285,35 @@
                         ▶ our VPS must detect the number of instances of every servers needs to be run and the load balancing algorithm 
                         bpf based proxy, firewall, vpns, packet sniffer and load balancer
 
+design patters:  
+        https://www.hackingwithrust.net/2023/06/03/the-decorator-pattern-an-easy-way-to-add-functionality/
+        https://www.hackingwithrust.net/2023/05/28/design-patterns-in-rust-flyweight-or-go-easy-on-your-memory/
+        https://www.hackingwithrust.net/2023/05/01/a-simple-quaternion-library-or-a-lesson-in-operator-overloading/
+        https://www.hackingwithrust.net/2023/09/23/design-patterns-in-rust-easy-container-traversing/
+        https://www.hackingwithrust.net/2023/10/20/easy-patterns-in-rust-the-adapter-pattern/
+        https://www.hackingwithrust.net/2023/10/23/a-composite-pattern-in-rust/
+        https://www.hackingwithrust.net/2023/03/12/design-patterns-in-rust-proxy/
+        https://www.hackingwithrust.net/2023/04/16/design-patterns-in-rust-mediator-or-uncoupling-objects-made-easy/
+        https://www.hackingwithrust.net/2023/04/10/design-patterns-in-rust-memento-or-how-to-undo-your-actions/
+        https://www.hackingwithrust.net/2023/04/08/design-patterns-in-rust-the-state-pattern/
+        https://www.hackingwithrust.net/2023/04/01/builder-pattern-in-rust-a-generic-solution/
+        https://www.hackingwithrust.net/2023/03/27/design-patterns-in-rust-observer/
+        https://www.hackingwithrust.net/2023/03/25/design-patterns-in-rust-visitor/
+        https://www.hackingwithrust.net/2023/03/29/design-patterns-in-rust-prototype-or-creating-your-own-clone-and-debug-implementations/
+        https://www.hackingwithrust.net/2023/03/24/design-patterns-in-rust-builder-pattern/
+        https://www.hackingwithrust.net/2023/06/03/the-decorator-pattern-an-easy-way-to-add-functionality/
+        https://www.hackingwithrust.net/2023/05/28/design-patterns-in-rust-flyweight-or-go-easy-on-your-memory/
+        https://www.hackingwithrust.net/2023/04/30/design-patterns-in-rust-chain-of-responsibility-there-is-more-than-one-way-to-do-it/
+        https://www.hackingwithrust.net/2023/04/24/design-patterns-in-rust-singleton-a-unique-way-of-creating-objects-in-a-threadsafe-way/
+        https://www.hackingwithrust.net/2023/04/17/design-patterns-in-rust-facade-hiding-a-complex-world/
+        https://www.hackingwithrust.net/2023/04/23/design-patterns-in-rust-the-command-a-simple-implementation-of-a-versatile-pattern/
+        https://www.hackingwithrust.net/2023/04/16/design-patterns-in-rust-interpreter-making-sense-of-the-world/
+        https://www.hackingwithrust.net/2023/03/30/design-patterns-in-rust-strategy/
+        https://www.hackingwithrust.net/2023/11/26/easy-mastery-a-deep-dive-into-the-active-object-pattern-in-rusts-seamless-concurrency-model/
+        https://www.hackingwithrust.net/2023/11/12/serving-simplicity-mastering-the-servant-pattern-in-rust-for-easy-and-elegant-code-design/
+        https://www.hackingwithrust.net/2023/10/29/unlocking-the-power-of-rust-exploring-the-extension-object-pattern-for-ultimate-flexibility/
+        https://www.hackingwithrust.net/2023/10/28/easy-delegation-in-rust-the-delegation-pattern/
+        https://www.hackingwithrust.net/2023/11/05/a-guide-to-flexible-easy-thread-safe-rust-unveiling-the-multiton-pattern-for-efficient-lazy-initialization/
 all ltgs in rust ::::: https://github.com/wildonion/rusty/blob/main/src/retbyref.rs#L17
 zero copy        ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/schemas.rs#L1621C6-L1621C6
 data collision   ::::: https://github.com/wildonion/uniXerr/blob/a30a9f02b02ec7980e03eb8e31049890930d9238/infra/valhalla/coiniXerr/src/utils.rs#L640 

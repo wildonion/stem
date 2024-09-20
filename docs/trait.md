@@ -77,20 +77,22 @@ In Rust, for a trait to be used in **dynamic dispatch** (i.e., when you use `Box
 
 ### Why Traits Must Be Object-Safe for Dynamic Dispatch
 
-Dynamic dispatch works by storing a **trait object** (e.g., `Box<dyn Trait>`) where the **concrete type** implementing the trait isn't known at compile time. Instead, a **vtable** is used at runtime to resolve the appropriate method to call. A **vtable** is essentially a table of function pointers, and the runtime system uses it to invoke the correct method for the concrete type.
+Dynamic dispatch works by storing a **trait object** (e.g., `Box<dyn Trait>`) where the **concrete type** implementing the trait isn't known at compile time. Instead, a **vtable** is used at runtime to resolve the appropriate method to call. A **vtable** is essentially a table of function pointers, and the runtime system uses it to invoke the correct method for the concrete type. That's why we can't use **GAT** or `type`, `self` (`&self` is allowed) and `Self` in object safe trait, there must be only functions without having a direction to the implementor.
 
 To allow the Rust compiler to generate the necessary vtable and resolve method calls dynamically at runtime, the trait must have properties that allow the compiler to generate a **single vtable** that can be used to look up methods. If the trait allows certain features that are incompatible with this approach, then it's not possible to use the trait in dynamic dispatch.
 
 ### What Makes a Trait Object-Safe?
 
-A trait is **object-safe** if it satisfies certain constraints that ensure it can be used to create a **trait object** (like `Box<dyn Trait>`, `&dyn Trait`, or `Rc<dyn Trait>`). These constraints exist because dynamic dispatch requires that the methods can be looked up through a vtable, and the trait methods must have predictable behavior that fits this model.
+> dynamic dispatching can also be used as dependency injection process through `Box<dyn Trait>`, `Arc<dync Trait>`, `&dyn Trait`, or `Rc<dyn Trait>`.
+
+A trait is **object-safe** if it satisfies certain constraints that ensure it can be used to create a **trait object** (like `Box<dyn Trait>`, `Arc<dync Trait>`, `&dyn Trait`, or `Rc<dyn Trait>`). These constraints exist because dynamic dispatch requires that the methods can be looked up through a vtable, and the trait methods must have predictable behavior that fits this model.
 
 #### The Key Rules for Object Safety:
 
 1. **No `self` by Value in Methods**:
    - A trait cannot have methods that take `self` by value (i.e., `self` is passed by value, like `fn method(self)`). This is because in dynamic dispatch, Rust only knows about the **trait object** (a pointer to the value), but it doesn't know the size or concrete type of the underlying object.
    
-   - If the trait method took `self` by value, Rust would need to know the concrete size of `self` to move it, but in a `dyn Trait`, the size is unknown (because different types can implement the trait with different sizes). Thus, Rust can't generate a vtable entry for such methods.
+   - If the trait method took `self` by value, Rust would need to know the concrete size of `self` to move it (cause due to ownership rules in order to move a type we should know its types hence the size accordingly), but in a `dyn Trait`, the size is unknown (because different types can implement the trait at runtime with different sizes). Thus, Rust can't generate a vtable entry for such methods.
    
    **Invalid example**:
    ```rust
@@ -107,7 +109,7 @@ A trait is **object-safe** if it satisfies certain constraints that ensure it ca
    ```
 
 2. **No Generic Methods**:
-   - A trait cannot have methods that are generic over types (i.e., methods that use type parameters like `fn method<T>(&self)`), because the vtable needs to provide a fixed signature for each method.
+   - A trait cannot have methods that are generic over types (i.e., methods that use type parameters like `fn method<T>(&self)`), because the vtable needs to provide a fixed signature for each method. By the way passing generic into the methdos or trait signature could solve the problem of polymorphism.
    
    - With generic methods, Rust would need to create separate versions of the method for each type `T`, but this is not compatible with dynamic dispatch, where the method's signature must be fixed in the vtable.
    
@@ -127,13 +129,13 @@ A trait is **object-safe** if it satisfies certain constraints that ensure it ca
 
 ### Why the Rules Ensure Object Safety
 
-The key issue with dynamic dispatch is that the type of the underlying object (`self`) is not known at runtime. For dynamic dispatch to work, the methods must be able to operate on a **trait object**, which is essentially a **pointer** to the object implementing the trait. The **vtable** only has information about the method signatures at a high level, without knowledge of the concrete type behind the trait object.
+The key issue with dynamic dispatch is that the type of the underlying object (`self`) is not known at compile time. For dynamic dispatch to work, the methods must be able to operate on a **trait object**, which is essentially a **pointer** to the object implementing the trait using either smart pointers like `Box`, `Rc` or `Arc` or `&'valid dyn`. The **vtable** only has information about the method signatures at a high level, without knowledge of the concrete type behind the trait object cause it only knows it by pointer!
 
-Let’s consider these constraints in light of the vtable:
+Let's consider these constraints in light of the vtable:
 
-- **`self` by Value**: If a method takes `self` by value, it needs to know how much memory to move or drop. But since Rust only has a pointer to the trait object and doesn't know the actual size of `self`, this operation is unsafe or impossible. Therefore, the trait must only use references (`&self` or `&mut self`), where Rust can safely dereference the pointer without needing to know the size of the underlying object.
+- **`self` by Value**: If a method takes `self` by value, it needs to know how much memory to move or drop (that's why we can't call other methods on the instance after calling a method which has `self` instead of `&self` cause it's already been moved). But since Rust only has a pointer to the trait object and doesn't know the actual size of `self`, this operation is unsafe or impossible. Therefore, the trait must only use references (`&self` or `&mut self`), where Rust can safely dereference the pointer without needing to know the size of the underlying object.
 
-- **Generics**: For a method that’s generic over some type `T`, the method could behave differently depending on the type `T`, and Rust would need to generate different versions of the method for each instantiation. However, in dynamic dispatch, the vtable needs a **single entry** for each method with a fixed signature. This means the method can't be generic, since the exact types must be known when the method is compiled and linked into the vtable.
+- **Generics**: For a method that's generic over some type `T`, the method could behave differently depending on the type `T`, and Rust would need to generate different versions of the method for each instantiation. However, in dynamic dispatch, the vtable needs a **single entry** for each method with a fixed signature. This means the method can't be generic, since the exact types must be known when the method is compiled and linked into the vtable.
 
 ### Example of a Non-Object-Safe Trait
 
@@ -150,19 +152,40 @@ trait NotObjectSafe {
 ### Example of an Object-Safe Trait
 
 ```rust
-trait ObjectSafe {
-    fn display(&self);
+trait Interface{
+   fn getCode(&self);
 }
+trait CantBe{
+   fn getCode(&self) -> &Self;
+}
+impl CantBe for String{
+   fn getCode(&self) -> &Self {
+      self
+   }
+}
+impl Interface for String{
+   fn getCode(&self) {
+      
+   }
+}
+
+// can't use CantBe trait for dynamic dispatch and dependency injections
+// let deps: Vec<Box<dyn CantBe>> = vec![Box::new(String::from("12923"))]; 
+
+// using Interface for dynamic dispatch and dependency injections
+let deps: Vec<Box<dyn Interface>> = vec![Box::new(String::from("12923"))];
 ```
 
-The `ObjectSafe` trait is object-safe because it only has methods that take a reference (`&self`), and no methods are generic or involve ownership transfer.
+The `Interface` trait is object-safe because it only has methods that take a reference (`&self`), and no methods are generic, involve ownership transfer or even returning `Self`.
 
 ### Why Object Safety is Important for Vtables
 
-In **dynamic dispatch**, the vtable is a lookup table for method calls. It must contain the addresses of the actual methods that can be called on the trait object. If the trait includes methods that involve operations Rust can't handle without knowing the exact type (`self` by value, generics, etc.), then the vtable would be unable to provide correct entries for these methods, and the dynamic dispatch mechanism would break.
+In **dynamic dispatch**, the vtable is a lookup table for method calls. It must contain the addresses of the actual methods that can be called on the trait object (since everything is done through pointing). If the trait includes methods that involve operations Rust can't handle without knowing the exact type (`self` by value, generics, etc.), then the vtable would be unable to provide correct entries for these methods, and the dynamic dispatch mechanism would break.
 
-In essence, the **object-safety rules** ensure that the trait's methods can be **represented in a vtable** and that the **dynamic dispatch** mechanism can resolve the correct method at runtime without needing knowledge of the concrete type.
+In essence, the **object-safety rules** ensure that the trait's methods can be **represented in a vtable** and that the **dynamic dispatch** mechanism can resolve the correct method at runtime without needing knowledge of the concrete type through only pointer or referencing.
+dynamic dispatch requires object safety (don't have `self`, `Self`, generic) rules to ensure trait's methods can be inside a vtable.
 
 ### Conclusion
 
 A trait must be **object-safe** for dynamic dispatch because **dynamic dispatch** relies on the **vtable** to look up method implementations at runtime. The vtable requires fixed method signatures and doesn't have knowledge of the concrete type implementing the trait. Thus, the trait needs to follow certain constraints (no `self` by value, no generics) to ensure that methods can be correctly stored in and looked up from the vtable. This guarantees that Rust can invoke the correct method at runtime without needing the size or type-specific details of the implementing type.
+After all dispatching dynamically means that there would be a type regardless of its size that needs to gets extended at runtime by implementing a trait for that to add some extra ability on the object like new methods. 
