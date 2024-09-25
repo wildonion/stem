@@ -8,18 +8,17 @@ Onion Virtual Machine for STEM
 
 > create dev and release branches to test. 
 
-bash
+```bash
 git checkout -b dev # git checkout -b release
+git branch --set-upstream-to=origin/dev
 git add .
-git commit -m "feat: initial commit"
+git commit -m "feat: adding some feature"
 git push origin main
-
+```
 
 ### CI/CD Notes:
 
-- setup a PAT with ead_repository and write_repository access.
-- create CI/CD environment variable and name it GL_ACCESS_TOKEN with the value of your PAT.
-- make sure you've unselected the protected optoion if the branch is not protected.
+at the start of each workflow, by default github creates unique `GITHUB_TOKEN` secrets per each workflow, make sure it has read and write permissions for the current workflow: `Settings > Actions > General`.
 
 ### Just in Case:
 
