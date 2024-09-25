@@ -7,7 +7,7 @@ edition = "2021"
 
 [workspace]
 members = [ 
-  "ovmlib"
+  "ovmlib" # ovmlib has separate Cargo.toml
 ]
 
 [dependencies]
@@ -59,9 +59,9 @@ indexmap = "2.4"
 wasmer = "4.1.1"
 wasmer-wasi = "3.1.1"
 
-
 [build-dependencies]
 tonic-build = "0.10.2"
+prost-build = "0.13"
 
 [dependencies.capnp]
 version = "0.19.0"

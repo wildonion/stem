@@ -46,7 +46,7 @@
         → arc mutex receiver eventloop joq or task queue: mpsc channel, tcp based channels like rmq, bidi capnpc&grpc, redis, kafka, ws
         → what are objects: are an isolated thread objects contains light thread for executing tasks, cron scheudling and jobq mailbox 
         → talk between two objects using job/task/msg queue with mpsc and rpc based channels like rmq, redis, kafka 
-        → receive tasks from the channel by streaming over eventloop with while let Some() = rx.recv().await{}
+        → receive tasks from the channel by streaming over eventloop with while let Some() = rx.recv().await{} eventloop and loop{select!{}}
         → what eventloop does: executing received tasks inside a light thread of execution 
         → receive long running notifications FROM brokers with shortPolling jobId or websocket streaming
         → stream is an eventloop receiver channel of some jobq that can be iterated over to get data as they're coming from the channel 
@@ -100,7 +100,7 @@
                 → custom error handler 
                 → Box::pin(async move{async_recursive().await})
                 → dependency injection and extend structure behaviour
-▶ tryout:
+▶ GPT tryout:
         - distributed p2p over all tlps based onion protocol with onion codec and vm like Ton and evm like a p2p 
           file sharing app to notify nodes through gossipsub protocol on top of actors with remote rpc and local 
           mpsc mailbox for message sending logic between other actor contracts through mpsc and rpc channels via 
@@ -145,7 +145,7 @@
         - cloudflare actor worker wasm (wasix, wasmedge, wasi, wasmer) on v8 and aws lambda binary on linux sandboxes: streamer, queue, http, bot events
         - actor service controller, cron scheduler, bot, http/ws api, while let some stream, rmq queue: scale node instance using k8s on firebase, aws, clf, azure
         - p2p and distributed based family tree using merkle tree and high entropy seed to create crypter ed25519 keypairs
-        - redis cluster, dht vs redlock, zookeeper, k8s, sharding, raft, ipfs and libp2p (graph algos like dag, mdp, adjmat, merkle tree, gvm allocation engine, wrtc, stun, turn, ws, tcp, udp, quic, kademliadht (find peers which are behind nat over wan), gossipsub, noise protocol)
+        - dht vs redlock, zookeeper, k8s, sharding, raft, ipfs and libp2p (graph algos like dag, mdp, adjmat, merkle tree, gvm allocation engine, wrtc, stun, turn, ws, tcp, udp, quic, kademliadht (find peers which are behind nat over wan), gossipsub, noise protocol)
         - load balancer api gateway with salvo and caddy (resource accessing oauth2: verify requests with ed25519 timehash sig with high entropy seed phrase using wallexerr) => api.app.com/router-service1 | api.app.com/router-service2
         - fire and publish an event like a user update his profile to rmq exchange so his friends actor can bind their own queue to receive the updated data in a fanout way
         - crypter crate (convert keypair, encrypted, sha256 bytes into hex or base58 or base64 chars, zkp, keypairs with high entropy seed for its rng) for zkp secure session, secure streaming channels, ed25519 wallet for ssl and ssh

@@ -128,6 +128,7 @@ mod wrtc;
     contains traits and data structures to use them in here 
     to create rpc server and client, internally this uses 
     the include!{} macro 
+    prost is a crate to compile .proto files and generate their Rust codes
 */
 pub mod event{
     tonic::include_proto!("event");

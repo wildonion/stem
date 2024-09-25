@@ -3110,6 +3110,7 @@ dependencies = [
  "percentage",
  "pretty_env_logger 0.5.0",
  "prost 0.13.2",
+ "prost-build 0.13.2",
  "prost-types 0.13.2",
  "rand",
  "rand_chacha",
@@ -3506,6 +3507,27 @@ dependencies = [
  "prettyplease",
  "prost 0.12.6",
  "prost-types 0.12.6",
+ "regex",
+ "syn 2.0.53",
+ "tempfile",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8650aabb6c35b860610e9cff5dc1af886c9e25073b7b1712a68972af4281302"
+dependencies = [
+ "bytes",
+ "heck 0.5.0",
+ "itertools",
+ "log",
+ "multimap",
+ "once_cell",
+ "petgraph",
+ "prettyplease",
+ "prost 0.13.2",
+ "prost-types 0.13.2",
  "regex",
  "syn 2.0.53",
  "tempfile",
@@ -4948,7 +4970,7 @@ checksum = "9d021fc044c18582b9a2408cd0dd05b1596e3ecdb5c4df822bb0183545683889"
 dependencies = [
  "prettyplease",
  "proc-macro2",
- "prost-build",
+ "prost-build 0.12.6",
  "quote",
  "syn 2.0.53",
 ]
