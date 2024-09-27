@@ -17,7 +17,13 @@ use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRunt
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use consts::SECURECELLCONFIG_TCPWALLET;
+use consts::gen_random_chars;
 
+
+pub mod tcp_chan_enc;
+pub mod consts;
+pub mod orex;
 
 
 // store users along with their tcp streaming channels
@@ -38,8 +44,7 @@ pub static ONLINE_USERS: Lazy<Arc<Mutex<HashMap<String, usize>>>> =
             users
         ))
     }
-);
-
+); 
 
 
 // Error part is an object safe trait which will be dispatched dynamically

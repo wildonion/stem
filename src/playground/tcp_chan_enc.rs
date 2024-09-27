@@ -6,8 +6,6 @@ use tokio::net::TcpListener;
 use tokio::io::AsyncWriteExt; // for writing to socket asyncly allows us to call .write_all() method
 use log::{info, error};
 use wallexerr::misc::SecureCellConfig;
-use consts::SECURECELLCONFIG_TCPWALLET;
-use consts::gen_random_chars;
 use crate::*;
 
 

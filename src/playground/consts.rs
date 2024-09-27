@@ -41,8 +41,8 @@ pub static SECURECELLCONFIG_TCPWALLET: Lazy<(wallexerr::misc::SecureCellConfig, 
     let cloned_aes256_config = aes256_config.clone();
     let cloned_wallet = wallet.clone();
 
-    // save the file config as an async task in the background 
-    // using tokio spawn 
+    // save the file config as an async io task in the background 
+    // light thread of tokio spawn
     tokio::spawn(async move{
         // save the config so we can share it between clients
         let mut file = tokio::fs::File::create("tcp_wallet_secure_cell_config.json").await.unwrap();

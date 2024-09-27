@@ -128,27 +128,13 @@
                 use abi/idl bytecodes (shellcode) to interact with contract methods from other langs by sending rpc request to chain
                 the eventloop jobq based channel in tcp, rpc, ws for rmq, redis, kafka 
         - p2p and graph based serverless smart contract using actor worker concepts like ipfs p2p based market broker and orderbook 
-                - emitter, broadcaster, publisher, sender [kafka/rmq/redis/rpc/ws] / receiver, subscriber, ws channels [while let some]
-                        https://www.youtube.com/watch?v=rht1vO2MBIg
-                        https://medium.com/@harshiljani2002/building-stock-market-engine-from-scratch-in-rust-ii-0c7b5d8a60b6
-                        https://github.com/MikeECunningham/rust-trader-public/tree/main 
-                        https://github.com/salvo-rs/salvo/tree/main/examples
-        - ci/cd jobs stages for automatic deployment and version bumping: update the version in cargo.toml automatically based on commit-branch convention in cicd and bump config file 
-        - Serverless smart contract and function handlers on cloudflare, aws, azure to compile to wasm to run on v8 and binary to run in linux sandboxes  
-        - Every function handler is an smart contract which is an actor that gets deployed on distributed p2p based cloud with graph algos enables us to call its methods through (JSON/G/Capnp)RPC calls
-        - dsl macrocosm for shop framework (contract!{}, product!{}, atomic_purchase!{}, contract!{}) and component!{} actor macro over onion arch which contains the notif streamer actor setup
-        - send message to update the component actor like set method to update the component state in react
-        - gvm (redux and template engin) with macro and dsl and global allocaitons like thread_local, malloc, drop, heap box
-        - gmv static lazy arc mutex rwlock lazylock: Send (thread safe), static lazycell and thread_local!{}: !Send (!thread safe)
-        - gvm (stack and graph based vm run each graph bytecodes instructions on a virtual register and stack)
+                https://www.youtube.com/watch?v=rht1vO2MBIg
+                https://medium.com/@harshiljani2002/building-stock-market-engine-from-scratch-in-rust-ii-0c7b5d8a60b6
+                https://github.com/MikeECunningham/rust-trader-public/tree/main 
+                https://github.com/salvo-rs/salvo/tree/main/examples
+        - Serverless smart contract and function handlers on cloudflare, aws, azure to compile to wasm to run on v8 and binary to run in linux sandboxes
         - cloudflare, firebase, azure and aws serverless handlers USING ACTORS AND K8S compile 2 wasm to run on v8 and linux sandbox
         - cloudflare actor worker wasm (wasix, wasmedge, wasi, wasmer) on v8 and aws lambda binary on linux sandboxes: streamer, queue, http, bot events
-        - actor service controller, cron scheduler, bot, http/ws api, while let some stream, rmq queue: scale node instance using k8s on firebase, aws, clf, azure
-        - p2p and distributed based family tree using merkle tree and high entropy seed to create crypter ed25519 keypairs
-        - dht vs redlock, zookeeper, k8s, sharding, raft, ipfs and libp2p (graph algos like dag, mdp, adjmat, merkle tree, gvm allocation engine, wrtc, stun, turn, ws, tcp, udp, quic, kademliadht (find peers which are behind nat over wan), gossipsub, noise protocol)
-        - load balancer api gateway with salvo and caddy (resource accessing oauth2: verify requests with ed25519 timehash sig with high entropy seed phrase using wallexerr) => api.app.com/router-service1 | api.app.com/router-service2
-        - fire and publish an event like a user update his profile to rmq exchange so his friends actor can bind their own queue to receive the updated data in a fanout way
-        - crypter crate (convert keypair, encrypted, sha256 bytes into hex or base58 or base64 chars, zkp, keypairs with high entropy seed for its rng) for zkp secure session, secure streaming channels, ed25519 wallet for ssl and ssh
         - serverless distributed and p2p coding using cloudflare actor workers 
           and aws lambda functions (execute functions in lightweight thread of execution on the cloud):  
                 https://github.com/cloudflare/workers-rs
@@ -430,12 +416,5 @@ https://github.com/bparli/convey
 https://github.com/NicolasLM/nucleon
 https://github.com/wildonion/smarties/blob/main/contracts/near/NEAR.rules
 https://github.com/wildonion/solmarties/blob/main/SOLANA.rules
-https://sui.io/ => vm like sui
 https://github.com/mozilla/cbindgen -> generate c bindings and .so from rust code using unsafe coding
-codec, virtual machine like move and evm with allocation concepts 
-    - macro dsl
-    - thread_local, actor id or address, std::alloc, jemalloc, GlobalAlloc, bumpalo and r3bl_rs_utils arena as a global allocator
-    - zero copy 
-    - null pointer optimiser
-    - unique storage key
 

@@ -4,17 +4,17 @@ import re
 # Get the new version from the command line arguments
 new_version = sys.argv[1]
 
-# Update version in pyproject.toml
+# Update version in cargo_toml.toml
 with open("Cargo.toml", "r") as file:
-    pyproject = file.read()
+    cargo_toml = file.read()
 
-pyproject = re.sub(r'version = ".*"', f'version = "{new_version}"', pyproject)
+cargo_toml = re.sub(r'(?<=\[package\][^\[]*version\s*=\s*")[^"]+', new_version, cargo_toml)
 
 with open("Cargo.toml", "w") as file:
-    file.write(pyproject)
+    file.write(cargo_toml)
 
 # Log the update process
-print(f"Updated pyproject.toml to version {new_version}")
+print(f"Updated cargo_toml.toml to version {new_version}")
 
 # Update version in Dockerfile
 with open("Dockerfile", "r") as file:

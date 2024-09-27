@@ -2208,6 +2208,14 @@ async fn pinned_box_ownership_borrowing(){
     impl Interface for CErr{}
     displayable = std::sync::Arc::new(CErr{});
 
+    fn getUser<F1: std::future::Future<Output=()>, R: Send + Sync + 'static + std::future::Future<Output = ()>>(
+        f1: F1,
+        f2: std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+        f3: std::sync::Arc<dyn Fn() -> R + Send + Sync + 'static> 
+    ){}
+    fn setUser(){}
+    let funcOverUnsafe = setUser as *const (); // () in C style means function pointer in Rust is fn
+
     ////---------+++++++++---------+++++++++---------+++++++++---------+++++++++
     // we can use heap based smart pointers like Box and Arc to store 
     // traits as objects on the heap for dynamic dispatch otherwise use 
