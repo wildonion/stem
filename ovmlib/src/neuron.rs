@@ -2,7 +2,14 @@
 
 /*  ========================================================================================
 
-        Neuron Actor DSL
+        Neuron Actor DSL Features
+
+        features:
+            neuron codec
+            supports ws, and jobId with CronScheduler for shortpolling 
+            p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
+            p2p based like adnl file sharing, vpn, gatewat, loadbalancer, proxy, ingress listener like ngrok and v2ray
+            p2p based like adnl onchain broker stock engine (find peers which are behind nat over wan)
 
             neuron onion{
                 {

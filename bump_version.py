@@ -8,7 +8,7 @@ new_version = sys.argv[1]
 with open("Cargo.toml", "r") as file:
     cargo_toml = file.read()
 
-cargo_toml = re.sub(r'(?<=\[package\][^\[]*version\s*=\s*")[^"]+', new_version, cargo_toml)
+cargo_toml = re.sub(r'(\[package\][\s\S]*?version\s*=\s*")(\d+\.\d+\.\d+[^"]*)(")', rf'\1{new_version}\3', cargo_toml)
 
 with open("Cargo.toml", "w") as file:
     file.write(cargo_toml)
