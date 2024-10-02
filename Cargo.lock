@@ -921,36 +921,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "capnp"
-version = "0.19.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff5e468996c73ea6d3d2bffc2b738782487f878286615b7f76e11af15a9ada3f"
-dependencies = [
- "embedded-io",
-]
-
-[[package]]
-name = "capnp-futures"
-version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8f3ee810b3890498e51028448ac732cdd5009223897124dd2fac6b085b5d867"
-dependencies = [
- "capnp",
- "futures",
-]
-
-[[package]]
-name = "capnp-rpc"
-version = "0.19.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe57ab22a5e121e6fddaf36e837514aab9ae888bcff2baa6fda5630820dfc501"
-dependencies = [
- "capnp",
- "capnp-futures",
- "futures",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1512,12 +1482,6 @@ name = "either"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
-
-[[package]]
-name = "embedded-io"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "encoding_rs"
@@ -3088,8 +3052,6 @@ dependencies = [
  "actix-web",
  "base58",
  "bytes",
- "capnp",
- "capnp-rpc",
  "chacha20",
  "chrono",
  "clap",
@@ -3140,6 +3102,8 @@ dependencies = [
 name = "ovmlib"
 version = "0.1.0"
 dependencies = [
+ "actix",
+ "actix-web",
  "bytes",
  "chrono",
  "dotenv",

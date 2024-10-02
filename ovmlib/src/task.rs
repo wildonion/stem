@@ -194,9 +194,8 @@ impl Gadget{
     atomic syncing with channels and mutex 
 */
 // #[derive(Debug)] // don't implement this cause Pin doesn't implement Debug
-pub struct Worker<J: std::future::Future<Output = O>, S, O> where // J is a Future object and must be executed with Box::pin(job);
+pub struct Task<J: std::future::Future<Output = ()>, S> where // J is a Future object and must be executed with Box::pin(job);
     J: std::future::Future + Send + Sync + 'static + Clone,
-    O: Send + Sync + 'static,
     J::Output: Send + Sync + 'static
 {
     pub status: TaskStatus,
@@ -210,13 +209,14 @@ pub struct Worker<J: std::future::Future<Output = O>, S, O> where // J is a Futu
         which means tha type type doesn't require to be pinned into 
         the ram, self ref types must implement !Unpin or must be pinned
     */
-    pub dep_injection_fut_obj: std::pin::Pin<Box<dyn std::future::Future<Output = O> + Send + Sync + 'static>>, // a future as separate type to move between scopes
+    pub io: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, // a future as separate type to move between scopes
     pub job: J, 
-    pub job_tree: Vec<Worker<J, S, O>>,
+    pub metadata: Option<serde_json::Value>,
+    pub job_tree: Vec<Task<J, S>>,
     pub sender: tokio::sync::mpsc::Sender<S>, // use this to send the result of the task into the channel to share between other lightweight thread workers
     pub eventloop_queue: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<S>>>, // use this as eventloop to execute tasks as they're coming from the channel in the background worker thread
-    pub pool: Vec<tokio::task::JoinHandle<O>>,
-    pub worker: std::sync::Mutex<tokio::task::JoinHandle<O>>, // execute the task inside the background worker, this is a thread which is safe to be mutated in other threads 
+    pub pool: Vec<tokio::task::JoinHandle<()>>,
+    pub worker: std::sync::Mutex<tokio::task::JoinHandle<()>>, // execute the task inside the background worker, this is a thread which is safe to be mutated in other threads 
     pub lock: std::sync::Mutex<()>, // the task itself is locked and can't be used by other threads
     pub state: std::sync::Arc<tokio::sync::Mutex<Vec<u8>>> // the state of the worker must be safe to be shared between threads
 }
@@ -228,14 +228,12 @@ pub struct QueueAndEventLoop<T: Clone + Send + Sync + 'static>{
 }
 
 
-impl<O, J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, S: Sync + Send + 'static> 
-    Worker<J, S, O> 
-    where O: std::any::Any + Send + Sync + 'static{
+impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S: Sync + Send + 'static> 
+    Task<J, S> {
 
     pub async fn new(job: J, num_threads: usize,
         sender: tokio::sync::mpsc::Sender<S>, 
-        eventloop_queue: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<S>>>, 
-        fut_output: O) -> Self{
+        eventloop_queue: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<S>>>) -> Self{
 
         // sender and receiver
 
@@ -244,12 +242,13 @@ impl<O, J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, S: S
             id: Uuid::new_v4().to_string(),
             name: String::from("KJHS923"),
             job: job.clone(),
-            dep_injection_fut_obj: Box::pin(async move{ fut_output }), // pinning the future into the ram with the output of type O
+            metadata: None,
+            io: Box::pin(async move{  }), // pinning the future into the ram with the output of type O
             sender,
             pool: {
                 (0..num_threads)
                     .map(|_| tokio::spawn(job.clone()))
-                    .collect::<Vec<tokio::task::JoinHandle<O>>>()
+                    .collect::<Vec<tokio::task::JoinHandle<()>>>()
             },
             eventloop_queue,
             job_tree: vec![],
@@ -310,7 +309,7 @@ impl<O, J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, S: S
 
     }
 
-    pub fn push(mut self, tasks: Vec<Worker<J, S, O>>) -> Worker<J, S, O>{
+    pub fn push(mut self, tasks: Vec<Task<J, S>>) -> Task<J, S>{
         
         // lock the instance to push tasks into the tree
         self.lock.lock().unwrap();
@@ -323,50 +322,10 @@ impl<O, J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, S: S
         self.status = TaskStatus::Hanlted;
     }
 
-    /* -------------------------------------------------------------
-        since futures are object safe trait hence they have all traits 
-        features we can pass them to the functions in an static or dynamic 
-        dispatch way using Arc or Box or impl Future or event as the return 
-        type of a closure trait method:
-            returning reference or box to dyn trait by casting the type who impls the trait into the trait 
-            dep injection object safe trait using & and smart pointers dyn
-            future as generic in return type of closure or function or pinning its box
-            std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>
-            Arc<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
-            Box<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
-            Arc<Mutex<dyn Fn() -> R + Send + Sync + 'static>> where R: std::future::Future<Output = ()> + Send + Sync + 'static
-            F: std::future::Future<Output = ()> + Send + Sync + 'static
-            param: impl std::future::Future<Output = ()> + Send + Sync + 'static
-
-        NOTE: mutex requires the type to be Sized and since traits are 
-        not sized at compile time we should annotate them with dyn keyword
-        and put them behind a pointer with valid lifetime or Box and Arc smart pointers
-        so for the mutexed_job we must wrap the whole mutex inside an Arc or annotate it
-        with something like &'valid tokio::sync::Mutex<dyn Fn() -> R + Send + Sync + 'static>
-        the reason is that Mutex is a guard and not an smart pointer which can hanlde 
-        an automatic pointer with lifetime 
-    */
-    pub async fn cron_scheduler<F, R>(&mut self, 
-        boxed_job: Box<dyn Fn() -> R + Send + Sync + 'static>,
-        mutexed_job: std::sync::Arc<tokio::sync::Mutex<dyn Fn() -> R + Send + Sync + 'static>>,
-        arced_job: std::sync::Arc<dyn Fn() -> R + Send + Sync + 'static>) 
-    where
-        R: std::future::Future<Output = O> + Send + Sync + 'static{
-
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
-            tokio::spawn(async move{
-                loop{
-                    interval.tick().await;  
-                    arced_job().await;
-                }
-            });
-    }
-
 }
 
 // once the task gets dropped drop any incomplete futures inside the worker 
-impl<O, J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, S> Drop for Worker<J, S, O> where 
-    O: Send + Sync + 'static{
+impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S> Drop for Task<J, S>{
     fn drop(&mut self) { // use std::sync::Mutex instead of tokio cause drop() method is not async 
         if let Ok(job) = self.worker.lock(){
             job.abort(); // abort the current future inside the joinhandle
@@ -382,29 +341,6 @@ pub enum TaskStatus{
     Hanlted
 }
 
-type FutureTraitObject<O: Send + Sync + 'static> = std::pin::Pin<Box<dyn std::future::Future<Output = O> + Send + Sync + 'static>>;
-impl<J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, 
-     S: Send + Sync + 'static, O: Send + Sync + 'static> 
-    Worker<J, S, O> 
-    where J::Output: Send + Sync + 'static{
-
-    pub async fn spawn_task< // none assoc method
-        F: std::future::Future<Output = O> + Send + Sync + 'static,
-        R: Send + Sync + 'static,
-        V: FnOnce(O) -> R + Send + Sync + 'static
-        >(
-            fut1: F,
-            pinned_fut: FutureTraitObject<O>, // future as trait object
-            input: O,
-            fut: impl std::future::Future<Output = O> + Send + Sync + 'static,
-            func: V
-    ){
-        tokio::spawn(fut);
-        tokio::spawn(async move{ func(input) });
-    }
-
-}
-
 /* ----------------------------------------------------- */
 //          a thread safe task tree executor
 /* ----------------------------------------------------- 
@@ -416,25 +352,24 @@ impl<J: std::future::Future<Output = O> + Send + Sync + 'static + Clone,
 */
 
 pub struct TaskTree<
-    J: std::future::Future<Output = O> + Send + Sync + 'static + Clone, 
-    S, O: Send + Sync + 'static>{
+    J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S>{
     // wrap it around mutex to share the task between threads cause we
     // want to execute the task in a light thread without blocking so 
     // we need to move the reference of the task into the thread which 
     // can be done via mutex since it's an smart pointer for sharing data
     // safely between threads
-    pub task: tokio::sync::Mutex<Worker<J, S, O>>, 
+    pub task: tokio::sync::Mutex<Task<J, S>>, 
     pub weight: std::sync::atomic::AtomicU8,
-    pub parent: std::sync::Arc<TaskTree<J, S, O>>, // the parent itself
-    pub children: std::sync::Mutex<Vec<std::sync::Arc<TaskTree<J, S, O>>>> // vector of children
+    pub parent: std::sync::Arc<TaskTree<J, S>>, // the parent itself
+    pub children: std::sync::Mutex<Vec<std::sync::Arc<TaskTree<J, S>>>> // vector of children
 }
 
-impl<J: std::future::Future<Output = O> + Send + Sync + 'static + Clone + std::fmt::Debug, 
-    S: std::fmt::Debug + Send + Sync + 'static, O: std::fmt::Debug + Send + Sync + 'static> 
-    TaskTree<J, S, O>{
+impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone + std::fmt::Debug, 
+    S: std::fmt::Debug + Send + Sync + 'static> 
+    TaskTree<J, S>{
     
     // execute all tasks in bfs order in none binary tree
-    pub fn execute_all_tasks(&mut self, root: std::sync::Arc<TaskTree<J, S, O>>){
+    pub fn execute_all_tasks(&mut self, root: std::sync::Arc<TaskTree<J, S>>){
         let mut queue = vec![root]; 
         while !queue.is_empty(){
             let get_node = queue.pop(); // pop the child out
@@ -462,12 +397,12 @@ impl<J: std::future::Future<Output = O> + Send + Sync + 'static + Clone + std::f
         }
     }
 
-    pub fn push_task(&mut self, child: std::sync::Arc<TaskTree<J, S, O>>){
+    pub fn push_task(&mut self, child: std::sync::Arc<TaskTree<J, S>>){
         let mut get_children = self.children.try_lock().unwrap();
         (*get_children).push(child);
     }
 
-    pub fn pop_task(&mut self) -> Option<std::sync::Arc<TaskTree<J, S, O>>>{
+    pub fn pop_task(&mut self) -> Option<std::sync::Arc<TaskTree<J, S>>>{
         let mut get_children = self.children.try_lock().unwrap();
         let poped_task = (*get_children).pop();
         poped_task

@@ -792,6 +792,33 @@ fn but_the_point_is1(){
         
         println!("final value of name: {}", name);
     }
+
+
+        /*
+            Rust moves data around the ram and assign them new address in new location 
+            Pass by ref to keep the same address in new scope otherwise new ownership 
+            hence address will be generated 
+        */
+    
+        let name = String::from("wo");
+        let p = &name;
+        println!("addr is {:p}", p);
+        
+        // pass by ref avoid moving same address will be inside the method
+        fn get_name(name: &String){
+            println!("name in here {:p}", name);
+        }
+        
+        get_name(p);
+        // any pointer in here would be invalidated 
+        // ...
+        
+        
+        fn getName(name: String){
+            println!("new name in here {:p}", &name);
+        }
+        
+        getName(name.clone());
     
 }
 
