@@ -6,6 +6,10 @@
       "prerelease": "dev"
     },
     {
+      "name": "release",
+      "prerelease": "rc"
+    },
+    {
       "name": "/^\\d+-release(-\\d+)?$/",
       "prerelease": "rc"
     },
