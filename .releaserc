@@ -23,7 +23,7 @@
     }
   ],
   "version_variable": "Cargo.toml:version",
-  "commit_message": "chore(release): {version} [skip ci]",
+  "commit_message": "bump: {version} [skip ci]",
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
@@ -37,7 +37,7 @@
       "@semantic-release/git",
       {
         "assets": ["Cargo.toml", "Dockerfile"],
-        "message": "chore(release): ${nextRelease.version} [skip ci]"
+        "message": "bump: ${nextRelease.version} [skip ci]"
       }
     ]
   ]
