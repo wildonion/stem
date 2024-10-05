@@ -1,49 +1,11 @@
 
 
+
+// every neuron is an actor component object, the building block of everything 
+// it's an smart object on its own which can communicate locally and remotely 
+// with other neurons, every neuron contains a metadata field which carries 
+// info about the actual object.
 /*  ========================================================================================
-
-        Neuron Actor DSL Features
-
-        features:
-            neuron codec
-            supports ws, and jobId with CronScheduler for shortpolling 
-            p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
-            p2p based like adnl file sharing, vpn, gatewat, loadbalancer, proxy, ingress listener like ngrok and v2ray
-            p2p based like adnl onchain broker stock engine (find peers which are behind nat over wan)
-
-            neuron onion{
-                {
-                    cells: 25,
-                    shellcodeConfig: {
-                        shellcode: 0x...,
-                        encryption: aes256
-                    },
-                    nestedData: {
-                        key: value
-                    }
-                }
-            }
-
-            every neuron actor must be able to do streaming either locally or remotely 
-            by using one of the following syntax:
-            stream!{
-                local stream over onion: // backed by jobq mpsc
-                    data -> | () => { 
-                        // Send message logic
-                    }),
-                    data <- | () => { 
-                        // Receive message logic
-                    });
-                
-                remote stream over onion:  // backed by rmq
-                    data -> | () => { 
-                        // Send message logic
-                    }),
-                    data <- | () => { 
-                        // Receive message logic
-                    });
-            }
-
     brokering is all about queueing, sending and receiving messages way more faster, 
     safer and reliable than a simple eventloop or a tcp based channel. 
     all brokers contains message/task/job queue to handle communication between services
@@ -126,13 +88,16 @@
     ======================================================================================== 
 */
 
+use std::error::Error;
+use std::process::Output;
+
 use task::Task;
 use task::TaskStatus;
 use tokio::sync::TryLockError;
 use tokio::sync::MutexGuard;
 use tx::Transaction;
 use wallexerr::misc::SecureCellConfig;
-use misc::{runInterval, Crypter};
+use misc::{Crypter};
 use crate::*;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -169,6 +134,12 @@ pub struct Worker{
     pub thread: std::sync::Arc<tokio::task::JoinHandle<()>>,
 }
 
+// this is the internal executor, it's a job or task queue eventloop
+// it has a buffer of Event objets, thread safe eventloop receiver and 
+// a sender to send data to its channel, this is the backbone of actor
+// worker objects they talk locally through the following pattern sicne
+// they have isolated state there is no mutex at all mutating the state
+// would be done through message sending pattern.
 #[derive(Clone)]
 pub struct InternalExecutor<Event>{
     pub id: String, 
@@ -190,15 +161,16 @@ where J: std::future::Future<Output = ()> + Send + Sync + 'static{
     pub job: Job<J, S>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Event{
     pub data: EventData,
     pub status: EventStatus,
     pub offset: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum EventStatus{
+    #[default]
     Committed,
     Executed,
     Halted
@@ -208,6 +180,12 @@ pub enum EventStatus{
 pub struct Buffer<E>{ // eg: Buffer<Event>
     pub events: std::sync::Arc<tokio::sync::Mutex<Vec<E>>>,
     pub size: usize
+}
+
+#[derive(Clone, Debug)]
+pub enum StreamError{
+    Sender(String),
+    Receiver(String)
 }
 
 /*  ====================================================================================
@@ -253,6 +231,12 @@ pub struct SendRpcMessage{ // used to send rpc request through rmq queue, good f
     pub reqQueue: String,
     pub repQueue: String,
     pub payload: String, // json string maybe! we'll convert it to u8 bytes eventually
+}
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct UpdateState{
+    pub new_state: u8
 }
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
@@ -337,11 +321,12 @@ pub struct Contract{
 #[derive(Clone)]
 pub struct NeuronActor{
     pub wallet: Option<wallexerr::misc::Wallet>,
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<serde_json::Value>, // json object contains the actual info of an object which is being carried by this neuron
     pub internal_executor: InternalExecutor<Event>, // sender and receiver, potentiall we can use the actor msg sending pattern
     pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,
     pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,
-    pub contract: Option<Contract>, // circom and noir for zk verifier contract
+    pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
+    pub state: u8
 }
 
 
@@ -359,6 +344,10 @@ impl Event{
 
 }
 
+// ------------------------------
+// implementnig the internal executor methods, it has an eventloop
+// in its core which receives event coming from its channel constantly
+// it then execute them along with the passed in callback in the run() method
 impl InternalExecutor<Event>{
     
     pub fn new(buffer: Buffer<Event>) -> Self{
@@ -367,45 +356,117 @@ impl InternalExecutor<Event>{
         Self { id: Uuid::new_v4().to_string(), buffer, sender: tx, eventloop: rx }
     }
 
-    pub async fn spawn(&self, event: Event) -> Self{
+    pub async fn spawn(&self, event: Event) -> Result<Self, tokio::sync::mpsc::error::SendError<Event>>{
         let sender = self.clone().sender;
-        sender.send(event).await;
-        self.clone()
+        if let Err(e) = sender.send(event).await{
+            return Err(e);
+        }
+        Ok(self.clone())
     }
 
     pub async fn run<F, R: std::future::Future<Output = ()> + Send + Sync + 'static, >(&self, callback: F)
-    where F: Clone + Fn(Event) -> R + Send + Sync + 'static{
+    where F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static{
         let get_rx = self.clone().eventloop;
-        let mut rx = get_rx.lock().await;
+        let mut rx = get_rx.try_lock();
         
-        while let Some(mut event) = rx.recv().await{
-            
-            let event_for_first_tokio = event.clone();
-            let cloned_event = event.clone();
-            let cloned_callback = callback.clone();
-
+        let cloned_callback = callback.clone();
+        if rx.is_err(){
+            let error = rx.unwrap_err();
             tokio::spawn(async move{
-                event_for_first_tokio.clone().process().await;
+                cloned_callback(
+                    Event::default(), 
+                    Some(StreamError::Receiver(error.source().unwrap().to_string()))
+                ).await; // calling callback with the passed in received event
             });
-            tokio::spawn(async move{
-                cloned_callback(cloned_event).await; // calling callback with the passed in received event
-            });
+        } else{
+            let mut actualRx = rx.unwrap(); 
+            while let Some(event) = actualRx.recv().await{
+                
+                let event_for_first_tokio = event.clone();
+                let cloned_event = event.clone();
+                let cloned_callback = callback.clone();
+    
+                tokio::spawn(async move{
+                    event_for_first_tokio.clone().process().await;
+                });
+                tokio::spawn(async move{
+                    cloned_callback(cloned_event, None).await; // calling callback with the passed in received event
+                });
+            }
         }
+
     }
 
 }
 
 impl NeuronActor{
+
+    /* -------------------------------------------------------------
+        since futures are object safe trait hence they have all traits 
+        features we can pass them to the functions in an static or dynamic 
+        dispatch way using Arc or Box or impl Future or event as the return 
+        type of a closure trait method, so a future task would be:
+
+            1) std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>
+            2) Arc<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
+            3) Box<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
+            4) Arc<Mutex<dyn Fn() -> R + Send + Sync + 'static>> where R: std::future::Future<Output = ()> + Send + Sync + 'static
+            5) F: std::future::Future<Output = ()> + Send + Sync + 'static
+            6) param: impl std::future::Future<Output = ()> + Send + Sync + 'static
+
+        NOTE: mutex requires the type to be Sized and since traits are 
+        not sized at compile time we should annotate them with dyn keyword
+        and put them behind a pointer with valid lifetime or Box and Arc smart pointers
+        so for the mutexed_job we must wrap the whole mutex inside an Arc or annotate it
+        with something like &'valid tokio::sync::Mutex<dyn Fn() -> R + Send + Sync + 'static>
+        the reason is that Mutex is a guard and not an smart pointer which can hanlde 
+        an automatic pointer with lifetime 
+    */
+    // task is a closure that returns a future object 
+    pub async fn runInterval<M, R, O>(&mut self, task: M, period: u64, retries: u8, timeout: u64)
+    where M: Fn() -> R + Send + Sync + 'static,
+            R: std::future::Future<Output = O> + Send + Sync + 'static,
+    {
+        let arced_task = std::sync::Arc::new(task);
+
+        // the future task must gets executed within the period of timeout
+        // otherwise it gets cancelled, dropped and aborted
+        if timeout != 0{
+            tokio::time::timeout(
+                tokio::time::Duration::from_secs(timeout),
+                arced_task()
+            ).await;
+        }
+
+        tokio::spawn(async move{
+            let mut int = tokio::time::interval(tokio::time::Duration::from_secs(period));
+            int.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            
+            let mut attempts = 0;
+            loop{
+                if retries == 0{
+                    continue;
+                }
+                if attempts >= retries{
+                    break;
+                }
+                int.tick().await;
+                arced_task().await;
+                attempts += 1;
+            }
+        });
+    }
     
     // see EventLoop struct in src/playground/app.rs
     pub async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
-        F: Clone + Fn(Event) -> R + Send + Sync + 'static>(&mut self, streamer: &str, eventType: &str, callback: F) -> Self{
-        
+        F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
+        (&mut self, streamer: &str, eventType: &str, callback: F) -> Self{
+
         let get_internal_executor = self.clone().internal_executor;
         let get_events = get_internal_executor.buffer.events.lock().await;
         let cloned_get_internal_executor = get_internal_executor.clone();
         let last_event = get_events.last().unwrap();
-        
+
         // in order to use * or deref mark on last_event the Copy trait must be implemented 
         // for the type since the Copy is not implemented for heap data types thus we should 
         // use clone() method on them to return the owned type.
@@ -421,12 +482,28 @@ impl NeuronActor{
                         
                         // spawn an event for the executor
                         tokio::spawn(async move{
-                            cloned_get_internal_executor.spawn(first_token_last_event).await;
+                            match cloned_get_internal_executor.spawn(first_token_last_event).await{
+                                Ok(this) => {
+                                    tokio::spawn(
+                                        callback(
+                                            owned_las_event.to_owned(), 
+                                            None
+                                        )
+                                    );
+                                },
+                                Err(e) => {
+                                    tokio::spawn(
+                                        callback(
+                                            owned_las_event.to_owned(), 
+                                            Some(StreamError::Sender(e.source().unwrap().to_string()))
+                                        )
+                                    );
+                                }
+                            }
                         });
-                        
-                        // executing the callback in the background thread
-                        tokio::spawn(callback(owned_las_event.to_owned()));
+
                         self.clone()
+
                     },
                     "rmq" => {
                         self.clone()
@@ -480,8 +557,11 @@ impl NeuronActor{
         decryptionConfig: Option<CryptoConfig>
     ){
 
+            // this can be used for sending the received message to some ws server 
+            let internal_executor = self.clone().internal_executor;
+
             // TODO
-            // send consumed data to the internal streamer channel
+            // also send consumed data to the streamer channel of the internal executor 
             // use self.on() method
     }
 
@@ -656,4 +736,15 @@ impl ActixMessageHandler<ConsumeNotifFromRmq> for NeuronActor{
 
     }
 
+}
+
+// handler for handling send update state message to this actor to update the state
+// this ensures the actor isolation stays safe and secure cause there is no direct 
+// mutating it's handled only by sending message to the actor and the actor receives
+// it from its mailbox and runs it accordingly. 
+impl ActixMessageHandler<UpdateState> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: UpdateState, ctx: &mut Self::Context) -> Self::Result {
+        self.state = msg.new_state;
+    }
 }

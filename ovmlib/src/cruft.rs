@@ -819,6 +819,13 @@ fn but_the_point_is1(){
         }
         
         getName(name.clone());
+
+        type UserId = char;
+        let userIds: Vec<UserId> = vec![];
+        let mut user_ids = vec![];
+        user_ids = userIds.into_iter()
+            .map(|uid| uid.len_utf8())
+            .collect::<_>();
     
 }
 
