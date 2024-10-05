@@ -22,6 +22,11 @@ at the start of each workflow, by default github creates unique `GITHUB_TOKEN` s
 
 ### Just in Case:
 
+> the [skip ci] inside the commit message of semantic release would ignore running ci/cd pipeline 
+for version bumping, [skip ci] is an special words used in git committing to ignore running pipeline
+other than doing that the version bumping process would stuck in an infinite loop of running ci/cd.
+
+
 - **fix** bumps the patch version, **feat** bumps the minor version, **BREAKING CHANGE** bumps the major version.
 - **feat:** on main -> bumps the minor version (e.g., 1.0.0 to 1.1.0).
 - **fix:** on main -> bumps the patch version (e.g., 1.0.0 to 1.0.1).
