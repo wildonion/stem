@@ -49,20 +49,20 @@ jobs:
       - name: Refetch Remote Tags
         run: git fetch --tags
 
-      # Extract version from Cargo.toml (PACKAGE_VERSION)
+      # Extract version from Cargo.toml and store it in GITHUB_ENV
       - name: Extract Version from Cargo.toml
         id: extract_version
         run: |
           package_version=$(grep -Po '(?<=^version = ").*(?=")' Cargo.toml)
-          echo "PACKAGE_VERSION=$package_version"
+          echo "PACKAGE_VERSION=$package_version" >> $GITHUB_ENV  # Store in GITHUB_ENV
 
-      # Check if any tags exist and create a tag if not
+      # Check if any tags exist and create a tag if none exist
       - name: Check and Create Tag if None Exist
         run: |
           if [ -z "$(git tag)" ]; then
             echo "No tags found, creating initial tag from Cargo.toml version."
-            git tag "v$PACKAGE_VERSION"
-            git push origin "v$PACKAGE_VERSION"
+            git tag "v${{ env.PACKAGE_VERSION }}"  # Use the PACKAGE_VERSION stored in GITHUB_ENV
+            git push origin "v${{ env.PACKAGE_VERSION }}"
           else
             echo "Tags found, proceeding with semantic-release!"
           fi
