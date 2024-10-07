@@ -6,6 +6,7 @@ use handler::HoopedHandler;
 use prelude::{max_concurrency, Compression, CompressionLevel};
 use salvo::*;
 use salvo::http::Method;
+use test::ResponseExt;
 
 
 
@@ -148,29 +149,34 @@ impl Express{
     
 }
 
-#[handler]
-pub async fn checkUser(
-    req: &mut Request, 
-    resp: &mut Response, 
-    depot: &mut Depot,
-    ctrl: &mut FlowCtrl, 
-){
-    // an api middleware 
-    // ...
-}
+
+
 
 #[tokio::test]
 async fn buildServer(){
 
     let app = Express::new(AppCtx{});
-    
+
+    // wirging  middlewares
+    #[handler]
+    pub async fn checkUser(
+        req: &mut Request, 
+        resp: &mut Response, 
+        depot: &mut Depot,
+        ctrl: &mut FlowCtrl, 
+    ){
+        // an api middleware 
+        // ...
+    }
 
     app.clone().post(
-        "/user/get/all",
+        "/user/get/all", // support wildcards
         vec![(|req, res, ctrl, depot| checkUser)(req, res, ctrl, depot)], // Wrap `checkUser` in a closure
         |req, res, ctrl, depot| async move {
             
-            // ...
+            res.render("hello from server");
+            ctrl.call_next(req, depot, res).await; // calling the next handler from the router tree
+
 
         },
     );

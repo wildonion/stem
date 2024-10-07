@@ -480,7 +480,8 @@ impl NeuronActor{
                         // sending in the background
                         let first_token_last_event = owned_las_event.clone();
                         
-                        // spawn an event for the executor
+                        // spawn an event for the executor, this would send the event into the channel
+                        // in the background lightweight thread
                         tokio::spawn(async move{
                             match cloned_get_internal_executor.spawn(first_token_last_event).await{
                                 Ok(this) => {
@@ -518,7 +519,8 @@ impl NeuronActor{
                 
                 match streamer{
                     "local" => {
-                        // receiving in the background 
+                        // running the eventloop to receive event streams from the channel 
+                        // in the background lightweight thread 
                         tokio::spawn(async move{
                             cloned_get_internal_executor.run(callback).await;
                         });
@@ -594,12 +596,99 @@ impl NeuronActor{
         );
     }
 
+    pub async fn executekMeIntervally(&mut self){
+        log::info!("execute...");
+    }
+
+    /* -------------------------------------------------------
+        an example function to show how we can execute jobs 
+        using an eventloop in the background thread.
+        a job can be arced version of a closure trait which 
+        returns a future object as its body or a pinned version
+        of the whole closure trait, a pinned version
+        of a boxed of a future trait object or binding the 
+        generic to the closure trait which returns a future
+        object as its body.
+        for both Arc<dyn Trait> or Box<dyn Trait> the trait 
+        must be object safe.
+    */
+    pub async fn AllInOneInternalExecutor<J, R>(&mut self, job: J) where J: Fn() -> R + Send + Sync +'static, 
+    R: std::future::Future<Output = ()> + Send + Sync + 'static{
+
+        trait Interface{}
+        struct Job{}
+        impl Interface for Job{}
+
+        // arcing like boxing the object safe trait use for thread safe dynamic dispatching and dep injection
+        let interfaces: std::sync::Arc<dyn Interface> = std::sync::Arc::new(Job{});
+
+        // boxing trait for dynamic dispatching and dep ibjection
+        let interfaces1: Box<dyn Interface> = Box::new(Job{});
+
+        // arcing the mutexed object safe trait for dynamic dispatching, dep injection and mutating it safely
+        let interfaces2: std::sync::Arc<tokio::sync::Mutex<dyn Interface>> = std::sync::Arc::new(tokio::sync::Mutex::new(Job{}));
+        
+        // we can't have the following cause in order to pin a type the size must be known
+        // at compile time thus pin can't have an object safe trait for pinning it at stable 
+        // position inside the ram without knowing the size 
+        // let interfaces3: std::sync::Arc<std::pin::Pin<dyn Interface>> = std::sync::Arc::pin(Job{});
+        
+        // schedule a job to pop it out from the eventloop queue to gets executed in the background 
+        // thread or send a message to the actor worker thread to execute a job like start consuming 
+        // or receiving streaming in a light thread like stream.on or while let some
+
+        // job however is an async io task which is a future object
+        type IoJob<R> = Arc<dyn Fn() -> R + Send + Sync + 'static>;
+        type IoJob1<R> = std::pin::Pin<Arc<dyn Fn() -> R + Send + Sync + 'static>>;
+        type IoJob2 = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+    
+        let arcedJob = std::sync::Arc::new(job);
+        let (tx, mut eventloop) = tokio::sync::mpsc::channel::<std::sync::Arc<J>>(100);
+        
+        // step1)
+        // execute an interval in the background thread, this would
+        // execute a sending task every 5 seconds in the background thread.
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            this.runInterval(move || {
+                // we must clone them inside the closure body 
+                // before sending them inside the tokio spawn
+                let cloned_tx = tx.clone();
+                let arcedJob = arcedJob.clone();
+                // this is the closure body which is of type future object
+                async move{
+                    cloned_tx.send(arcedJob).await;
+                }
+            }, 5, 0, 0).await;
+        });
+
+        // step2)
+        // start receiving or streaming over the eventloop 
+        // of the channel to receive jobs
+        tokio::spawn(async move{
+            while let Some(job) = eventloop.recv().await{
+                tokio::spawn(async move{
+                    job().await
+                });
+            }
+        });
+
+    }
+
 }
 
 impl Actor for NeuronActor{
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
         
+        ctx.run_interval(std::time::Duration::from_secs(10), |actor, ctx|{
+
+            let mut this = actor.clone(); 
+            tokio::spawn(async move{
+                this.executekMeIntervally().await;
+            });
+
+        });
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {

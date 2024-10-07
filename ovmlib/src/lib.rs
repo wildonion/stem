@@ -7,7 +7,7 @@ use std::{sync::{Arc, Weak, RwLock}, cell::RefCell};
 use neuron::{Buffer, Event, EventData, EventStatus, InternalExecutor, NeuronActor, UpdateState, Worker};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use actix::prelude::*;
+use actix::{prelude::*, spawn};
 use actix::Handler as ActixMessageHandler;
 use uuid::Uuid;
 use std::sync::atomic::AtomicU64;

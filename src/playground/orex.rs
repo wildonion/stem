@@ -340,7 +340,7 @@ impl From<std::io::Error> for CustomeErrMe1{
     other threads from doing so at the same time in comparison with channels it's expensive and costs overhead, we 
     should use tokio mutex in none blocking io light threads and std mutex in a cpu threads, don't use std mutex in io light threads
     lightweight threads none blocking io tasks => tokio::spawn(): file, networking and db operations, streaming over jobq based channels
-    cpu threads blocking tasks                 => rayon::spawn(): cryptography, dl and ml logics, mathematical operations
+    cpu threads blocking tasks                 => rayon::spawn() and simd: cryptography, dl and ml logics, mathematical operations like img processing 
     
     Notes:
     don't block the lightweight thread at all, wait on them until complete the job, used for io processes  

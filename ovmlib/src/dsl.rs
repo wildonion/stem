@@ -4,16 +4,23 @@
 // -----------------------------------
 /* Neuron Actor DSL Features
 
+    tools: stem, GPT tryout section in ovm.spec, desktop books for neuroscience and information theory
+    service logic: 
+        ratelimiting, caching and interval execution with redis pubsub key exp chan
+        api gateway, redis, pg, elastic, crypter and services: orders, rest management, paytx, reservation and searching, auth,
+        develop apis using salvo http3 certed(ws realtiming over rmq streamer, jobId shortpolliong, middlewares, express based syntax, app ctx);
+        talking between services using neuron component actor (run intervally, pubsub streaming and rpc using rmq/p2p, executor eventloop jobq chan for local message passing, lightthread)
+        dockerizing and ci/cd pipeline for automatic deployment and version bumping and publishing the crate 
+        atomic purchasing, booking and execution for tx order object (prevent double spending) and a product using select, spawn, mutex and executor eventloop jobq chan
+        tokio time loop spawn, select, executor eventloop jobq chan, timeout, mutex, rwlock, signal
     features:
-        neuron codec
-        supports ws, and jobId with CronScheduler for shortpolling 
+        vm using macro, neuron codec, supports ws, and jobId with CronScheduler for shortpolling 
+        remote talking through p2p and rpc rmq req-rep queue
         p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
         p2p based like adnl file sharing, vpn, gatewat, loadbalancer, proxy, ingress listener like ngrok and v2ray
         p2p based like adnl onchain broker stock engine (find peers which are behind nat over wan)
-    tools: stem, GPT tryout section in ovm.spec
-    tools: desktop books for neuroscience and information theory
     main concepts:
-            use Box::pin(async move{}) to return async future object in none async context that you can't await on future objects
+            use Box::pin(async move{}) or Arc::pin(async move{})  to return async future object in none async context that you can't await on future objects
             make everything cloneable and break the cycle of self ref types using Arc and store on the heap using Box 
             mutex, channel, spawn, select, trait closure for poly, dep inj, dyn and stat dispatch,
             future objects in form of dyn dispatch with Box::pin(async move{}) or a job in closure return type with Arc::new(||async move{})
@@ -26,10 +33,9 @@
             interfaces and traits for poly, stat dyn dispatch, access types through a single interface, Any trait, dep injection
             if you don't care about the result of the io task don't await on the spawn otherwise use static lazy arc mutex or chans and let the task gets executed in the background thread
             spawn(async move{handleMsg().await}) in the background light thread (none blocking) without awaiting: thread per each task
-            Box::pin(async move{}) and Arc<Fn() -> R> where R: Future + Send + Sync
+            Box::pin(async move{}), Arc::pin(async move{}) and Arc<Fn() -> R> where R: Future + Send + Sync
             eventloop with spawn(async move{loop{select!{}}}) and spawn(async move{while let Some(job) = rx.recv().await{}}) inside the actor.rs of the ovm 
-            CronScheduler(time, ctx, redis pubsub exp key), select!{} awaiting, arc, mutex, timeout, Box::pin(async{}), condvar, jobq chan send recv
-
+            CronScheduler(time, ctx, redis pubsub exp key), select!{} awaiting, arc, mutex, timeout, Box::pin(async{}), Arc::pin(async move{}), condvar, jobq chan send recv
     
 
         neuron onion{
