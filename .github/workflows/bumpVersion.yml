@@ -54,7 +54,7 @@ jobs:
         id: extract_version
         run: |
           package_version=$(grep -Po '(?<=^version = ").*(?=")' Cargo.toml)
-          echo "PACKAGE_VERSION=$package_version" >> $GITHUB_ENV
+          echo "PACKAGE_VERSION=$package_version"
 
       # Check if any tags exist and create a tag if not
       - name: Check and Create Tag if None Exist
