@@ -1,11 +1,15 @@
 
 
 
-// every neuron is an actor component object, the building block of everything 
-// it's an smart object on its own which can communicate locally and remotely 
-// with other neurons, every neuron contains a metadata field which carries 
-// info about the actual object.
 /*  ========================================================================================
+    
+    What is a Neuron?
+        every neuron is an actor component object or a process or a light thread, the building 
+        block of everything it's an smart object on its own which can communicate locally and 
+        remotely with other neurons, every neuron contains a metadata field which carries 
+        info about the actual object and informations that are being passed through the 
+        synapses protocols. 
+
     brokering is all about queueing, sending and receiving messages way more faster, 
     safer and reliable than a simple eventloop or a tcp based channel. 
     all brokers contains message/task/job queue to handle communication between services
@@ -110,8 +114,6 @@ pub struct CryptoConfig{
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub enum ActionType{ // all the action type that causes the notif to get fired
     #[default]
-    ProductPurchased, // or minted
-    Zerlog,
     EventCreated,
     EventExpired,
     EventLocked,
@@ -145,22 +147,25 @@ pub struct InternalExecutor<Event>{
     pub id: String, 
     pub buffer: Buffer<Event>,
     pub sender: tokio::sync::mpsc::Sender<Event>,
-    // receive Event inside tokio::spawn and execute them in the background
+    // what does the eventloop do? it receives Event inside tokio::spawn and execute them in the background
     pub eventloop: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Event>>> 
 }
 
+// a job contains the io task 
 pub struct Job<J: Clone, S>
 where J: std::future::Future<Output = ()> + Send + Sync + 'static{
     pub id: String, 
     pub task: Task<J, S>
 }
 
+// a runner runs a job in its context
 pub struct Runner<J: Clone, S>
 where J: std::future::Future<Output = ()> + Send + Sync + 'static{
     pub id: String,
     pub job: Job<J, S>
 }
 
+// an event contains the offset in the cluster, execution status and the data
 #[derive(Clone, Debug, Default)]
 pub struct Event{
     pub data: EventData,
@@ -176,6 +181,7 @@ pub enum EventStatus{
     Halted
 }
 
+// a buffer contains a thread safe vector of Events
 #[derive(Clone)]
 pub struct Buffer<E>{ // eg: Buffer<Event>
     pub events: std::sync::Arc<tokio::sync::Mutex<Vec<E>>>,
@@ -186,6 +192,13 @@ pub struct Buffer<E>{ // eg: Buffer<Event>
 pub enum StreamError{
     Sender(String),
     Receiver(String)
+}
+
+#[derive(Clone, Debug)]
+pub enum NeuronError{
+    Runner(String),
+    Job(String),
+    Buffer(String),
 }
 
 /*  ====================================================================================
@@ -238,6 +251,13 @@ pub struct SendRpcMessage{ // used to send rpc request through rmq queue, good f
 pub struct UpdateState{
     pub new_state: u8
 }
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct BanCry{
+    pub cmd: String
+}
+
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
@@ -397,6 +417,7 @@ impl InternalExecutor<Event>{
 
     }
 
+
 }
 
 impl NeuronActor{
@@ -458,6 +479,7 @@ impl NeuronActor{
     }
     
     // see EventLoop struct in src/playground/app.rs
+    // we'll call the callback after executing the event
     pub async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
         F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
         (&mut self, streamer: &str, eventType: &str, callback: F) -> Self{
@@ -520,7 +542,8 @@ impl NeuronActor{
                 match streamer{
                     "local" => {
                         // running the eventloop to receive event streams from the channel 
-                        // in the background lightweight thread 
+                        // this would be done in the background lightweight thread, we've passed
+                        // the callback to execute it in there
                         tokio::spawn(async move{
                             cloned_get_internal_executor.run(callback).await;
                         });
@@ -627,29 +650,86 @@ impl NeuronActor{
 
         // arcing the mutexed object safe trait for dynamic dispatching, dep injection and mutating it safely
         let interfaces2: std::sync::Arc<tokio::sync::Mutex<dyn Interface>> = std::sync::Arc::new(tokio::sync::Mutex::new(Job{}));
-        
+
         // we can't have the following cause in order to pin a type the size must be known
         // at compile time thus pin can't have an object safe trait for pinning it at stable 
         // position inside the ram without knowing the size 
         // let interfaces3: std::sync::Arc<std::pin::Pin<dyn Interface>> = std::sync::Arc::pin(Job{});
-        
-        // schedule a job to pop it out from the eventloop queue to gets executed in the background 
-        // thread or send a message to the actor worker thread to execute a job like start consuming 
-        // or receiving streaming in a light thread like stream.on or while let some
+        // we can't pin a trait directly into the ram, instead we must pin their
+        // boxed or arced version like Arc<dyn Future> or Box<dyn Future> into 
+        // the ram: Arc::pin(async move{}) or Box::pin(async move{})
 
         // job however is an async io task which is a future object
         type IoJob<R> = Arc<dyn Fn() -> R + Send + Sync + 'static>;
         type IoJob1<R> = std::pin::Pin<Arc<dyn Fn() -> R + Send + Sync + 'static>>;
         type IoJob2 = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
-    
-        let arcedJob = std::sync::Arc::new(job);
-        let (tx, mut eventloop) = tokio::sync::mpsc::channel::<std::sync::Arc<J>>(100);
+        type IoJob3 = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+        type Tasks = Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+        type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
+
+
+        // use effect: interval task execution but use chan to fill the data
+        // use effect takes an async closure
+        struct useEffect<'valid, E, F, R>(pub F, &'valid [E]) where 
+            E: Send + Sync + 'static + Clone,
+            F: Fn() -> R + Send + Sync + 'static,
+            R: std::future::Future<Output = ()> + Send + Sync + 'static;
+
+        let router = String::from("/login"); // the effect on variable
+        self.runInterval(move || {
+            let clonedRouter = router.clone();
+            let clonedRouter1 = router.clone();
+            async move{
+                let state = useEffect(
+                    move || {
+                        let clonedRouter1 = clonedRouter1.clone();
+                        async move{
+
+                            // some condition to affect on router
+                            // ...
+
+                            use tokio::{spawn, sync::mpsc::channel};
+                            let (tx, rx) = channel(100);
+                            spawn(async move{
+                                tx.send(clonedRouter1).await;
+                            });
+            
+                        }
+                    }, &[clonedRouter]
+                );
+            }
+        }, 10, 10, 0).await;
+
         
+        /* the error relates to compiling traits with static dispatch approach:
+        mismatched types
+            expected `async` block `{async block@ovmlib/src/neuron.rs:661:27: 661:37}`
+            found `async` block `{async block@ovmlib/src/neuron.rs:661:41: 661:51}`
+            no two async blocks, even if identical, have the same type
+            consider pinning your async block and casting it to a trait object 
+        */
+        // let tasks1 = vec![async move{}, async move{}];
+        // vector of async tasks pinned into the ram, every async move{} considerred to be a different type
+        // which is kninda static dispatch or impl Future logic, boxing their pinned object into the ram 
+        // bypass this allows us to access multiple types through a single interface using dynamic dispatch.
+        // since the type in dynamic dispatch will be specified at runtime. 
+        let tasks: Tasks = vec![Box::pin(async move{}), Box::pin(async move{})]; // future as separate objects must gets pinned into the ram  
+        let futDependency: Task = Box::new(async move{});
+
+        let arcedJob = std::sync::Arc::new(job);
+        let (tx, mut eventloop) = 
+            tokio::sync::mpsc::channel::<std::sync::Arc<J>>(100);
+
+        // schedule a job to pop it out from the eventloop queue to gets executed in the background 
+        // thread or send a message to the actor worker thread to execute a job like start consuming 
+        // or receiving streaming in a light thread like stream.on or while let some
+
         // step1)
         // execute an interval in the background thread, this would
         // execute a sending task every 5 seconds in the background thread.
         let mut this = self.clone();
         tokio::spawn(async move{
+            // run a task intervally in the background light thread
             this.runInterval(move || {
                 // we must clone them inside the closure body 
                 // before sending them inside the tokio spawn
@@ -723,14 +803,13 @@ impl ActixMessageHandler<PublishNotifToRmq> for NeuronActor{
 
             } = msg.clone();
         
-        let this = self.clone();
         
         let mut stringData = serde_json::to_string(&notif_data).unwrap();
         let mut scc = SecureCellConfig::default();
         let mut ruk = String::from(""); 
 
         let finalData = if encryptionConfig.is_some(){
-                        
+            
             let CryptoConfig{ secret, passphrase, unique_key } = encryptionConfig.clone().unwrap();
             let mut secure_cell_config = &mut wallexerr::misc::SecureCellConfig{
                 secret_key: hex::encode(secret),
@@ -749,6 +828,8 @@ impl ActixMessageHandler<PublishNotifToRmq> for NeuronActor{
         } else{
             stringData
         };
+
+        let this = self.clone();
 
         // spawn the future in the background into the given actor context thread
         // by doing this we're executing the future inside the actor thread since
@@ -835,5 +916,12 @@ impl ActixMessageHandler<UpdateState> for NeuronActor{
     type Result = ();
     fn handle(&mut self, msg: UpdateState, ctx: &mut Self::Context) -> Self::Result {
         self.state = msg.new_state;
+    }
+}
+
+impl ActixMessageHandler<BanCry> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: BanCry, ctx: &mut Self::Context) -> Self::Result{
+
     }
 }

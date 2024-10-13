@@ -49,7 +49,7 @@ pub async fn upAndRun(){
         from the eventloop to execute it meanwhile the future is being solved, 
         this allows to execute tasks in a none blocking manner 
     */
-    neuron.runInterval(||async move{
+    neuron.runInterval(|| async move{
         println!("run me every 10 seconds, with retries of 12 and timeout 0");
     }, 10, 12, 0).await;
 
@@ -58,32 +58,33 @@ pub async fn upAndRun(){
         .on("local", "receive", move |event, error| async move{
 
             if error.is_some(){
-                println!("an error accoured in receiving: {:?}", error.unwrap());
+                println!("an error accoured during receiving: {:?}", error.unwrap());
+                return;
             }
 
             // event is the received event
             // ...
-            println!("received task >> {:?}", event);
+            println!("received task: {:?}", event);
 
         }).await
         .on("rmq", "send", move |event, error| async move{
             
             if error.is_some(){
-                println!("an error accoured in sending: {:?}", error.unwrap());
+                println!("an error accoured during sending: {:?}", error.unwrap());
+                return;
             }
             
             // event is the sent event
             // ...
-            println!("sent task >> {:?}", event);
+            println!("sent task: {:?}", event);
 
         }).await;
 
     
     // starting the neuron actor 
-    let neuron_actor = neuron.start();
+    let nueronComponentActor = neuron.clone().start();
     
-    // send update state message
-    neuron_actor.send(UpdateState{new_state: 1}).await;
-
+    // sending update state message
+    nueronComponentActor.send(UpdateState{new_state: 1}).await;
 
 }

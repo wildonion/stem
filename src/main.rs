@@ -11,8 +11,14 @@ mod neuron;
 mod stream;
 mod types;
 mod express;
+mod schemas;
+mod mathista;
 
 
+use schemas::Neuron;
+use serde::{Serialize, Deserialize};
+use uuid::Uuid;
+use actix::prelude::*;
 use lexer::Lexer;
 use parser::Parser;
 use codegen::CodeGenerator;

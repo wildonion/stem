@@ -1,20 +1,21 @@
 
-
-// dsl for neuron actor using macrocosm crate 
 // -----------------------------------
 /* Neuron Actor DSL Features
 
-    tools: stem, GPT tryout section in ovm.spec, desktop books for neuroscience and information theory
+    tools: macrocosm crate, GPT tryout section in stem.spec, desktop books for neuroscience and information theory
     service logic: 
         ratelimiting, caching and interval execution with redis pubsub key exp chan
         api gateway, redis, pg, elastic, crypter and services: orders, rest management, paytx, reservation and searching, auth,
         develop apis using salvo http3 certed(ws realtiming over rmq streamer, jobId shortpolliong, middlewares, express based syntax, app ctx);
         talking between services using neuron component actor (run intervally, pubsub streaming and rpc using rmq/p2p, executor eventloop jobq chan for local message passing, lightthread)
-        dockerizing and ci/cd pipeline for automatic deployment and version bumping and publishing the crate 
+        ci/cd pipeline for automatic deployment and version bumping and publishing the crate and starting the dockerfiles on vps
         atomic purchasing, booking and execution for tx order object (prevent double spending) and a product using select, spawn, mutex and executor eventloop jobq chan
         tokio time loop spawn, select, executor eventloop jobq chan, timeout, mutex, rwlock, signal
     features:
-        vm using macro, neuron codec, supports ws, and jobId with CronScheduler for shortpolling 
+        vpn like tor and v2ray, firewall, proxy and dns over neuron actor protocols like elixir: p2p, rmq
+        an stem crate contains neuron actor and onion based setup, elixir lang and its cli
+        build this dsl for neuron streaming 
+        local talking with jobq chan eventloop receiver mailbox
         remote talking through p2p and rpc rmq req-rep queue
         p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
         p2p based like adnl file sharing, vpn, gatewat, loadbalancer, proxy, ingress listener like ngrok and v2ray
@@ -71,9 +72,36 @@
                 });
         }
 
+
+        proc ones can only be used on top of functions and impl 
+        blocks to extend the function body and add some vars 
+        into it at compile time:
+        use proc macro with attrs to handle automatic task spawning and jobq chan creations
+        use decl macro to build dsl
+
+        struct ProcessStruct;
+
+        // also handle multiple passing params to function using macros with omitting the useless ones
+        // do this:    
+        #[processExt]
+        impl ProcessStruct{
+            async fn start(&self){}
+            async fn stop(&self){}
+        }
+        // instead of:
+        impl processExt for ProcessStruct{} 
+
+
+        // when a function is annotated with distribute 
+        // means it can distribute itself among networks
+        #[distribute]
+        pub async fn injectShellcodeLogic(){
+        }
+
 */
 
 
+// defining del macros
 #[macro_export]
 macro_rules! neuron {
     () => {

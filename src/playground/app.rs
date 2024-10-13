@@ -175,7 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
                 if rcvd_bytes == 0{
                     getStream.shutdown().await; // shutdown the stream, disconnect the connection
                 }
-                let current_user_msg = std::str::from_utf8(&buff[..rcvd_bytes]).unwrap();
+                let current_user_msg = std::str::from_utf8(&buff[..]).unwrap();
                 // send the msg bytes of the current user to the connected user channel
                 // connected user will use his receiver to receive the msg 
                 getUserSender.send(current_user_msg.to_string()).await;
@@ -185,7 +185,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
                 // receive the connected user (user2) msg in here and send it through the 
                 // current user (user1) tcp stream channel to the current user 
                 while let Some(connected_user_msg) = getReceiver.recv().await{
-                    getStream.write_all(connected_user_msg.as_bytes()).await;
+                    let msg = format!("you've sent: {connected_user_msg:}");
+                    getStream.write_all(msg.as_bytes()).await;
                 }
             }
         });
@@ -457,6 +458,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     }
 
     /* 
+        futures do nothing unless we awiat on them and we can await on them in a light thread 
+        because not doing so would cause to have no result in order to run them in the background 
+        we can spawn them in a tokio thread then use channel to move the response out of the 
+        thread cause threading needs mutex or channel to get the response from the future io task 
+        inside the thread since they are not accesible simply.
         in Rust by default we should await on futures cause they don't do anything by
         default unless we poll them it's not like nodejs which can be executed in
         the background without awaiting on them, doing so tells runtime that suspend the 

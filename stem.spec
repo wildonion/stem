@@ -417,4 +417,9 @@ https://github.com/NicolasLM/nucleon
 https://github.com/wildonion/smarties/blob/main/contracts/near/NEAR.rules
 https://github.com/wildonion/solmarties/blob/main/SOLANA.rules
 https://github.com/mozilla/cbindgen -> generate c bindings and .so from rust code using unsafe coding
-
+https://github.com/mozilla/cbindgen -> generate c bindings and .so from rust code
+https://github.com/wildonion/cs-concepts
+https://github.com/alordash/newton-fractal
+https://github.com/Patryk27/shorelark/ -> GA, NN and WASM
+https://crates.io/crates/wasmtime
+https://wasmer.io/

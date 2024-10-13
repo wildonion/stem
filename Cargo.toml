@@ -29,10 +29,9 @@ is_type = "0.2.1"
 rayon = "1.10.0"
 rand = "0.8"
 rslock = "0.4.0"
-tonic = "0.12"
 futures = "0.3"
 deadpool-lapin = { version = "0.12.1", features = ["serde", "rt_tokio_1"] }
-deadpool-redis = "0.16.0"
+deadpool-redis = "0.18.0"
 futures-util = "0.3"
 once_cell = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
@@ -49,20 +48,13 @@ hex = "0.4"
 clap = { version = "4.5.17", features = ["derive"] }
 thiserror = "1.0"
 percentage = "0.1.0"
-prost = "0.13"
-prost-types = "0.13"
 themis = "0.14.0"
 base58 = "0.2.0"
 rand_chacha = "0.3"
 chacha20 = "0.9"
 indexmap = "2.4"
-wasmer = "4.1.1"
+wasmer = "4.4.0"
 wasmer-wasi = "3.1.1"
-
-[build-dependencies]
-tonic-build = "0.10.2"
-prost-build = "0.13"
-
 
 [[bin]]
 name = "ovm"
