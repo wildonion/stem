@@ -42,7 +42,7 @@ use tokio::task;
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>{
 
 
-    ovmlib::upAndRun().await;
+    stemlib::upAndRun().await;
 
     // Read the main.onion file
     let source_code = std::fs::read_to_string("app.onion").expect("Failed to read file");

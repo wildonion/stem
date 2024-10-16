@@ -3425,91 +3425,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
-name = "ovm"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-web",
- "base58",
- "bytes",
- "chacha20",
- "chrono",
- "clap",
- "crypter",
- "deadpool-lapin",
- "deadpool-redis",
- "dotenv",
- "env_logger 0.11.5",
- "futures",
- "futures-util",
- "hex",
- "indexmap 2.5.0",
- "is_type",
- "log",
- "log4rs",
- "once_cell",
- "ovmlib",
- "percentage",
- "pretty_env_logger 0.5.0",
- "rand",
- "rand_chacha",
- "rayon",
- "redis-async",
- "reqwest 0.12.5",
- "rslock",
- "salvo",
- "sanitize-filename",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "themis",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "wallexerr",
- "wasmer 4.4.0",
- "wasmer-wasi",
-]
-
-[[package]]
-name = "ovmlib"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-web",
- "bytes",
- "chrono",
- "dotenv",
- "env_logger 0.10.2",
- "futures",
- "futures-util",
- "hex",
- "indexmap 2.5.0",
- "is_type",
- "log",
- "log4rs",
- "once_cell",
- "pretty_env_logger 0.4.0",
- "proc-macro2",
- "quote",
- "rand",
- "rayon",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "syn 2.0.53",
- "tokio",
- "tokio-cron-scheduler",
- "uuid",
- "wallexerr",
- "wasmer 4.4.0",
- "wasmer-wasi",
-]
-
-[[package]]
 name = "parity-scale-codec"
 version = "3.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5395,6 +5310,91 @@ name = "stdweb-internal-runtime"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
+
+[[package]]
+name = "stem"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-web",
+ "base58",
+ "bytes",
+ "chacha20",
+ "chrono",
+ "clap",
+ "crypter",
+ "deadpool-lapin",
+ "deadpool-redis",
+ "dotenv",
+ "env_logger 0.11.5",
+ "futures",
+ "futures-util",
+ "hex",
+ "indexmap 2.5.0",
+ "is_type",
+ "log",
+ "log4rs",
+ "once_cell",
+ "percentage",
+ "pretty_env_logger 0.5.0",
+ "rand",
+ "rand_chacha",
+ "rayon",
+ "redis-async",
+ "reqwest 0.12.5",
+ "rslock",
+ "salvo",
+ "sanitize-filename",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "stemlib",
+ "themis",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "wallexerr",
+ "wasmer 4.4.0",
+ "wasmer-wasi",
+]
+
+[[package]]
+name = "stemlib"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-web",
+ "bytes",
+ "chrono",
+ "dotenv",
+ "env_logger 0.10.2",
+ "futures",
+ "futures-util",
+ "hex",
+ "indexmap 2.5.0",
+ "is_type",
+ "log",
+ "log4rs",
+ "once_cell",
+ "pretty_env_logger 0.4.0",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "syn 1.0.109",
+ "tokio",
+ "tokio-cron-scheduler",
+ "uuid",
+ "wallexerr",
+ "wasmer 4.4.0",
+ "wasmer-wasi",
+]
 
 [[package]]
 name = "str-buf"

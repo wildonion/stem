@@ -99,9 +99,10 @@ use task::Task;
 use task::TaskStatus;
 use tokio::sync::TryLockError;
 use tokio::sync::MutexGuard;
+use tokio::task::JoinHandle;
 use tx::Transaction;
 use wallexerr::misc::SecureCellConfig;
-use misc::{Crypter};
+use interfaces::{Crypter};
 use crate::*;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -142,6 +143,10 @@ pub struct Worker{
 // worker objects they talk locally through the following pattern sicne
 // they have isolated state there is no mutex at all mutating the state
 // would be done through message sending pattern.
+// threadpool executor eventloop: 
+//      sender, 
+//      Vec<JoinHanlde<()>>, 
+//      while let Some(task) = rx.lock().await.recv().await{ spawn(task); }
 #[derive(Clone)]
 pub struct InternalExecutor<Event>{
     pub id: String, 
@@ -240,14 +245,6 @@ pub enum NeuronError{
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
-pub struct SendRpcMessage{ // used to send rpc request through rmq queue, good for actor communication directly through rpc backed by rmq
-    pub reqQueue: String,
-    pub repQueue: String,
-    pub payload: String, // json string maybe! we'll convert it to u8 bytes eventually
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
 pub struct UpdateState{
     pub new_state: u8
 }
@@ -340,11 +337,13 @@ pub struct Contract{
 
 #[derive(Clone)]
 pub struct NeuronActor{
-    pub wallet: Option<wallexerr::misc::Wallet>,
-    pub metadata: Option<serde_json::Value>, // json object contains the actual info of an object which is being carried by this neuron
-    pub internal_executor: InternalExecutor<Event>, // sender and receiver, potentiall we can use the actor msg sending pattern
-    pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,
-    pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,
+    pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
+    pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
+    pub internal_executor: InternalExecutor<Event>, /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */
+    pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>, /* -- all neuron atomic transactions -- */
+    pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>, /* -- an internal lighthread worker -- */
+    pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>, /* -- internal locker -- */
+    pub signal: std::sync::Arc<std::sync::Condvar>, /* -- the condition variable signal for this neuron -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
@@ -423,25 +422,28 @@ impl InternalExecutor<Event>{
 impl NeuronActor{
 
     /* -------------------------------------------------------------
-        since futures are object safe trait hence they have all traits 
+        since futures are object safe traits hence they have all traits 
         features we can pass them to the functions in an static or dynamic 
-        dispatch way using Arc or Box or impl Future or event as the return 
-        type of a closure trait method, so a future task would be:
+        dispatch way using Arc or Box or impl Future or even as the return 
+        type of a closure trait method, so a future task would be one of 
+        the following types: 
 
-            1) std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>
-            2) Arc<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
-            3) Box<dyn Fn() -> R + Send + Sync + 'static> where R: std::future::Future<Output = ()> + Send + Sync + 'static
-            4) Arc<Mutex<dyn Fn() -> R + Send + Sync + 'static>> where R: std::future::Future<Output = ()> + Send + Sync + 'static
-            5) F: std::future::Future<Output = ()> + Send + Sync + 'static
-            6) param: impl std::future::Future<Output = ()> + Send + Sync + 'static
+            1) Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
+            2) Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
+            3) Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
+            4) Box<dyn Fn() -> Pin<Box<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
+            5) Arc<Mutex<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>> where R: Future<Output = ()> + Send + Sync + 'static
+            6) job: F where F: Future<Output = ()> + Send + Sync + 'static
+            7) param: impl Future<Output = ()> + Send + Sync + 'static
 
-        NOTE: mutex requires the type to be Sized and since traits are 
-        not sized at compile time we should annotate them with dyn keyword
-        and put them behind a pointer with valid lifetime or Box and Arc smart pointers
-        so for the mutexed_job we must wrap the whole mutex inside an Arc or annotate it
-        with something like &'valid tokio::sync::Mutex<dyn Fn() -> R + Send + Sync + 'static>
+        NOTE: mutex requires the type to be Sized and since traits are not sized at 
+        compile time we should annotate them with dyn keyword and put them behind a 
+        pointer with a valid lifetime like Box or Arc smart pointers so for the 
+        mutexed_job we must wrap the whole mutex inside an Arc or annotate it with 
+        something like &'valid Mutex<dyn Fn() -> R + Send + Sync + 'static>
         the reason is that Mutex is a guard and not an smart pointer which can hanlde 
-        an automatic pointer with lifetime 
+        an automatic pointer with lifetime, using of this syntax however would be in 
+        a rare case when we want to mutate the closure!
     */
     // task is a closure that returns a future object 
     pub async fn runInterval<M, R, O>(&mut self, task: M, period: u64, retries: u8, timeout: u64)
@@ -477,101 +479,13 @@ impl NeuronActor{
             }
         });
     }
-    
-    // see EventLoop struct in src/playground/app.rs
-    // we'll call the callback after executing the event
-    pub async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
-        F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
-        (&mut self, streamer: &str, eventType: &str, callback: F) -> Self{
-
-        let get_internal_executor = self.clone().internal_executor;
-        let get_events = get_internal_executor.buffer.events.lock().await;
-        let cloned_get_internal_executor = get_internal_executor.clone();
-        let last_event = get_events.last().unwrap();
-
-        // in order to use * or deref mark on last_event the Copy trait must be implemented 
-        // for the type since the Copy is not implemented for heap data types thus we should 
-        // use clone() method on them to return the owned type.
-        let owned_las_event = last_event.clone();
-
-        match eventType{
-            "send" => {
-                
-                match streamer{
-                    "local" => {
-                        // sending in the background
-                        let first_token_last_event = owned_las_event.clone();
-                        
-                        // spawn an event for the executor, this would send the event into the channel
-                        // in the background lightweight thread
-                        tokio::spawn(async move{
-                            match cloned_get_internal_executor.spawn(first_token_last_event).await{
-                                Ok(this) => {
-                                    tokio::spawn(
-                                        callback(
-                                            owned_las_event.to_owned(), 
-                                            None
-                                        )
-                                    );
-                                },
-                                Err(e) => {
-                                    tokio::spawn(
-                                        callback(
-                                            owned_las_event.to_owned(), 
-                                            Some(StreamError::Sender(e.source().unwrap().to_string()))
-                                        )
-                                    );
-                                }
-                            }
-                        });
-
-                        self.clone()
-
-                    },
-                    "rmq" => {
-                        self.clone()
-                    },
-                    _ => {
-                        log::error!("unknown streamer!");
-                        self.clone()
-                    }
-                }
-            },
-            "receive" => {
-                
-                match streamer{
-                    "local" => {
-                        // running the eventloop to receive event streams from the channel 
-                        // this would be done in the background lightweight thread, we've passed
-                        // the callback to execute it in there
-                        tokio::spawn(async move{
-                            cloned_get_internal_executor.run(callback).await;
-                        });
-                        self.clone()
-                    },
-                    "rmq" => {
-                        self.clone()
-                    },
-                    _ => {
-                        log::error!("unknown streamer!");
-                        self.clone()
-                    }
-                }
-
-            },
-            _ => {
-                log::info!("unknown event type!");
-                self.clone()
-            }
-        }
-
-    }
 
     pub async fn publishToRmq(&self, data: &str, exchange: &str, routing_key: &str, 
         exchange_type: &str, secureCellConfig: SecureCellConfig, redisUniqueKey: &str){
 
             // TODO
             // use self.on() method
+            // also handle rmq rpc and p2p in here 
 
     }
 
@@ -583,11 +497,12 @@ impl NeuronActor{
     ){
 
             // this can be used for sending the received message to some ws server 
-            let internal_executor = self.clone().internal_executor;
+            let internal_executor = &self.internal_executor;
 
             // TODO
             // also send consumed data to the streamer channel of the internal executor 
             // use self.on() method
+            // also handle rmq rpc and p2p in here 
     }
 
     // if we can acquire the lock means the lock is free
@@ -666,7 +581,12 @@ impl NeuronActor{
         type IoJob3 = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
         type Tasks = Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
         type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
-
+        // dependency injection and dynamic dispatching is done by:
+        // Arc::pin(async move{}) or Box::pin(async move{})
+        // Pin<Arc<dyn Trait>> or Pin<Box<dyn Trait>>
+        // R: Future<Output=()> + Send + Sync + 'static
+        use std::{pin::Pin, sync::Arc};
+        type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>;
 
         // use effect: interval task execution but use chan to fill the data
         // use effect takes an async closure
@@ -703,8 +623,8 @@ impl NeuronActor{
         
         /* the error relates to compiling traits with static dispatch approach:
         mismatched types
-            expected `async` block `{async block@ovmlib/src/neuron.rs:661:27: 661:37}`
-            found `async` block `{async block@ovmlib/src/neuron.rs:661:41: 661:51}`
+            expected `async` block `{async block@stemlib/src/neuron.rs:661:27: 661:37}`
+            found `async` block `{async block@stemlib/src/neuron.rs:661:41: 661:51}`
             no two async blocks, even if identical, have the same type
             consider pinning your async block and casting it to a trait object 
         */
@@ -776,14 +696,6 @@ impl Actor for NeuronActor{
     }
 }
 
-impl ActixMessageHandler<SendRpcMessage> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: SendRpcMessage, ctx: &mut Self::Context) -> Self::Result {
-        
-        ()
-    }
-}
-
 /* ********************************************************************************* */
 /* ***************************** PRODUCE NOTIF HANDLER ***************************** */
 /* ********************************************************************************* */
@@ -802,7 +714,6 @@ impl ActixMessageHandler<PublishNotifToRmq> for NeuronActor{
                 encryptionConfig,
 
             } = msg.clone();
-        
         
         let mut stringData = serde_json::to_string(&notif_data).unwrap();
         let mut scc = SecureCellConfig::default();
@@ -923,5 +834,29 @@ impl ActixMessageHandler<BanCry> for NeuronActor{
     type Result = ();
     fn handle(&mut self, msg: BanCry, ctx: &mut Self::Context) -> Self::Result{
 
+        let BanCry { cmd } = msg;
+        match cmd.as_str(){
+            "executeTransaction" => {
+
+            },
+            _ => {
+
+            }
+        }
+        
+    }
+}
+
+impl Drop for NeuronActor{
+    fn drop(&mut self) {
+        let this = self.clone();
+        tokio::spawn(async move{
+            let getInternalWorker = &this.internal_worker;
+            if getInternalWorker.is_some(){
+                let mut internalWorker = getInternalWorker.clone().unwrap();
+                let mut unloackedInternalWorker = internalWorker.lock().await;
+                (*unloackedInternalWorker).thread.abort(); // abort the thread handler, the tokio threads are future based thread so we can easily abort them
+            }
+        });
     }
 }
