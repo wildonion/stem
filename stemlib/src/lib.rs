@@ -23,3 +23,7 @@ mod neuron;
 mod tx;
 mod interfaces;
 mod dsl;
+
+pub async fn upAndRun(){
+    log::info!("up and running from stemlib...");
+}
