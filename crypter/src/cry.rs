@@ -18,9 +18,9 @@ pub trait Crypter{
 impl Crypter for String{
     fn decrypt(&mut self, secure_cell_config: &mut SecureCellConfig){
        
-        // encrypt convert the raw string into hex encrypted thus
-        // calling decrypt method on the hex string returns the 
-        // raw string
+        // encrypt() convert the raw string into hex encrypted thus
+        // calling decrypt() method on the hex string should return 
+        // the raw string
         secure_cell_config.data = hex::decode(&self).unwrap();
         match Wallet::secure_cell_decrypt(secure_cell_config){ // passing the redis secure_cell_config instance
             Ok(data) => {
@@ -89,7 +89,7 @@ pub fn gen_random_chars_no_special(size: u32) -> String{
 pub fn get_random_elem<T: Default + Clone + Send + Sync + Sized>(vec: Vec<T>) -> T{
     // making a high entropy seed to create the rng
     let random_chars = gen_random_chars(10);
-    let high_entropy_seed = wallexerr::misc::Wallet::generate_sha256_from(&random_chars); // generating a 256 bits hash
+    let high_entropy_seed = wallexerr::misc::Wallet::generate_sha256_from(&random_chars); // generating a 256 bits or 32 bytes hash
     let mut crypto_seeded_rng = rand_chacha::ChaCha20Rng::from_seed(high_entropy_seed);
 
     // to_owned() convert the pointer to the owned type by cloning it

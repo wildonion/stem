@@ -1,5 +1,5 @@
 [package]
-name = "stemlib"
+name = "stemplugins"
 version = "0.1.0"
 edition = "2021"
 
@@ -39,12 +39,9 @@ indexmap = "2.4"
 
 
 [lib]
-# libraries don't have entry points, you can't run them,they're used for functionality sharing like binding a .wasm into js codes
-# we need lib.rs and crate type of cdylib for none binary like .wasm, .so, .dylib and .dll files or for tests
-crate-type = ["cdylib", "rlib"]
-path = "src/lib.rs"
-name = "stemlib"
-
+path = "src/plugins.rs"
+name = "stemplugins"
+proc-macro = true
 
 [profile.release]
 panic = "abort"

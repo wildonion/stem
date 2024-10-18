@@ -93,10 +93,12 @@
 */
 
 use std::error::Error;
+use std::future::Future;
 use std::process::Output;
-
+use actor::workerthreadpool::sync::NoneAsyncThreadPool;
 use task::Task;
 use task::TaskStatus;
+use tokio::spawn;
 use tokio::sync::TryLockError;
 use tokio::sync::MutexGuard;
 use tokio::task::JoinHandle;
@@ -104,6 +106,8 @@ use tx::Transaction;
 use wallexerr::misc::SecureCellConfig;
 use interfaces::{Crypter};
 use crate::*;
+
+
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct CryptoConfig{
@@ -252,7 +256,8 @@ pub struct UpdateState{
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
 pub struct BanCry{
-    pub cmd: String
+    pub cmd: String,
+    pub tx: Transaction,
 }
 
 
@@ -317,9 +322,7 @@ pub struct ConsumeNotifFromRmq{ // we'll create a channel then start consuming b
     */
     pub routing_key: String, // patterns for this queue to tell exchange what messages this queue is interested in
     pub tag: String,
-    pub redis_cache_exp: u64,
     pub local_spawn: bool, // either spawn in actor context or tokio threadpool
-    pub store_in_db: bool,
     pub decryptionConfig: Option<CryptoConfig>
 }
 
@@ -343,22 +346,22 @@ pub struct NeuronActor{
     pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>, /* -- all neuron atomic transactions -- */
     pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>, /* -- an internal lighthread worker -- */
     pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>, /* -- internal locker -- */
+    pub internal_none_async_threadpool: std::sync::Arc<Option<NoneAsyncThreadPool>>, /* -- internal none async threadpool -- */
     pub signal: std::sync::Arc<std::sync::Condvar>, /* -- the condition variable signal for this neuron -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
 
-
 impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S> Runner<J, S>{
     pub async fn execute(&mut self){
-
+        let job = &self.job;
     }
 }
 
 impl Event{
 
     pub async fn process(&mut self){
-
+        
     }
 
 }
@@ -408,6 +411,8 @@ impl InternalExecutor<Event>{
                 tokio::spawn(async move{
                     event_for_first_tokio.clone().process().await;
                 });
+
+                // executing the eventloop in the background
                 tokio::spawn(async move{
                     cloned_callback(cloned_event, None).await; // calling callback with the passed in received event
                 });
@@ -489,10 +494,9 @@ impl NeuronActor{
 
     }
 
-    pub async fn consumeFromRmq(&self, exp_seconds: u64,
+    pub async fn consumeFromRmq(&self,
         consumer_tag: &str, queue: &str, 
         binding_key: &str, exchange: &str,
-        store_in_db: bool,
         decryptionConfig: Option<CryptoConfig>
     ){
 
@@ -502,7 +506,8 @@ impl NeuronActor{
             // TODO
             // also send consumed data to the streamer channel of the internal executor 
             // use self.on() method
-            // also handle rmq rpc and p2p in here 
+            // also handle rmq rpc and p2p in here
+            
     }
 
     // if we can acquire the lock means the lock is free
@@ -535,7 +540,7 @@ impl NeuronActor{
     }
 
     pub async fn executekMeIntervally(&mut self){
-        log::info!("execute...");
+        log::info!("executing...");
     }
 
     /* -------------------------------------------------------
@@ -581,12 +586,26 @@ impl NeuronActor{
         type IoJob3 = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
         type Tasks = Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
         type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
+        type Task1 = std::sync::Arc<dyn FnOnce() 
+            -> std::pin::Pin<std::sync::Arc<dyn Future<Output = ()> + Send + Sync + 'static>>>;
         // dependency injection and dynamic dispatching is done by:
         // Arc::pin(async move{}) or Box::pin(async move{})
         // Pin<Arc<dyn Trait>> or Pin<Box<dyn Trait>>
         // R: Future<Output=()> + Send + Sync + 'static
         use std::{pin::Pin, sync::Arc};
-        type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>;
+        type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>; // an arced closure trait which returns an arced pinned future trait object
+
+        async fn push<C, R>(topic: &str, event: Event, payload: &[u8], c: C) where 
+        C: Fn() -> R + Send + Sync + 'static,
+        R: Future<Output = ()> + Send + Sync + 'static{
+            let arcedCallback = Arc::new(c);
+            // spawn the task in the background thread, don't 
+            // await on it let the task spawned into the tokio 
+            // thread gets awaited by the tokio ligh thread
+            spawn(async move{
+                arcedCallback().await;
+            });
+        }
 
         // use effect: interval task execution but use chan to fill the data
         // use effect takes an async closure
@@ -595,7 +614,7 @@ impl NeuronActor{
             F: Fn() -> R + Send + Sync + 'static,
             R: std::future::Future<Output = ()> + Send + Sync + 'static;
 
-        let router = String::from("/login"); // the effect on variable
+        let router = String::from("/login"); // this variable gets effected
         self.runInterval(move || {
             let clonedRouter = router.clone();
             let clonedRouter1 = router.clone();
@@ -774,9 +793,7 @@ impl ActixMessageHandler<ConsumeNotifFromRmq> for NeuronActor{
                 tag,
                 exchange_name,
                 routing_key,
-                redis_cache_exp,
                 local_spawn,
-                store_in_db,
                 decryptionConfig
 
             } = msg.clone(); // the unpacking pattern is always matched so if let ... is useless
@@ -789,12 +806,10 @@ impl ActixMessageHandler<ConsumeNotifFromRmq> for NeuronActor{
         if local_spawn{
             async move{
                 this.consumeFromRmq(
-                    redis_cache_exp, 
                     &tag, 
                     &queue, 
                     &routing_key, 
                     &exchange_name,
-                    store_in_db,
                     decryptionConfig
                 ).await;
             }
@@ -803,12 +818,10 @@ impl ActixMessageHandler<ConsumeNotifFromRmq> for NeuronActor{
         } else{ // spawn the future in the background into the tokio lightweight thread
             tokio::spawn(async move{
                 this.consumeFromRmq(
-                    redis_cache_exp, 
                     &tag, 
                     &queue, 
                     &routing_key, 
                     &exchange_name,
-                    store_in_db,
                     decryptionConfig
                 ).await;
             });
@@ -834,13 +847,33 @@ impl ActixMessageHandler<BanCry> for NeuronActor{
     type Result = ();
     fn handle(&mut self, msg: BanCry, ctx: &mut Self::Context) -> Self::Result{
 
-        let BanCry { cmd } = msg;
+        let BanCry { cmd, tx } = msg;
         match cmd.as_str(){
             "executeTransaction" => {
-
+                let this = self.clone();
+                let task = async move{
+                    let getNeuronTransactions = &this.transactions;
+                    if getNeuronTransactions.is_some(){
+                        let neuronTransactions = getNeuronTransactions.as_ref().unwrap();
+                        let mut lockedNeuronTransactions = neuronTransactions.lock().await;
+                        let tx = Transaction::new(
+                            tx,
+                            Uuid::new_v4().to_string().as_str(), 
+                            100.0, 
+                            "0x01", 
+                            "0x00", 
+                            2.5, 
+                            String::from("some data").as_bytes()
+                        ).await;
+                        (*lockedNeuronTransactions).push(tx);
+                    } else{
+                        log::error!("[!] actor has no transactions");
+                    }
+                };
+                spawn(task); // spawn the task of pushing tx into the neuron transactions in the background thread
             },
             _ => {
-
+                log::error!("[!] invalid command for bancry!");
             }
         }
         

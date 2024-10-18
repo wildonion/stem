@@ -83,7 +83,7 @@
                 → use trait for polymorphism like wallet payment portal
                 → pass Box<dyn AnyType in struct for dep injection and dynamic dispatch
                 → use Box::pin() to pin the future trait objects into the ram
-                → use onion, macrocosm and features to create plugins
+                → use onion and features to create plugins
                 → dependency injection using Box<dyn AnyType>
                 → passing trait to methods or struct using dyn as dynamic dispatch and impl Trait as static dispatch
                 → Traits for static dynamic dispatch, polymorphism, dynamic typing with Any and dependency injection, future traits with box pin

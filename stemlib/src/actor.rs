@@ -81,7 +81,7 @@
     }
 
     let mut tokio_async_worker = AsyncWorker::new();
-    let mut native_sync_worker = NativeSyncWorker::spawn(n_workers);
+    let mut native_sync_worker = NoneAsyncThreadPool::spawn(n_workers);
     let mut rayon_sync_worker  = RayonSyncWorker::new();
     let (sender, receiver) = std_mpsc::channel::<u8>();
     let cloned_sender = sender.clone();
@@ -314,6 +314,8 @@ pub mod workerthreadpool{
 
         type Job = Box<dyn FnOnce() + Send + 'static>; // a job is of type closure which must be Send and static across all threads inside a Box on the heap
 
+        type Task = std::sync::Arc<dyn FnOnce() 
+            -> std::pin::Pin<std::sync::Arc<dyn Future<Output = ()> + Send + Sync + 'static>>>;
 
         //// there is no guaranteed order of execution for spawns, given that other threads 
         //// may steal tasks at any time, however, they are generally prioritized in a LIFO order 
@@ -396,7 +398,7 @@ pub mod workerthreadpool{
             thread: Option<thread::JoinHandle<()>>, //// thread is of type JoinHandld struct which return nothing or ()
         }
 
-        pub struct NativeSyncWorker {
+        pub struct NoneAsyncThreadPool {
             workers: Vec<Worker>,
             sender: std_mpsc::Sender<Message>, // all sends will be asynchronous and they never block
         }
@@ -406,9 +408,9 @@ pub mod workerthreadpool{
             Terminate,
         }
 
-        impl NativeSyncWorker{
+        impl NoneAsyncThreadPool{
             
-            pub fn spawn(size: usize) -> NativeSyncWorker {
+            pub fn spawn(size: usize) -> NoneAsyncThreadPool {
                 assert!(size > 0);
                 let (sender, receiver) = std_mpsc::channel();
                 let receiver = Arc::new(Mutex::new(receiver)); // reading and writing from an IO must be mutable thus the receiver must be inside a Mutex cause data inside Arc can't be borrows as mutable since the receiver read operation is a mutable process
@@ -416,7 +418,7 @@ pub mod workerthreadpool{
                 for _ in 0..size { // since the receiver is not bounded to trait Clone we must clone it using Arc in each iteration cause we want to share it between multiple threads to get what the sender has sent 
                     workers.push(Worker::new(Uuid::new_v4(), Arc::clone(&receiver)));
                 }
-                NativeSyncWorker{workers, sender}
+                NoneAsyncThreadPool{workers, sender}
             }
 
             pub fn execute<F>(&self, f: F) where F: FnOnce() + Send + 'static { // calling this method means send the incoming task from the process through the mpsc sender to down side of the channel in order to block a free thread using the receiver on locking the mutex
@@ -425,8 +427,8 @@ pub mod workerthreadpool{
             }
         }
 
-        impl Drop for NativeSyncWorker{ // shutting down all threads on ctrl + c by dropping all of them
-            fn drop(&mut self) { // destructor for NativeSyncWorker struct 
+        impl Drop for NoneAsyncThreadPool{ // shutting down all threads on ctrl + c by dropping all of them
+            fn drop(&mut self) { // destructor for NoneAsyncThreadPool struct 
                 info!("Sending terminate message to all workers.");
                 for _ in &self.workers {
                     self.sender.send(Message::Terminate).unwrap();

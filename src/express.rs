@@ -11,7 +11,6 @@ use std::{os::unix::thread, pin::pin, process::Output, sync::{mpsc, Arc}};
 
 
 
-
 #[derive(Clone)]
 struct Express{
     pub router: std::sync::Arc<Router>, // the building blocks of all apis in salvo
@@ -57,8 +56,8 @@ impl Express{
     // every api in salvo must be bounded to salvo Handler trait
     // every middleware in salvo is an api handler which calles before all apis
     pub fn post<C, M, R>(&mut self, path: &str, middlewares: &[M], callback: C) where 
-        M: Send + Sync + Clone + 'static + Handler, // structure middelware
-        C: Send + Sync + 'static + Handler, // structure middelware
+        M: Send + Sync + Clone + 'static + salvo::Handler, // structure middelware
+        C: Send + Sync + 'static + salvo::Handler, // structure middelware
         R: std::future::Future<Output = ()>{
 
             let mut hoopRouters = middlewares.to_vec()
@@ -84,7 +83,7 @@ impl Express{
 async fn buildServer(){
 
     // api or middleware handlers
-    #[handler]
+    #[handler] // this trait convert functions into structure who implements Handler trait 
     pub async fn ensureAdminAccess(){}
     #[handler]
     pub async fn ensureUserAccess(){}
@@ -94,7 +93,7 @@ async fn buildServer(){
     // trait we can box them as an instance of the struct and collect them through a
     // single interface using the dynamic dispatch and dependency injection approach.
     let handlers: Vec<Box<dyn Handler>> = vec![Box::new(ensureAdminAccess), Box::new(ensureUserAccess)];
- 
+
     post!(
         "/user",
         (ensureAdminAccess, ensureUserAccess),

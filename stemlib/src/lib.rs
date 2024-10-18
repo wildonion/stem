@@ -12,6 +12,7 @@ use actix::Handler as ActixMessageHandler;
 use uuid::Uuid;
 use std::sync::atomic::AtomicU64;
 use interfaces::OnionStream;
+use crate::dsl::*;
 
 
 const APP_NAME: &str = "STEM";
@@ -23,6 +24,8 @@ mod neuron;
 mod tx;
 mod interfaces;
 mod dsl;
+mod test;
+
 
 pub async fn upAndRun(){
     log::info!("up and running from stemlib...");

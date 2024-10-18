@@ -169,16 +169,19 @@ impl Transaction{
         
     }
 
-    pub fn on_error<E>(e: E) where E: FnMut() -> () + Send + Sync + 'static{ // error is of type a closure trait
-
+    pub fn on_error<E, R>(e: E) where E: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    { // error is of type a closure trait
+        let arced_e = Arc::new(e);
     }
 
-    pub fn on_success<S>(s: S) where S: FnMut() -> () + Send + Sync + 'static{ // success is of type a closure trait
-        
+    pub fn on_success<S, R>(s: S) where S: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    { // success is of type a closure trait
+        let arced_s = Arc::new(s);
     }
 
-    pub fn on_reject<R>(r: R) where R: FnMut() -> () + Send + Sync + 'static{ // reject is of type a closure trait
-        
+    pub fn on_reject<J, R>(r: J) where J: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    { // reject is of type a closure trait
+        let arced_r = Arc::new(r);
     }
 
     pub fn queueTx(&mut self){

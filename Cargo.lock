@@ -279,9 +279,9 @@ dependencies = [
 
 [[package]]
 name = "aes256ctr_poly1305aes"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de2926121f4e92f1682d993563f9128b65978dab1fb3879f8f533e97c0697483"
+checksum = "c12ce6f8614befd457e18cc05cba86277779cd61a5f94a71368576cef2e6c3c4"
 dependencies = [
  "aead",
  "aes",
@@ -806,6 +806,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "bitcoin-io"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "340e09e8399c7bd8912f495af6aa58bea0c9214773417ffaa8f6460f93aaee56"
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb18c03d0db0247e147a21a6faafd5a7eb851c743db062de72018b6b7e8e4d16"
+dependencies = [
+ "bitcoin-io",
+ "hex-conservative",
 ]
 
 [[package]]
@@ -1416,7 +1432,7 @@ dependencies = [
  "rand_chacha",
  "ring",
  "rust-argon2",
- "secp256k1 0.29.1",
+ "secp256k1 0.30.0",
  "serde",
  "serde_json",
  "sha2 0.10.8",
@@ -2344,6 +2360,15 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-conservative"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5313b072ce3c597065a808dbf612c4c8e8590bdbf8b579508bf7a762c5eae6cd"
+dependencies = [
+ "arrayvec 0.7.4",
+]
 
 [[package]]
 name = "hmac"
@@ -4900,6 +4925,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "secp256k1"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b50c5943d326858130af85e049f2661ba3c78b26589b8ab98e65e80ae44a1252"
+dependencies = [
+ "bitcoin_hashes",
+ "rand",
+ "secp256k1-sys 0.10.1",
+]
+
+[[package]]
 name = "secp256k1-sys"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5349,6 +5385,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "stemlib",
+ "stemplugins",
  "themis",
  "thiserror",
  "tokio",
@@ -5369,6 +5406,43 @@ dependencies = [
  "actix-web",
  "bytes",
  "chrono",
+ "deadpool-lapin",
+ "dotenv",
+ "env_logger 0.10.2",
+ "futures",
+ "futures-util",
+ "hex",
+ "indexmap 2.5.0",
+ "is_type",
+ "log",
+ "log4rs",
+ "once_cell",
+ "pretty_env_logger 0.4.0",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "syn 2.0.53",
+ "tokio",
+ "tokio-cron-scheduler",
+ "uuid",
+ "wallexerr",
+ "wasmer 4.4.0",
+ "wasmer-wasi",
+]
+
+[[package]]
+name = "stemplugins"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-web",
+ "bytes",
+ "chrono",
+ "deadpool-lapin",
  "dotenv",
  "env_logger 0.10.2",
  "futures",
