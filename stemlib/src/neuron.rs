@@ -339,7 +339,16 @@ pub struct Contract{
 }
 
 #[derive(Clone)]
+pub struct RmqConfig{
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Clone)]
 pub struct NeuronActor{
+    pub rmqConfig: Option<RmqConfig>,
     pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
     pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
     pub internal_executor: InternalExecutor<Event>, /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */
@@ -483,6 +492,7 @@ impl NeuronActor{
                 attempts += 1;
             }
         });
+
     }
 
     pub async fn publishToRmq(&self, data: &str, exchange: &str, routing_key: &str, 

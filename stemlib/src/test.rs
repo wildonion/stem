@@ -1,8 +1,11 @@
 
 
 
+use neuron::RmqConfig;
 use crate::*;
 use crate::dsl::*;
+
+
 
 #[tokio::test]
 pub async fn upAndRun(){
@@ -21,6 +24,12 @@ pub async fn upAndRun(){
         internal_none_async_threadpool: Arc::new(None),
         signal: std::sync::Arc::new(std::sync::Condvar::new()),
         contract: None,
+        rmqConfig: Some(RmqConfig{ 
+            host: String::from("0.0.0.0"), 
+            port: 5672, 
+            username: String::from("rabbitmq"), 
+            password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
+        }),
         state: 0 // this can be mutated by sending the update state message to the actor
     };
 
@@ -69,6 +78,19 @@ pub async fn upAndRun(){
 
             // do whatever you want to do with sent task:
             // please shiaf the sent task!
+            // ...
+
+        }).await
+        .on("rmq", "receive", move |event, error| async move{
+            
+            if error.is_some(){
+                println!("an error accoured during receiving: {:?}", error.unwrap());
+                return;
+            }
+
+            println!("received task: {:?}", event);
+
+            // store the event in db or cache on redis
             // ...
 
         }).await;
