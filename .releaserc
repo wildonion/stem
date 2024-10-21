@@ -3,27 +3,27 @@
     "main",
     {
       "name": "dev",
-      "prerelease": "dev",
-      "tag_format": false
+      "prerelease": "dev"
+    },
+    {
+      "name": "release",
+      "prerelease": "rc"
     },
     {
       "name": "/^\\d+-release(-\\d+)?$/",
-      "prerelease": "rc",
-      "tag_format": false
+      "prerelease": "rc"
     },
     {
       "name": "/^\\d+-release$/",
-      "prerelease": "rc",
-      "tag_format": false
+      "prerelease": "rc"
     },
     {
       "name": "/^release-\\d+\\.\\d+\\.\\d+$/",
-      "prerelease": "rc",
-      "tag_format": false
+      "prerelease": "rc"
     }
   ],
-  "version_variable": "pyproject.toml:version",
-  "commit_message": "chore(release): {version} [skip ci]",
+  "version_variable": "Cargo.toml:version",
+  "commit_message": "bump: {version} [skip ci]",
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
@@ -36,8 +36,8 @@
     [
       "@semantic-release/git",
       {
-        "assets": ["pyproject.toml", "Dockerfile"],
-        "message": "chore(release): ${nextRelease.version} [skip ci]"
+        "assets": ["Cargo.toml", "Dockerfile"],
+        "message": "bump: ${nextRelease.version} [skip ci]"
       }
     ]
   ]

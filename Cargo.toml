@@ -1,19 +1,20 @@
 [package]
-name = "ovm"
-version = "0.1.0"
+name = "stem"
+version = "0.2.0-dev.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
 members = [ 
-  "ovmlib" # ovmlib has separate Cargo.toml
+  "stemlib" # stemlib has separate Cargo.toml
 ]
 
 [dependencies]
 crypter = { path = "crypter", name = "crypter" }
-ovmlib = { path = "ovmlib", name = "ovmlib"}
-capnp-rpc = "0.19.4"
+stemlib = { path = "stemlib", name = "stemlib"}
+stemplugins = { path = "stemplugins", name = "stemplugins"}
+salvo = { version = "0.73.0", features = ["full"] }
 actix = "0.13.5"
 actix-web = "4"
 tokio = { version = "1", features = ["full"] }
@@ -29,10 +30,9 @@ is_type = "0.2.1"
 rayon = "1.10.0"
 rand = "0.8"
 rslock = "0.4.0"
-tonic = "0.12"
 futures = "0.3"
 deadpool-lapin = { version = "0.12.1", features = ["serde", "rt_tokio_1"] }
-deadpool-redis = "0.16.0"
+deadpool-redis = "0.18.0"
 futures-util = "0.3"
 once_cell = "1"
 uuid = { version = "1", features = ["serde", "v4"] }
@@ -49,31 +49,18 @@ hex = "0.4"
 clap = { version = "4.5.17", features = ["derive"] }
 thiserror = "1.0"
 percentage = "0.1.0"
-prost = "0.13"
-prost-types = "0.13"
 themis = "0.14.0"
 base58 = "0.2.0"
 rand_chacha = "0.3"
 chacha20 = "0.9"
 indexmap = "2.4"
-wasmer = "4.1.1"
+wasmer = "4.4.0"
 wasmer-wasi = "3.1.1"
 
-[build-dependencies]
-tonic-build = "0.10.2"
-prost-build = "0.13"
-
-[dependencies.capnp]
-version = "0.19.0"
-
 [[bin]]
-name = "ovm"
+name = "stem"
 path = "src/main.rs"
 
 [[bin]]
 name = "playground"
 path = "src/playground/app.rs"
-
-[[bin]]
-name = "hooper"
-path = "hooper/app.rs"

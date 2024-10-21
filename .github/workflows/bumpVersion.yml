@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      
+
       - name: Install Python
         run: |
           sudo apt-get update
@@ -36,13 +36,43 @@ jobs:
           git config --global user.email "abarmardeatashyne@gmail.com"
           git config --global user.name "wildonion"
 
-      # Install dependencies (semantic-release and plugins)
+      # Fetch full history and tags
+      - name: Fetch Full Git History
+        run: |
+          git fetch --all --tags --prune
+
+      # Delete local tags to ensure no cached tags remain
+      - name: Delete Local Tags
+        run: git tag -d $(git tag) || true
+
+      # Refetch remote tags after deletion
+      - name: Refetch Remote Tags
+        run: git fetch --tags
+
+      # Extract version from Cargo.toml and store it in GITHUB_ENV
+      - name: Extract Version from Cargo.toml
+        id: extract_version
+        run: |
+          package_version=$(grep -Po '(?<=^version = ").*(?=")' Cargo.toml)
+          echo "PACKAGE_VERSION=$package_version" >> $GITHUB_ENV  # Store in GITHUB_ENV
+
+      # Check if any tags exist and create a tag if none exist
+      - name: Check and Create Tag if None Exist
+        run: |
+          if [ -z "$(git tag)" ]; then
+            echo "No tags found, creating initial tag from Cargo.toml version."
+            git tag "v${{ env.PACKAGE_VERSION }}"  # Use the PACKAGE_VERSION stored in GITHUB_ENV
+            git push origin "v${{ env.PACKAGE_VERSION }}"
+          else
+            echo "Tags found, proceeding with semantic-release!"
+          fi
+
+      # Install semantic-release and the exec plugin
       - name: Install Dependencies
-        run: npm install semantic-release @semantic-release/exec @semantic-release/git @semantic-release/gitlab --save-dev
+        run: npm install semantic-release @semantic-release/exec @semantic-release/git @semantic-release/github --save-dev
 
       # Run Semantic Release with version bumping
       - name: Run Semantic Release
         run: npx semantic-release --ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub access token for authentication
-

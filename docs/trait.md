@@ -174,6 +174,22 @@ impl Interface for String{
 
 // using Interface for dynamic dispatch and dependency injections
 let deps: Vec<Box<dyn Interface>> = vec![Box::new(String::from("12923"))];
+
+// putting Interface in Box requires the trait be object safe 
+// thus we are not allowed to use GAT in here
+trait Interface{}
+struct Player{}
+impl Interface for String{}
+impl Interface for Player{}
+// access multiple types through a single interface using dynamic dispatch
+let object: Box<dyn Interface> = Box::new(String::from(""));
+let object1: Box<dyn Interface> = Box::new(Player{});
+// access multiple types through a single interface using static dispatch
+fn getParam(param: impl Interface){}
+getParam(Player{});
+getParam(String::from(""));
+
+
 ```
 
 The `Interface` trait is object-safe because it only has methods that take a reference (`&self`), and no methods are generic, involve ownership transfer or even returning `Self`.

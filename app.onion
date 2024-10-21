@@ -1,0 +1,21 @@
+neuron onion{
+    {
+        cells: 25,
+        shellcodeConfig: {
+            shellcode: 0xff24,
+            encryption: aes256
+        },
+        nestedData: {
+            key: value
+        }
+    }
+}
+
+local stream over onion: 
+    data -> | () => { 
+
+    })
+    ,
+    data <- | () => { 
+        
+    })
