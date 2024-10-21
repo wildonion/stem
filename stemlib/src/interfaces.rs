@@ -1,7 +1,7 @@
 
 
 use std::error::Error;
-use neuron::StreamError;
+use neuron::{AppService, StreamError};
 use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
 
@@ -76,11 +76,11 @@ impl OnionStream for NeuronActor{
     async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
             F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
             (&mut self, streamer: &str, eventType: &str, callback: F) -> Self::Model {
-        
+                
         // execute callback instead of directly caching and storing the received 
         // or sent events on redis or inside db , the process can be done inside 
         // the callback instead of handling it in here
-        
+
         let get_internal_executor = &self.clone().internal_executor;
         let get_events = get_internal_executor.buffer.events.lock().await;
         let cloned_get_internal_executor = get_internal_executor.clone();
@@ -92,6 +92,16 @@ impl OnionStream for NeuronActor{
         let owned_las_event = last_event.clone();
 
         match eventType{
+            "crash" => {
+
+                drop(self.clone());
+                self.clone()
+            },
+            "shutdown" => {
+                
+                drop(self.clone());
+                self.clone()
+            },
             "send" => {
                 
                 match streamer{
@@ -164,4 +174,20 @@ impl OnionStream for NeuronActor{
 
     }
     
+}
+
+pub trait ServiceExt: Send + Sync + 'static{
+    type Model;
+    fn run(&mut self);
+    fn status(&self);
+}
+
+impl ServiceExt for AppService{
+    type Model = NeuronActor;
+    fn run(&mut self) {
+        
+    }
+    fn status(&self) {
+        
+    }
 }

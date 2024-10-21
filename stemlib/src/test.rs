@@ -1,7 +1,7 @@
 
 
 
-use neuron::RmqConfig;
+use neuron::{AppService, RmqConfig};
 use crate::*;
 use crate::dsl::*;
 
@@ -9,6 +9,66 @@ use crate::dsl::*;
 
 #[tokio::test]
 pub async fn upAndRun(){
+
+    trait CastTome{}
+    struct Caster{}
+    impl CastTome for Caster{} // THIS MUST BE IMPLEMENTED
+    let caster = Caster{};
+    let castedTo = &caster as &dyn CastTome;
+    let dynamicDispatch: Box<dyn CastTome> = Box::new(Caster{});
+ 
+
+    // capturing lifetime means return the reference so the underlying 
+    // must be valid and live long enough 
+    trait Capture<T: ?Sized>{}
+    impl<T: ?Sized, U: ?Sized> Capture<T> for U{}
+    // this is the eventloop with a thread safe receiver
+    #[derive(Clone)]
+    struct JobQueueEventLoop<R, T: Fn() -> R + Send + Sync + 'static + Clone>
+    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
+        sender: tokio::sync::mpsc::Sender<Job<R, T>>,
+        receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Job<R, T>>>>
+    }
+
+    #[derive(Clone)]
+    struct Job<R, T: Fn() -> R + Send + Sync + 'static + Clone>
+    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
+        task: Arc<T>, // thread safe Task
+    }
+
+    // execute each received job of the queue inside a light thread 
+    impl<T: Fn() -> R + Send + Sync + 'static + Clone, 
+        R: std::future::Future<Output=()> + Send + Sync + 'static + Clone> 
+        JobQueueEventLoop<R, T>{
+        
+        pub async fn spawn(&mut self, job: Job<R, T>){
+            let sender = self.clone().sender;
+            spawn(async move{
+                sender.send(job).await;
+            });
+        }
+
+        // run the eventloop
+        pub async fn run(&mut self){
+
+            let this = self.clone();
+            spawn(async move{
+                let getReceiver = this.clone().receiver;
+                let mut receiver = getReceiver.lock().await;
+                // executing the eventloop in this light thread
+                while let Some(job) = receiver.recv().await{
+                    // executing the task inside a light thread
+                    let clonedJob = job.clone();
+                    spawn(async move{
+                        (clonedJob.task)().await;
+                    });
+                }
+
+            });
+        }
+
+    }
+
 
     let mut neuron = NeuronActor{
         wallet: Some(wallexerr::misc::Wallet::new_ed25519()),
@@ -30,6 +90,7 @@ pub async fn upAndRun(){
             username: String::from("rabbitmq"), 
             password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
         }),
+        dependency: std::sync::Arc::new(AppService{}),
         state: 0 // this can be mutated by sending the update state message to the actor
     };
 

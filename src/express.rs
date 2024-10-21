@@ -18,7 +18,7 @@ struct Express{
 
 #[derive(Clone)]
 struct AppCtx{
-
+    
 }
 
 impl Express{
@@ -60,6 +60,8 @@ impl Express{
         C: Send + Sync + 'static + salvo::Handler, // structure middelware
         R: std::future::Future<Output = ()>{
 
+            // every m implements the Handler trait, Handler trait allows 
+            // to have the method or function as api
             let mut hoopRouters = middlewares.to_vec()
                 .into_iter()
                 .map(|m| Router::new().hoop(m))
@@ -92,7 +94,10 @@ async fn buildServer(){
     // since each handler method would convert into a structure who impls the Handler
     // trait we can box them as an instance of the struct and collect them through a
     // single interface using the dynamic dispatch and dependency injection approach.
-    let handlers: Vec<Box<dyn Handler>> = vec![Box::new(ensureAdminAccess), Box::new(ensureUserAccess)];
+    let handlers: Vec<Box<dyn Handler>> = vec![
+        Box::new(ensureAdminAccess), 
+        Box::new(ensureUserAccess)
+    ];
 
     post!(
         "/user",

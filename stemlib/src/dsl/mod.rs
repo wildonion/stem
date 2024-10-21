@@ -8,8 +8,9 @@
         GPT tryout section in stem.spec, 
         desktop books for neuroscience and information theory
     features:
+        use a codec to encoder/decoder a neuron object 
         local talking with jobq chan eventloop receiver of mailbox of actor message sending logic
-        encrypted through crypter crate of remote talking through p2p and rpc rmq req-rep queue:
+        encrypted through crypter crate for remote talking through p2p and rpc rmq req-rep queue:
             p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
             p2p based like adnl file sharing, vpn like tor, ton and v2ray, firewall, gateway, loadbalancer, ingress listener like ngrok, proxy and dns over neuron actor
             p2p based like adnl onchain broker stock engine (find peers which are behind nat over wan)
@@ -81,6 +82,64 @@
 
 use crate::*;
 
+
+#[macro_export]
+macro_rules! post {
+    /* 
+        due to the static dispatch behaviour
+        the `mismatched types
+            expected fn item `fn() -> impl std::future::Future<Output = ()> {ensureAdminAccess}`
+            found fn item `fn() -> impl std::future::Future<Output = ()> {ensureUserAccess}`
+            distinct uses of `impl Trait` result in different opaque types` error
+        is caused by the fact that Rust's impl Trait 
+        creates an opaque type at compile time, meaning that every use of impl Trait in 
+        a different function signature produces a distinct type, even if the returned type 
+        is conceptually the same. When you try to collect these middlewares into a Vec, 
+        Rust sees each middleware function as returning a distinct type that's why all the
+        types inside the vector are not the same since async fn metho(){} uses impl Trait 
+        in the background, To solve this, we need to avoid trying to store the impl Trait 
+        directly in a Vec. Instead, we can use a trait object (Box<dyn Handler>) to store the 
+        middlewares in a homogeneous container (like a Vec).
+    */
+    (
+        $path:expr, ($($mid:ident),*), 
+        ($req:ident, $res:ident, 
+         $next:ident, $depot:ident) => async move $handler:block) => 
+    {
+        {
+            /* -------------------
+                every impl Trait or static dispatch would generate distinct type at
+                compile time hence we can't have a vector of impl Trait cause they
+                are different event they return a same result we should use dynamic 
+                dispatch approach to access multiple types through a single interface.
+                in case of trait objects we can box an instance of a type who impls 
+                the object safe trait we can collect them into a vector this approach 
+                would be used in dynamic dispatch and dep injection.
+                collecting the middlewares into a vector since we can't use impl Trait 
+                in a vector due to its static type behaviour, we can collect a vector 
+                of object safe traits which are injected dependencies. #[handler]
+                proc macro in salvo on top of functions convert them into structure
+                and impl Handler for the structure which allows us to collect a vector
+                of object safe traits by boxing the instance of the struct who impls 
+                the Handler trait, this is a dynamic dispatch and since the actual 
+                type will be specefied at runtime it's ok to have this instead of 
+                impl Trait which is static dispatch.
+            */
+            let middlewares: Vec<Box<dyn Handler>> = vec![$(Box::new($mid)),*];
+
+            #[handler]
+            async fn api(
+                $req: &mut Request, 
+                $res: &mut Response, 
+                $depot: &mut Depot, 
+                $next: &mut FlowCtrl
+            ){
+                $handler
+            }
+
+        }
+    };
+}
 
 // a neuron is an actor, an isolated state talks locally and remotely through 
 // eventloop jobq channel and rpc rmq + p2p
