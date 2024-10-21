@@ -1,3 +1,3 @@
 
 FROM rust:slim-bullseye as builder
-LABEL version="0.1.0"
+LABEL version="0.2.0-dev.1"
