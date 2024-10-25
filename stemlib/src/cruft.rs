@@ -4832,3 +4832,225 @@ pub fn init_vm(){
     };
 
 }
+
+
+pub async fn neuron_actor_cruft(){
+    // --------------------------------------------
+    // --------------------------------------------
+    trait Interface0{}
+    struct Job1{}
+    impl Interface0 for Job1{}
+
+    // arcing like boxing the object safe trait use for thread safe dynamic dispatching and dep injection
+    let interfaces: std::sync::Arc<dyn Interface0> = std::sync::Arc::new(Job1{});
+
+    // boxing trait for dynamic dispatching and dep ibjection
+    let interfaces1: Box<dyn Interface0> = Box::new(Job1{});
+
+    // arcing the mutexed object safe trait for dynamic dispatching, dep injection and mutating it safely
+    let interfaces2: std::sync::Arc<tokio::sync::Mutex<dyn Interface0>> = std::sync::Arc::new(tokio::sync::Mutex::new(Job1{}));
+
+    // we can't have the following cause in order to pin a type the size must be known
+    // at compile time thus pin can't have an object safe trait for pinning it at stable 
+    // position inside the ram without knowing the size 
+    // let interfaces3: std::sync::Arc<std::pin::Pin<dyn Interface>> = std::sync::Arc::pin(Job{});
+    // we can't pin a trait directly into the ram, instead we must pin their
+    // boxed or arced version like Arc<dyn Future> or Box<dyn Future> into 
+    // the ram: Arc::pin(async move{}) or Box::pin(async move{})
+
+    // job however is an async io task which is a future object
+    type IoJob<R> = Arc<dyn Fn() -> R + Send + Sync + 'static>;
+    type IoJob1<R> = std::pin::Pin<Arc<dyn Fn() -> R + Send + Sync + 'static>>;
+    type IoJob2 = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+    type IoJob3 = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+    type Tasks = Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+    type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
+    type Task1 = std::sync::Arc<dyn FnOnce() 
+        -> std::pin::Pin<std::sync::Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+    // dependency injection and dynamic dispatching is done by:
+    // Arc::pin(async move{}) or Box::pin(async move{})
+    // Pin<Arc<dyn Trait>> or Pin<Box<dyn Trait>>
+    // R: Future<Output=()> + Send + Sync + 'static
+    use std::{pin::Pin, sync::Arc};
+    type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>; // an arced closure trait which returns an arced pinned future trait object
+
+    async fn getTask(task: impl std::future::Future<Output = ()> + Send + Sync + 'static){
+        task.await;
+    }
+    
+    async fn push<C, R>(topic: &str, event: neuron::Event, payload: &[u8], c: C) where 
+        C: Fn() -> R + Send + Sync + 'static,
+        R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        let arcedCallback = Arc::new(c);
+        // spawn the task in the background thread, don't 
+        // await on it let the task spawned into the tokio 
+        // thread gets awaited by the tokio ligh thread
+        spawn(async move{
+            arcedCallback().await;
+        });
+    }
+
+    // use effect: interval task execution but use chan to fill the data
+    // use effect takes an async closure
+    struct useEffect<'valid, E, F, R>(pub F, &'valid [E]) where 
+        E: Send + Sync + 'static + Clone,
+        F: Fn() -> R + Send + Sync + 'static,
+        R: std::future::Future<Output = ()> + Send + Sync + 'static;
+
+    let router = String::from("/login"); // this variable gets effected
+    NeuronActor::na_runInterval(move || {
+        let clonedRouter = router.clone();
+        let clonedRouter1 = router.clone();
+        async move{
+            let state = useEffect(
+                move || {
+                    let clonedRouter1 = clonedRouter1.clone();
+                    async move{
+
+                        // some condition to affect on router
+                        // ...
+
+                        use tokio::{spawn, sync::mpsc::channel};
+                        let (tx, rx) = channel(100);
+                        spawn(async move{
+                            tx.send(clonedRouter1).await;
+                        });
+        
+                    }
+                }, &[clonedRouter] // effected variabel is clonedRouter
+            );
+        }
+    }, 10, 10, 0).await;
+
+    
+    /* the error relates to compiling traits with static dispatch approach:
+    mismatched types
+        expected `async` block `{async block@stemlib/src/neuron.rs:661:27: 661:37}`
+        found `async` block `{async block@stemlib/src/neuron.rs:661:41: 661:51}`
+        no two async blocks, even if identical, have the same type
+        consider pinning your async block and casting it to a trait object 
+    */
+    // let tasks1 = vec![async move{}, async move{}];
+    // vector of async tasks pinned into the ram, every async move{} considerred to be a different type
+    // which is kninda static dispatch or impl Future logic, boxing their pinned object into the ram 
+    // bypass this allows us to access multiple types through a single interface using dynamic dispatch.
+    // since the type in dynamic dispatch will be specified at runtime. 
+    let tasks: Tasks = vec![Box::pin(async move{}), Box::pin(async move{})]; // future as separate objects must gets pinned into the ram  
+    let futDependency: Task = Box::new(async move{});
+
+    trait CastTome{}
+    struct Caster{}
+    impl CastTome for Caster{} // THIS MUST BE IMPLEMENTED
+    let caster = Caster{};
+    let castedTo = &caster as &dyn CastTome;
+    let dynamicDispatch: Box<dyn CastTome> = Box::new(Caster{});
+ 
+
+    // capturing lifetime means return the reference so the underlying 
+    // must be valid and live long enough 
+    trait Capture<T: ?Sized>{}
+    impl<T: ?Sized, U: ?Sized> Capture<T> for U{}
+    // this is the eventloop with a thread safe receiver
+    #[derive(Clone)]
+    struct JobQueueEventLoop<R, T: Fn() -> R + Send + Sync + 'static + Clone>
+    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
+        sender: tokio::sync::mpsc::Sender<Job<R, T>>,
+        receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Job<R, T>>>>
+    }
+
+    #[derive(Clone)]
+    struct Job<R, T: Fn() -> R + Send + Sync + 'static + Clone>
+    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
+        task: Arc<T>, // thread safe Task
+    }
+
+    // execute each received job of the queue inside a light thread 
+    impl<T: Fn() -> R + Send + Sync + 'static + Clone, 
+        R: std::future::Future<Output=()> + Send + Sync + 'static + Clone> 
+        JobQueueEventLoop<R, T>{
+        
+        pub async fn spawn(&mut self, job: Job<R, T>){
+            let sender = self.clone().sender;
+            spawn(async move{
+                sender.send(job).await;
+            });
+        }
+
+        // run the eventloop
+        pub async fn run(&mut self){
+
+            let this = self.clone();
+            spawn(async move{
+                let getReceiver = this.clone().receiver;
+                let mut receiver = getReceiver.lock().await;
+                // executing the eventloop in this light thread
+                while let Some(job) = receiver.recv().await{
+                    // executing the task inside a light thread
+                    let clonedJob = job.clone();
+                    spawn(async move{
+                        (clonedJob.task)().await;
+                    });
+                }
+
+            });
+        }
+
+    }
+
+    // in custom error handler structu since the error can be any type hence 
+    // the error must be an object safe trait supports multiple types through 
+    // a single interface 
+    trait ServiceInterface{}
+    struct Module<'valid>(pub &'valid str, pub u16);
+    impl ServiceInterface for String{}
+    impl<'valid> ServiceInterface for Module<'valid>{}
+    
+    // access multiple types through a single interface
+    // using dependency injection we can 
+    let allTypes: Vec<Box<dyn ServiceInterface>> = vec![
+        Box::new(String::from("")), 
+        Box::new(Module::<'_>("0.0.0.0", 2344))
+    ];
+
+    async fn executeObserver(code: &str) -> Result<(), AppError>{
+        Ok(())
+    }
+
+    #[derive(Debug)]
+    pub struct AppError{
+        pub msg: String,
+        pub code: u16,
+        pub variant: AppErrorVariant
+    }
+    #[derive(Debug)]
+    pub enum AppErrorVariant{
+        Stream,
+        Io
+    }
+
+    pub trait Interface{
+        fn call(&self);
+    }
+    pub trait InterfaceCls{
+        fn call(&self);
+    }
+    impl Interface for fn(){
+        fn call(&self){
+            self();
+        }
+    }
+    impl<T> InterfaceCls for T where T: Fn(){
+        fn call(&self) {
+            self();
+        }
+    }
+    
+    fn getUser(){}
+    let func = getUser;
+    func.call();
+    let cls = ||{};
+    cls.call();
+
+    // --------------------------------------------
+    // --------------------------------------------
+}

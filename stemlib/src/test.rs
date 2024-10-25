@@ -1,98 +1,23 @@
 
 
 
-use neuron::{AppService, RmqConfig};
+use neuron::{AppService, Broadcast, InjectPayload, ReceiveP2pResponse, ReceiveRpcResponse, RmqConfig, SendP2pRequest, SendRpcRequest, ShutDown, StartP2pSwarEventLoop, Subscribe};
 use crate::*;
 use crate::dsl::*;
 
 
-
-#[tokio::test]
-pub async fn upAndRun(){
-
-    trait CastTome{}
-    struct Caster{}
-    impl CastTome for Caster{} // THIS MUST BE IMPLEMENTED
-    let caster = Caster{};
-    let castedTo = &caster as &dyn CastTome;
-    let dynamicDispatch: Box<dyn CastTome> = Box::new(Caster{});
- 
-
-    // capturing lifetime means return the reference so the underlying 
-    // must be valid and live long enough 
-    trait Capture<T: ?Sized>{}
-    impl<T: ?Sized, U: ?Sized> Capture<T> for U{}
-    // this is the eventloop with a thread safe receiver
-    #[derive(Clone)]
-    struct JobQueueEventLoop<R, T: Fn() -> R + Send + Sync + 'static + Clone>
-    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
-        sender: tokio::sync::mpsc::Sender<Job<R, T>>,
-        receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Job<R, T>>>>
-    }
-
-    #[derive(Clone)]
-    struct Job<R, T: Fn() -> R + Send + Sync + 'static + Clone>
-    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
-        task: Arc<T>, // thread safe Task
-    }
-
-    // execute each received job of the queue inside a light thread 
-    impl<T: Fn() -> R + Send + Sync + 'static + Clone, 
-        R: std::future::Future<Output=()> + Send + Sync + 'static + Clone> 
-        JobQueueEventLoop<R, T>{
-        
-        pub async fn spawn(&mut self, job: Job<R, T>){
-            let sender = self.clone().sender;
-            spawn(async move{
-                sender.send(job).await;
-            });
-        }
-
-        // run the eventloop
-        pub async fn run(&mut self){
-
-            let this = self.clone();
-            spawn(async move{
-                let getReceiver = this.clone().receiver;
-                let mut receiver = getReceiver.lock().await;
-                // executing the eventloop in this light thread
-                while let Some(job) = receiver.recv().await{
-                    // executing the task inside a light thread
-                    let clonedJob = job.clone();
-                    spawn(async move{
-                        (clonedJob.task)().await;
-                    });
-                }
-
-            });
-        }
-
-    }
-
-
-    let mut neuron = NeuronActor{
-        wallet: Some(wallexerr::misc::Wallet::new_ed25519()),
-        internal_executor: InternalExecutor::new(
-            Buffer{ events: std::sync::Arc::new(tokio::sync::Mutex::new(vec![
-                Event{ data: EventData::default(), status: EventStatus::Committed, offset: 0 }
-            ])), size: 100 }
-        ), 
-        metadata: None,
-        internal_worker: None,
-        transactions: None,
-        internal_locker: None,
-        internal_none_async_threadpool: Arc::new(None),
-        signal: std::sync::Arc::new(std::sync::Condvar::new()),
-        contract: None,
-        rmqConfig: Some(RmqConfig{ 
+pub async fn upAndRunStreaming(){
+    
+    let (mut neuron, synprot) = NeuronActor::new(100,
+        Some(RmqConfig{ 
             host: String::from("0.0.0.0"), 
             port: 5672, 
             username: String::from("rabbitmq"), 
             password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
         }),
-        dependency: std::sync::Arc::new(AppService{}),
-        state: 0 // this can be mutated by sending the update state message to the actor
-    };
+    ).await;
+
+    let getNeuronWallet = neuron.wallet.as_ref().unwrap();
 
     /* --------------------------
         execution thread process for solving future:
@@ -154,13 +79,138 @@ pub async fn upAndRun(){
             // store the event in db or cache on redis
             // ...
 
+        }).await
+        .on("p2p", "send", move |event, error| async move{
+            
+            if error.is_some(){
+                println!("an error accoured during sending: {:?}", error.unwrap());
+                return;
+            }
+            
+            println!("sent task: {:?}", event);
+
+            // do whatever you want to do with sent task:
+            // please shiaf the sent task!
+            // ...
+
+        }).await
+        .on("p2p", "receive", move |event, error| async move{
+            
+            if error.is_some(){
+                println!("an error accoured during receiving: {:?}", error.unwrap());
+                return;
+            }
+
+            println!("received task: {:?}", event);
+
+            // store the event in db or cache on redis
+            // ...
+
         }).await;
+
+}
+
+pub async fn upAndRunTalking(){
+
+    let (mut neuron, synprot) = NeuronActor::new(100,
+        Some(RmqConfig{ 
+            host: String::from("0.0.0.0"), 
+            port: 5672, 
+            username: String::from("rabbitmq"), 
+            password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
+        }),
+    ).await;
+
     
+    let getNeuronWallet = neuron.wallet.as_ref().unwrap();
+    let getNeuronId = neuron.peerId.to_base58();
+    
+    // ------- sending message through actor mailbox eventloop receiver:
+    // actor mailbox is the eventloop receiver of actor jobq mpsc channel
+    // which receive messages and execute them in a light thread or process 
+
     // starting the neuron actor 
-    let nueronComponentActor = neuron.clone().start();
+    let neuronComponentActor = neuron.clone().start();
     
     // sending update state message
-    nueronComponentActor.send(UpdateState{new_state: 1}).await;
+    neuronComponentActor.send(
+        UpdateState{new_state: 1}
+    ).await;
+
+    // send shutdown message to the neuron
+    neuronComponentActor.send(ShutDown).await;
+
+    // send payload remotely using the neuron actor
+    neuronComponentActor.send(
+        InjectPayload{
+            payload: String::from("0x01ff").as_bytes().to_vec(), 
+            method: neuron::TransmissionMethod::Remote(String::from("p2p-synapse"))
+        }
+    ).await;
+
+    // send rpc request to another neuron
+    neuronComponentActor.send(
+        SendRpcRequest{
+            local_spawn: todo!(),
+            notif_data: todo!(),
+            requestQueue: todo!(),
+            correlationId: todo!(),
+            encryptionConfig: todo!(),
+        }
+    ).await;
+
+    // receive rpc responses from another neuron
+    neuronComponentActor.send(
+        ReceiveRpcResponse{
+            local_spawn: todo!(),
+            notif_data: todo!(),
+            requestQueue: todo!(),
+            encryptionConfig: todo!(),
+        }
+    ).await;
+
+    // broadcast in the whole brain
+    neuronComponentActor.send(
+        Broadcast{
+            local_spawn: todo!(),
+            notif_data: todo!(),
+            rmqConfig: todo!(),
+            p2pConfig: todo!(),
+            encryptionConfig: todo!(),
+        }
+    ).await;
+
+    // subscribe in the whole brian
+    neuronComponentActor.send(
+        Subscribe{
+            p2pConfig: todo!(),
+            rmqConfig: todo!(),
+            local_spawn: todo!(),
+            decryptionConfig: todo!(),
+        }
+    ).await;
+
+    // start the p2p swarm event loop 
+    neuronComponentActor.send(
+        StartP2pSwarEventLoop{
+            synprot
+        }
+    ).await;
+
+    // send a p2p based request
+    neuronComponentActor.send(
+        SendP2pRequest{
+            message: todo!(),
+            peerId: todo!()
+        }
+    ).await;
+
+    // receive a p2p based response
+    neuronComponentActor.send(
+        ReceiveP2pResponse
+    ).await;
+
+    log::info!("executed all..");
 
 
 }

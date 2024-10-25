@@ -1,19 +1,18 @@
 
+
 // -----------------------------------
 /* Neuron Actor DSL using Macros
 
-    TODOs: dsl.rs, select!{}, publishToRmq() and consumeFromRmq() methods, 
-    TODOs: stem.spec, express framework, publish stemlib to crate
-    tools: 
-        GPT tryout section in stem.spec, 
-        desktop books for neuroscience and information theory
-    features:
-        use a codec to encoder/decoder a neuron object 
-        local talking with jobq chan eventloop receiver of mailbox of actor message sending logic
-        encrypted through crypter crate for remote talking through p2p and rpc rmq req-rep queue:
-            p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
-            p2p based like adnl file sharing, vpn like tor, ton and v2ray, firewall, gateway, loadbalancer, ingress listener like ngrok, proxy and dns over neuron actor
-            p2p based like adnl onchain broker stock engine (find peers which are behind nat over wan)
+    
+    tools: desktop books for neuroscience and information theory
+    TODOs: p2p network behavior: stream, request response, kademlia, gossipsub 
+    TODOs: this.rs, neuron message handlers, build neuron actor from cli args,
+    TODOs: stem.spec (GPT tryout section), publish stemlib to crate
+    TODOs: impl Trait for functions by proc macro then box them (structured functions) for dep injection
+    TODOs: encrypt the connection between each neuron in a cluster or brain using ed25519
+    TODOs:
+        SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway, 
+        SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, proxy and dns server
     main concepts:
         dyn dispatch and dep injection with Arc::new(TypeImplsTrait{}) Box::new(TypeImplsTrait{}) Arc::pin(async move{}), Box::pin(async move{})
         stat dyn dispatch, dep injecton and binding to trait, Box::pin(async move{}), Arc::pin(async move{}), Arc<Fn() -> R> where R: Future
@@ -86,6 +85,16 @@ use crate::*;
 #[macro_export]
 macro_rules! post {
     /* 
+        post!(
+            "/user",
+            (ensureAdminAccess, api),
+            (req, res, next, depot) => async move { // if you don't have a variable just define it as ident which is a name for that
+                // Handler logic
+                res.render("hello");
+                println!("Handling salvo::request for /user");
+            }
+        );
+
         due to the static dispatch behaviour
         the `mismatched types
             expected fn item `fn() -> impl std::future::Future<Output = ()> {ensureAdminAccess}`

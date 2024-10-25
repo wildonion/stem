@@ -6,6 +6,18 @@ use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
 
 
+
+pub trait ShaHasher{
+    fn hash(&mut self);
+}
+
+impl ShaHasher for String{
+    fn hash(&mut self) {
+        let hashed = Wallet::generate_sha256_from(&self);
+        *self = hex::encode(hashed);
+    }
+}
+
 pub trait Crypter{
     fn encrypt(&mut self, secure_cell_config: &mut SecureCellConfig);
     fn decrypt(&mut self, secure_cell_config: &mut SecureCellConfig);

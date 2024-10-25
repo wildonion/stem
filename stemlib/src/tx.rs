@@ -2,7 +2,7 @@
 
 use std::sync::atomic::AtomicU8;
 use neuron::ActionType;
-use neuron::PublishNotifToRmq;
+use neuron::{Broadcast, RmqPublishConfig};
 use wallexerr::misc::Wallet;
 use crate::*;
 use actix::prelude::*;
@@ -352,7 +352,7 @@ impl ActixMessageHandler<Send2Pool> for StatelessTransactionPool{
         }
 
         let prod_event = 
-            PublishNotifToRmq{
+            Broadcast{
                 local_spawn: true,
                 notif_data: EventData{ 
                     id: Uuid::new_v4().to_string(), 
@@ -363,26 +363,21 @@ impl ActixMessageHandler<Send2Pool> for StatelessTransactionPool{
                     fired_at: chrono::Local::now().timestamp(), 
                     is_seen: false 
                 },
-                exchange_name: format!("{}.notif:TxPool", APP_NAME),
-                exchange_type: String::from("fanout"),
-                routing_key: String::from(""),
+                p2pConfig: None,
+                rmqConfig: Some(RmqPublishConfig{
+                    exchange_name: format!("{}.notif:TxPool", APP_NAME),
+                    exchange_type: String::from("fanout"),
+                    routing_key: String::from(""),
+                }),
                 encryptionConfig: None, // don't encrypt the data 
             };
 
         // background worker thread using tokio
         let cloned_producer = producer.clone();
-        let cloned_prod_event = prod_event.clone();
         tokio::spawn(async move{
-            cloned_producer.send(cloned_prod_event).await;
+            cloned_producer.send(prod_event).await;
         });
 
-        if spawn_local{
-            // spawn in local thread of the actor itself
-            async move{
-                producer.send(prod_event).await;
-            }.into_actor(self) // convert the future into the actor so we can call the spawn method to execute the future in actor thread
-            .spawn(ctx);
-        }
 
     }
 

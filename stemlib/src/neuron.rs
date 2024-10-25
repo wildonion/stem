@@ -92,8 +92,18 @@
     ======================================================================================== 
 */
 
+use libp2p::kad::store::MemoryStore;
+use libp2p::kad::Mode;
+use libp2p::{kad, PeerId, Swarm, SwarmBuilder};
+use libp2p::{tcp, yamux, gossipsub, mdns, noise,
+    swarm::NetworkBehaviour, swarm::SwarmEvent,
+    request_response::{self, ProtocolSupport, OutboundRequestId, ResponseChannel, 
+        Event as P2pReqResEvent, Codec, Config},
+};
+use libp2p::identity::Keypair;
 use std::error::Error;
 use std::future::Future;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Output;
 use actor::workerthreadpool::sync::NoneAsyncThreadPool;
 use interfaces::ServiceExt;
@@ -105,7 +115,7 @@ use tokio::sync::MutexGuard;
 use tokio::task::JoinHandle;
 use tx::Transaction;
 use wallexerr::misc::SecureCellConfig;
-use interfaces::{Crypter};
+use interfaces::{Crypter, ShaHasher};
 use crate::*;
 
 
@@ -115,6 +125,21 @@ pub struct CryptoConfig{
     pub secret: String,
     pub passphrase: String,
     pub unique_key: String
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct CompressionConfig{
+
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct ElectricNerveImpulse{
+
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct SynapticConnection{
+
 }
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
@@ -142,16 +167,18 @@ pub struct Worker{
     pub thread: std::sync::Arc<tokio::task::JoinHandle<()>>,
 }
 
-// this is the internal executor, it's a job or task queue eventloop
-// it has a buffer of Event objets, thread safe eventloop receiver and 
-// a sender to send data to its channel, this is the backbone of actor
-// worker objects they talk locally through the following pattern sicne
-// they have isolated state there is no mutex at all mutating the state
-// would be done through message sending pattern.
-// threadpool executor eventloop: 
-//      sender, 
-//      Vec<JoinHanlde<()>>, 
-//      while let Some(task) = rx.lock().await.recv().await{ spawn(task); }
+/* ------------------------------------------------------------------------
+this is the internal executor, it's a job or task queue eventloop
+it has a buffer of Event objets, thread safe eventloop receiver and 
+a sender to send data to its channel, this is the backbone of actor
+worker objects they talk locally through the following pattern sicne
+they have isolated state there is no mutex at all mutating the state
+would be done through message sending pattern.
+threadpool executor eventloop: 
+     sender, 
+     Vec<JoinHanlde<()>>, 
+     while let Some(task) = rx.lock().await.recv().await{ spawn(task); }
+*/
 #[derive(Clone)]
 pub struct InternalExecutor<Event>{
     pub id: String, 
@@ -187,7 +214,7 @@ where J: std::future::Future<Output = ()> + Send + Sync + 'static{
 pub struct Event{
     pub data: EventData,
     pub status: EventStatus,
-    pub offset: u64,
+    pub offset: u64, // the position of the event inside the brain network
 }
 
 #[derive(Clone, Debug, Default)]
@@ -255,10 +282,70 @@ pub enum NeuronError{
     ====================================================================================
 */
 
+// the following defines our p2p protocol
+#[derive(NetworkBehaviour)]
+pub struct NeuronBehaviour {
+    pub kademlia: kad::Behaviour<MemoryStore>, // peer discovery over wan
+    pub gossipsub: gossipsub::Behaviour, // pubsub messaging
+}
+
+impl NeuronBehaviour{
+    pub fn new(key: Keypair) -> Self{
+
+        let peer_id = key.clone().public().to_peer_id();
+        let memory_store = MemoryStore::new(peer_id.clone());
+        let kad = kad::Behaviour::new(peer_id, memory_store);
+
+        // use hash of the message as the message id
+        let message_id_fn = |message: &gossipsub::Message| {
+            let mut s = DefaultHasher::new();
+            message.data.hash(&mut s);
+            gossipsub::MessageId::from(s.finish().to_string())
+        };
+        let gossipsubConfig = gossipsub::ConfigBuilder::default()
+            .heartbeat_interval(tokio::time::Duration::from_secs(10))
+            .validation_mode(gossipsub::ValidationMode::Strict) // enforce message signing when a peer sends it
+            .message_id_fn(message_id_fn)
+            .build()
+            .map_err(|msg| std::io::Error::new(std::io::ErrorKind::Other, msg))
+            .unwrap();
+
+        let gossipsub = gossipsub::Behaviour::new(
+                gossipsub::MessageAuthenticity::Signed(key.clone()),
+                gossipsubConfig,
+        ).unwrap();
+
+        Self{
+            kademlia: kad,
+            gossipsub,
+        }
+
+    }
+
+} 
+
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
 pub struct UpdateState{
     pub new_state: u8
+}
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct ShutDown;
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct InjectPayload{
+    pub payload: Vec<u8>, // the shellcode or bytecode
+    pub method: TransmissionMethod,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub enum TransmissionMethod{
+    #[default]
+    Local,
+    Remote(String)
 }
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
@@ -268,21 +355,54 @@ pub struct BanCry{
     pub tx: Transaction,
 }
 
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[derive(Message)]
 #[rtype(result = "()")]
-pub struct PublishNotifToRmq{
-    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
-    pub notif_data: EventData,
-    pub exchange_name: String,
-    pub exchange_type: String,
-    pub routing_key: String,
-    pub encryptionConfig: Option<CryptoConfig>,
+pub struct StartP2pSwarEventLoop{
+    pub synprot: SynapseProtocol,
 }
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
-pub struct ConsumeNotifFromRmq{ // we'll create a channel then start consuming by binding a queue to the exchange
+pub struct StartHttpServer{
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Broadcast{
+    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
+    pub notif_data: EventData,
+    pub rmqConfig: Option<RmqPublishConfig>,
+    pub p2pConfig: Option<P2pPublishConfig>,
+    pub encryptionConfig: Option<CryptoConfig>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct RmqPublishConfig{
+    pub exchange_name: String,
+    pub exchange_type: String,
+    pub routing_key: String,
+}
+
+pub struct P2pPublishConfig{
+    pub topic: String,
+    pub peerId: String,
+    pub message: String,
+    pub synProt: SynapseProtocol
+}
+
+pub struct P2pConsumeConfig{
+    pub topic: String,
+    pub synProt: SynapseProtocol
+}
+
+pub struct SynapseProtocol{
+    pub swarm: Swarm<NeuronBehaviour>
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct RmqConsumeConfig{
     /* -ˋˏ✄┈┈┈┈ 
         following queue gets bounded to the passed in exchange type with its 
         routing key, when producer wants to produce notif data it sends them 
@@ -330,6 +450,43 @@ pub struct ConsumeNotifFromRmq{ // we'll create a channel then start consuming b
     */
     pub routing_key: String, // patterns for this queue to tell exchange what messages this queue is interested in
     pub tag: String,
+}
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct SendRpcRequest{
+    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
+    pub notif_data: EventData,
+    pub requestQueue: String, // a queue to send messages for server: server <---requestQueue---> client
+    pub correlationId: String, // used to identify messages in reply queue which contains responses from server, client consume from this queue
+    pub encryptionConfig: Option<CryptoConfig>,
+}
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct ReceiveRpcResponse{
+    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
+    pub notif_data: EventData,
+    pub requestQueue: String, // used to specify to which queue client sends the message for server
+    pub encryptionConfig: Option<CryptoConfig>,
+}
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct SendP2pRequest{
+    pub peerId: String,
+    pub message: String
+}
+
+#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
+#[rtype(result = "()")]
+pub struct ReceiveP2pResponse;
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Subscribe{ // we'll create a channel then start consuming by binding a queue to the exchange
+    pub p2pConfig: Option<P2pConsumeConfig>,
+    pub rmqConfig: Option<RmqConsumeConfig>,
     pub local_spawn: bool, // either spawn in actor context or tokio threadpool
     pub decryptionConfig: Option<CryptoConfig>
 }
@@ -356,11 +513,11 @@ pub struct RmqConfig{
 
 #[derive(Clone)]
 pub struct AppService{
-
 }
 
 #[derive(Clone)]
 pub struct NeuronActor{
+    pub peerId: libp2p::PeerId,
     pub rmqConfig: Option<RmqConfig>,
     pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
     pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
@@ -388,6 +545,7 @@ impl Event{
     }
 
 }
+
 
 // ------------------------------
 // implementnig the internal executor methods, it has an eventloop
@@ -449,73 +607,116 @@ impl InternalExecutor<Event>{
 
 impl NeuronActor{
 
-    /* -------------------------------------------------------------
-        since futures are object safe traits hence they have all traits 
-        features we can pass them to the functions in an static or dynamic 
-        dispatch way using Arc or Box or impl Future or even as the return 
-        type of a closure trait method, so a future task would be one of 
-        the following types: 
+    pub async fn new(bufferSize: usize, rmqConfig: Option<RmqConfig>) -> (Self, SynapseProtocol){
+        
+        let edkeys = Keypair::generate_ed25519();
 
-            1) Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
-            2) Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
-            3) Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
-            4) Box<dyn Fn() -> Pin<Box<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
-            5) Arc<Mutex<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>> where R: Future<Output = ()> + Send + Sync + 'static
-            6) job: F where F: Future<Output = ()> + Send + Sync + 'static
-            7) param: impl Future<Output = ()> + Send + Sync + 'static
+        // building the swarm object with our network behaviour contains our protocol
+        let mut swarm = SwarmBuilder::with_new_identity()
+            .with_tokio()
+            .with_tcp(
+                tcp::Config::default(), 
+                noise::Config::new,
+                yamux::Config::default
+            )
+            .unwrap()
+            .with_quic()
+            .with_behaviour(|key|{
+                Ok(NeuronBehaviour::new(key.clone()))
+            })
+            .unwrap()
+            .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
+            .build();
 
-        NOTE: mutex requires the type to be Sized and since traits are not sized at 
-        compile time we should annotate them with dyn keyword and put them behind a 
-        pointer with a valid lifetime like Box or Arc smart pointers so for the 
-        mutexed_job we must wrap the whole mutex inside an Arc or annotate it with 
-        something like &'valid Mutex<dyn Fn() -> R + Send + Sync + 'static>
-        the reason is that Mutex is a guard and not an smart pointer which can hanlde 
-        an automatic pointer with lifetime, using of this syntax however would be in 
-        a rare case when we want to mutate the closure!
-    */
-    // task is a closure that returns a future object 
-    pub async fn runInterval<M, R, O>(&mut self, task: M, period: u64, retries: u8, timeout: u64)
-    where M: Fn() -> R + Send + Sync + 'static,
-            R: std::future::Future<Output = O> + Send + Sync + 'static,
-    {
-        let arced_task = std::sync::Arc::new(task);
+        (
+            NeuronActor{
+                peerId: {
+                    let local_peer_id = PeerId::from_public_key(&edkeys.public());
+                    local_peer_id
+                },
+                wallet: Some(wallexerr::misc::Wallet::new_ed25519()),
+                internal_executor: InternalExecutor::new(
+                    Buffer{ events: std::sync::Arc::new(tokio::sync::Mutex::new(vec![
+                        Event{ data: EventData::default(), status: EventStatus::Committed, offset: 0 }
+                    ])), size: bufferSize }
+                ), 
+                metadata: None,
+                internal_worker: None,
+                transactions: None,
+                internal_locker: None,
+                internal_none_async_threadpool: Arc::new(None),
+                signal: std::sync::Arc::new(std::sync::Condvar::new()),
+                contract: None,
+                rmqConfig,
+                dependency: std::sync::Arc::new(AppService{}),
+                state: 0 // this can be mutated by sending the update state message to the actor
+            }, SynapseProtocol{swarm}
+        )
+    }
 
-        // the future task must gets executed within the period of timeout
-        // otherwise it gets cancelled, dropped and aborted
-        if timeout != 0{
-            tokio::time::timeout(
-                tokio::time::Duration::from_secs(timeout),
-                arced_task()
-            ).await;
-        }        
-
-        tokio::spawn(async move{
-            let mut int = tokio::time::interval(tokio::time::Duration::from_secs(period));
-            int.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            
-            let mut attempts = 0;
-            loop{
-                if retries == 0{
-                    continue;
-                }
-                if attempts >= retries{
-                    break;
-                }
-                int.tick().await;
-                arced_task().await;
-                attempts += 1;
-            }
-        });
+    pub async fn sendRpcRequest(&mut self, rpcConfig: SendRpcRequest){
 
     }
 
-    pub async fn publishToRmq(&self, data: &str, exchange: &str, routing_key: &str, 
+    pub async fn receiveRpcResponse(&mut self, rpcConfig: ReceiveRpcResponse){
+
+    }
+
+    pub async fn sendP2pRequest(&mut self, p2pConfig: SendP2pRequest){
+
+    }
+
+    pub async fn receiveP2pResponse(&mut self, p2pConfig: ReceiveP2pResponse){
+
+    }
+
+    pub async fn startP2pSwarmEventLoop(&mut self, synProt: SynapseProtocol){
+        
+        // https://github.com/libp2p/rust-libp2p/blob/master/examples/distributed-key-value-store/src/main.rs
+        // https://github.com/libp2p/rust-libp2p/blob/master/examples/chat/src/main.rs
+        let mut swarm = synProt.swarm;
+
+        swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
+        swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap()).unwrap();
+        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap()).unwrap();
+
+        // TODO 
+        // ...
+
+
+    }
+
+    pub async fn p2pPublish(&mut self, p2pConfig: P2pPublishConfig){
+
+        let P2pPublishConfig { topic, peerId, message, synProt } = p2pConfig;
+        
+        let mut swarm = synProt.swarm;
+        let topic = gossipsub::IdentTopic::new(topic);
+        let msgId = swarm.behaviour_mut().gossipsub.publish(topic.clone(), message.as_bytes()).unwrap();
+        
+        // TODO - use self.on()
+        // ...
+
+    }   
+
+    pub async fn p2pConsume(&mut self, p2pConfig: P2pConsumeConfig){
+
+        let P2pConsumeConfig { topic, synProt } = p2pConfig;
+
+        let mut swarm = synProt.swarm;
+        let topic = gossipsub::IdentTopic::new(topic);
+        swarm.behaviour_mut().gossipsub.subscribe(&topic).unwrap();
+
+        // TODO - use self.on()
+        // ...
+
+    }
+
+    pub async fn rmqPublish(&self, data: &str, exchange: &str, routing_key: &str, 
         exchange_type: &str, secureCellConfig: SecureCellConfig, redisUniqueKey: &str){
 
             // TODO
-            // use self.on() method
-            // also handle rmq rpc and p2p in here
-            // also handle file sharing with rmq  
+            // use self.on() method 
 
             /*
                 let zerlog_producer_actor = self.clone().zerlog_producer_actor;
@@ -697,7 +898,7 @@ impl NeuronActor{
 
     }
 
-    pub async fn consumeFromRmq(&self,
+    pub async fn rmqConsume(&self,
         consumer_tag: &str, queue: &str, 
         binding_key: &str, exchange: &str,
         decryptionConfig: Option<CryptoConfig>
@@ -709,8 +910,6 @@ impl NeuronActor{
             // TODO
             // also send consumed data to the streamer channel of the internal executor 
             // use self.on() method
-            // also handle rmq rpc and p2p in here
-            // also handle file sharing with rmq 
 
             /* 
                 let storage = self.app_storage.clone();
@@ -1167,6 +1366,113 @@ impl NeuronActor{
             
     }
 
+    //==================================================================================
+    /* -------------------------------------------------------------
+        since futures are object safe traits hence they have all traits 
+        features we can pass them to the functions in an static or dynamic 
+        dispatch way using Arc or Box or impl Future or even as the return 
+        type of a closure trait method, so a future task would be one of 
+        the following types: 
+
+            1) Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
+            2) Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
+            3) Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
+            4) Box<dyn Fn() -> Pin<Box<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
+            5) Arc<Mutex<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>> where R: Future<Output = ()> + Send + Sync + 'static
+            6) job: F where F: Future<Output = ()> + Send + Sync + 'static
+            7) task: impl Future<Output = ()> + Send + Sync + 'static
+
+        NOTE: mutex requires the type to be Sized and since traits are not sized at 
+        compile time we should annotate them with dyn keyword and put them behind a 
+        pointer with a valid lifetime like Box or Arc smart pointers so for the 
+        mutexed_job we must wrap the whole mutex inside an Arc or annotate it with 
+        something like &'valid Mutex<dyn Fn() -> R + Send + Sync + 'static>
+        the reason is that Mutex is a guard and not an smart pointer which can hanlde 
+        an automatic pointer with lifetime, using of this syntax however would be in 
+        a rare case when we want to mutate the closure!
+    */
+    // task is a closure that returns a future object 
+    pub async fn runInterval<M, R, O>(&mut self, task: M, period: u64, retries: u8, timeout: u64)
+    where M: Fn() -> R + Send + Sync + 'static,
+            R: std::future::Future<Output = O> + Send + Sync + 'static,
+    {
+        let arced_task = std::sync::Arc::new(task);
+
+        // the future task must gets executed within the period of timeout
+        // otherwise it gets cancelled, dropped and aborted
+        if timeout != 0{
+            tokio::time::timeout(
+                tokio::time::Duration::from_secs(timeout),
+                arced_task()
+            ).await;
+        }
+        
+        tokio::spawn(async move{
+            let mut int = tokio::time::interval(tokio::time::Duration::from_secs(period));
+            int.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            
+            let mut attempts = 0;
+            loop{
+                if retries == 0{
+                    continue;
+                }
+                if attempts >= retries{
+                    break;
+                }
+                int.tick().await;
+                arced_task().await;
+                attempts += 1;
+            }
+        });
+
+    }
+
+    pub async fn na_getTask<F, R>(
+        task1: F,
+        task: impl std::future::Future<Output = ()> + Send + Sync + 'static
+    ) where F: Fn() -> R + Send + Sync + 'static, R: std::future::Future<Output=()> + Send + Sync + 'static{
+        
+        let arcedTask = std::sync::Arc::new(task1);
+        arcedTask().await;
+
+        task.await;
+    }
+
+    pub async fn na_runInterval<M, R, O>(task: M, period: u64, retries: u8, timeout: u64)
+    where M: Fn() -> R + Send + Sync + 'static,
+            R: std::future::Future<Output = O> + Send + Sync + 'static,
+    {
+        let arced_task = std::sync::Arc::new(task);
+
+        // the future task must gets executed within the period of timeout
+        // otherwise it gets cancelled, dropped and aborted
+        if timeout != 0{
+            tokio::time::timeout(
+                tokio::time::Duration::from_secs(timeout),
+                arced_task()
+            ).await;
+        }        
+
+        tokio::spawn(async move{
+            let mut int = tokio::time::interval(tokio::time::Duration::from_secs(period));
+            int.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            
+            let mut attempts = 0;
+            loop{
+                if retries == 0{
+                    continue;
+                }
+                if attempts >= retries{
+                    break;
+                }
+                int.tick().await;
+                arced_task().await;
+                attempts += 1;
+            }
+        });
+
+    }
+
     // if we can acquire the lock means the lock is free
     // and is not being in used by another process which 
     // causes the second process to be awaited until the 
@@ -1215,103 +1521,6 @@ impl NeuronActor{
     pub async fn AllInOneInternalExecutor<J, R>(&mut self, job: J) where J: Fn() -> R + Send + Sync +'static, 
     R: std::future::Future<Output = ()> + Send + Sync + 'static{
 
-        trait Interface{}
-        struct Job{}
-        impl Interface for Job{}
-
-        // arcing like boxing the object safe trait use for thread safe dynamic dispatching and dep injection
-        let interfaces: std::sync::Arc<dyn Interface> = std::sync::Arc::new(Job{});
-
-        // boxing trait for dynamic dispatching and dep ibjection
-        let interfaces1: Box<dyn Interface> = Box::new(Job{});
-
-        // arcing the mutexed object safe trait for dynamic dispatching, dep injection and mutating it safely
-        let interfaces2: std::sync::Arc<tokio::sync::Mutex<dyn Interface>> = std::sync::Arc::new(tokio::sync::Mutex::new(Job{}));
-
-        // we can't have the following cause in order to pin a type the size must be known
-        // at compile time thus pin can't have an object safe trait for pinning it at stable 
-        // position inside the ram without knowing the size 
-        // let interfaces3: std::sync::Arc<std::pin::Pin<dyn Interface>> = std::sync::Arc::pin(Job{});
-        // we can't pin a trait directly into the ram, instead we must pin their
-        // boxed or arced version like Arc<dyn Future> or Box<dyn Future> into 
-        // the ram: Arc::pin(async move{}) or Box::pin(async move{})
-
-        // job however is an async io task which is a future object
-        type IoJob<R> = Arc<dyn Fn() -> R + Send + Sync + 'static>;
-        type IoJob1<R> = std::pin::Pin<Arc<dyn Fn() -> R + Send + Sync + 'static>>;
-        type IoJob2 = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
-        type IoJob3 = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
-        type Tasks = Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
-        type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
-        type Task1 = std::sync::Arc<dyn FnOnce() 
-            -> std::pin::Pin<std::sync::Arc<dyn Future<Output = ()> + Send + Sync + 'static>>>;
-        // dependency injection and dynamic dispatching is done by:
-        // Arc::pin(async move{}) or Box::pin(async move{})
-        // Pin<Arc<dyn Trait>> or Pin<Box<dyn Trait>>
-        // R: Future<Output=()> + Send + Sync + 'static
-        use std::{pin::Pin, sync::Arc};
-        type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>; // an arced closure trait which returns an arced pinned future trait object
-
-        async fn push<C, R>(topic: &str, event: Event, payload: &[u8], c: C) where 
-        C: Fn() -> R + Send + Sync + 'static,
-        R: Future<Output = ()> + Send + Sync + 'static{
-            let arcedCallback = Arc::new(c);
-            // spawn the task in the background thread, don't 
-            // await on it let the task spawned into the tokio 
-            // thread gets awaited by the tokio ligh thread
-            spawn(async move{
-                arcedCallback().await;
-            });
-        }
-
-        // use effect: interval task execution but use chan to fill the data
-        // use effect takes an async closure
-        struct useEffect<'valid, E, F, R>(pub F, &'valid [E]) where 
-            E: Send + Sync + 'static + Clone,
-            F: Fn() -> R + Send + Sync + 'static,
-            R: std::future::Future<Output = ()> + Send + Sync + 'static;
-
-        let router = String::from("/login"); // this variable gets effected
-        self.runInterval(move || {
-            let clonedRouter = router.clone();
-            let clonedRouter1 = router.clone();
-            async move{
-                let state = useEffect(
-                    move || {
-                        let clonedRouter1 = clonedRouter1.clone();
-                        async move{
-
-                            // some condition to affect on router
-                            // ...
-
-                            use tokio::{spawn, sync::mpsc::channel};
-                            let (tx, rx) = channel(100);
-                            spawn(async move{
-                                tx.send(clonedRouter1).await;
-                            });
-            
-                        }
-                    }, &[clonedRouter]
-                );
-            }
-        }, 10, 10, 0).await;
-
-        
-        /* the error relates to compiling traits with static dispatch approach:
-        mismatched types
-            expected `async` block `{async block@stemlib/src/neuron.rs:661:27: 661:37}`
-            found `async` block `{async block@stemlib/src/neuron.rs:661:41: 661:51}`
-            no two async blocks, even if identical, have the same type
-            consider pinning your async block and casting it to a trait object 
-        */
-        // let tasks1 = vec![async move{}, async move{}];
-        // vector of async tasks pinned into the ram, every async move{} considerred to be a different type
-        // which is kninda static dispatch or impl Future logic, boxing their pinned object into the ram 
-        // bypass this allows us to access multiple types through a single interface using dynamic dispatch.
-        // since the type in dynamic dispatch will be specified at runtime. 
-        let tasks: Tasks = vec![Box::pin(async move{}), Box::pin(async move{})]; // future as separate objects must gets pinned into the ram  
-        let futDependency: Task = Box::new(async move{});
-
         let arcedJob = std::sync::Arc::new(job);
         let (tx, mut eventloop) = 
             tokio::sync::mpsc::channel::<std::sync::Arc<J>>(100);
@@ -1340,7 +1549,8 @@ impl NeuronActor{
 
         // step2)
         // start receiving or streaming over the eventloop 
-        // of the channel to receive jobs
+        // of the channel to receive jobs and execute them
+        // in another light thread in the background
         tokio::spawn(async move{
             while let Some(job) = eventloop.recv().await{
                 tokio::spawn(async move{
@@ -1356,7 +1566,9 @@ impl NeuronActor{
 impl Actor for NeuronActor{
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
-        
+
+        let pid = ctx.address(); // actor or process address or unique id
+
         ctx.run_interval(std::time::Duration::from_secs(10), |actor, ctx|{
 
             let mut this = actor.clone(); 
@@ -1375,21 +1587,20 @@ impl Actor for NeuronActor{
 /* ********************************************************************************* */
 /* ***************************** PRODUCE NOTIF HANDLER ***************************** */
 /* ********************************************************************************* */
-impl ActixMessageHandler<PublishNotifToRmq> for NeuronActor{
+impl ActixMessageHandler<Broadcast> for NeuronActor{
     
     type Result = ();
-    fn handle(&mut self, msg: PublishNotifToRmq, ctx: &mut Self::Context) -> Self::Result {;
+    fn handle(&mut self, msg: Broadcast, ctx: &mut Self::Context) -> Self::Result {;
 
         // unpacking the notif data
-        let PublishNotifToRmq { 
-                exchange_name,
-                exchange_type,
-                routing_key,
+        let Broadcast { 
+                rmqConfig,
+                p2pConfig,
                 local_spawn,
                 notif_data,
                 encryptionConfig,
 
-            } = msg.clone();
+            } = msg;
         
         let mut stringData = serde_json::to_string(&notif_data).unwrap();
         let mut scc = SecureCellConfig::default();
@@ -1416,20 +1627,34 @@ impl ActixMessageHandler<PublishNotifToRmq> for NeuronActor{
             stringData
         };
 
-        let this = self.clone();
+        let mut this = self.clone();
 
         // spawn the future in the background into the given actor context thread
         // by doing this we're executing the future inside the actor thread since
         // every actor has its own thread of execution.
         if local_spawn{
             async move{
-                this.publishToRmq(&finalData, &exchange_name, &routing_key, &exchange_type, scc, &ruk).await;
+                if let Some(rmqcfg) = rmqConfig{
+                    let RmqPublishConfig { exchange_name, exchange_type, routing_key } = rmqcfg;
+                    this.rmqPublish(&finalData, &exchange_name, &routing_key, &exchange_type, scc, &ruk).await;
+                } else if let Some(p2pcfg) = p2pConfig{
+                    this.p2pPublish(p2pcfg).await;
+                } else{
+                    return;
+                }
             }
             .into_actor(self) // convert the future into an actor future of type NotifBrokerActor
             .spawn(ctx); // spawn the future object into this actor context thread
         } else{ // spawn the future in the background into the tokio lightweight thread
             tokio::spawn(async move{
-                this.publishToRmq(&finalData, &exchange_name, &routing_key, &exchange_type, scc, &ruk).await;
+                if let Some(rmqcfg) = rmqConfig{
+                    let RmqPublishConfig { exchange_name, exchange_type, routing_key } = rmqcfg;
+                    this.rmqPublish(&finalData, &exchange_name, &routing_key, &exchange_type, scc, &ruk).await;
+                } else if let Some(p2pcfg) = p2pConfig{
+                    this.p2pPublish(p2pcfg).await;
+                } else{
+                    return;
+                }
             });
         }
         
@@ -1439,48 +1664,60 @@ impl ActixMessageHandler<PublishNotifToRmq> for NeuronActor{
 
 }
 
-impl ActixMessageHandler<ConsumeNotifFromRmq> for NeuronActor{
+impl ActixMessageHandler<Subscribe> for NeuronActor{
     
     type Result = ();
-    fn handle(&mut self, msg: ConsumeNotifFromRmq, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Subscribe, ctx: &mut Self::Context) -> Self::Result {
 
         // unpacking the consume data
-        let ConsumeNotifFromRmq { 
-                queue, 
-                tag,
-                exchange_name,
-                routing_key,
+        let Subscribe { 
+                rmqConfig,
+                p2pConfig,
                 local_spawn,
                 decryptionConfig
 
-            } = msg.clone(); // the unpacking pattern is always matched so if let ... is useless
+            } = msg; // the unpacking pattern is always matched so if let ... is useless
         
-        let this = self.clone();
+        let mut this = self.clone();
         
         // spawn the future in the background into the given actor context thread
         // by doing this we're executing the future inside the actor thread since
         // every actor has its own thread of execution.
         if local_spawn{
             async move{
-                this.consumeFromRmq(
-                    &tag, 
-                    &queue, 
-                    &routing_key, 
-                    &exchange_name,
-                    decryptionConfig
-                ).await;
+                if let Some(rmqcfg) = rmqConfig{
+                    let RmqConsumeConfig{ queue, exchange_name, routing_key, tag } = rmqcfg;
+                    this.rmqConsume(
+                        &tag, 
+                        &queue, 
+                        &routing_key, 
+                        &exchange_name,
+                        decryptionConfig
+                    ).await;
+                } else if let Some(p2pcfg) = p2pConfig{
+                    this.p2pConsume(p2pcfg).await;
+                } else{
+                    return;
+                }
             }
             .into_actor(self) // convert the future into an actor future of type NotifBrokerActor
             .spawn(ctx); // spawn the future object into this actor context thread
         } else{ // spawn the future in the background into the tokio lightweight thread
             tokio::spawn(async move{
-                this.consumeFromRmq(
-                    &tag, 
-                    &queue, 
-                    &routing_key, 
-                    &exchange_name,
-                    decryptionConfig
-                ).await;
+                if let Some(rmqcfg) = rmqConfig{
+                    let RmqConsumeConfig{ queue, exchange_name, routing_key, tag } = rmqcfg;
+                    this.rmqConsume(
+                        &tag, 
+                        &queue, 
+                        &routing_key, 
+                        &exchange_name,
+                        decryptionConfig
+                    ).await;
+                } else if let Some(p2pcfg) = p2pConfig{
+                    this.p2pConsume(p2pcfg).await;
+                } else{
+                    return;
+                }
             });
         }
         return; // terminate the caller
@@ -1497,6 +1734,90 @@ impl ActixMessageHandler<UpdateState> for NeuronActor{
     type Result = ();
     fn handle(&mut self, msg: UpdateState, ctx: &mut Self::Context) -> Self::Result {
         self.state = msg.new_state;
+    }
+}
+
+impl ActixMessageHandler<SendRpcRequest> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: SendRpcRequest, ctx: &mut Self::Context) -> Self::Result {
+        let SendRpcRequest{ local_spawn, notif_data, requestQueue, correlationId, encryptionConfig } = msg.clone();
+
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            this.sendRpcRequest(msg.clone()).await;
+        });
+    }
+}
+
+impl ActixMessageHandler<ReceiveRpcResponse> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: ReceiveRpcResponse, ctx: &mut Self::Context) -> Self::Result {
+        let ReceiveRpcResponse { local_spawn, notif_data, requestQueue, encryptionConfig } = msg.clone();
+
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            this.receiveRpcResponse(msg.clone()).await;
+        });
+    }
+}
+
+impl ActixMessageHandler<SendP2pRequest> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: SendP2pRequest, ctx: &mut Self::Context) -> Self::Result {
+        let SendP2pRequest{ peerId, message } = msg.clone();
+
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            this.sendP2pRequest(msg.clone()).await;
+        });
+    }
+}
+
+impl ActixMessageHandler<ReceiveP2pResponse> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: ReceiveP2pResponse, ctx: &mut Self::Context) -> Self::Result {
+        let ReceiveP2pResponse { } = msg.clone();
+
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            this.receiveP2pResponse(msg.clone()).await;
+        });
+    }
+}
+
+impl ActixMessageHandler<ShutDown> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: ShutDown, ctx: &mut Self::Context) -> Self::Result {
+        ctx.stop();
+    }
+}
+
+impl ActixMessageHandler<InjectPayload> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: InjectPayload, ctx: &mut Self::Context) -> Self::Result {
+        
+        let InjectPayload{ payload, method} = msg.clone();
+        match method{
+            TransmissionMethod::Local => {
+
+            },
+            TransmissionMethod::Remote(methodName) => {
+                
+            },
+            _ => {}
+        }
+    }
+}
+
+impl ActixMessageHandler<StartP2pSwarEventLoop> for NeuronActor{
+    type Result = ();
+    fn handle(&mut self, msg: StartP2pSwarEventLoop, ctx: &mut Self::Context) -> Self::Result {
+        
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            this.startP2pSwarmEventLoop(msg.synprot).await;
+        });
+
     }
 }
 
@@ -1535,6 +1856,17 @@ impl ActixMessageHandler<BanCry> for NeuronActor{
         }
         
     }
+}
+
+impl ActixMessageHandler<StartHttpServer> for NeuronActor{
+    
+    type Result = ();
+    fn handle(&mut self, msg: StartHttpServer, ctx: &mut Self::Context) -> Self::Result {
+
+        let StartHttpServer { host, port } = msg.clone();
+        
+    }
+
 }
 
 impl Drop for NeuronActor{

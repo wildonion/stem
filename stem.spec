@@ -423,3 +423,4 @@ https://github.com/alordash/newton-fractal
 https://github.com/Patryk27/shorelark/ -> GA, NN and WASM
 https://crates.io/crates/wasmtime
 https://wasmer.io/
+https://os.phil-opp.com/

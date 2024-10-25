@@ -228,7 +228,6 @@ pub mod workerthreadpool{
             receiver: mpsc::UnboundedReceiver<Result<(), E>>, // receiver async side with no byte limitation
         }
 
-
         impl<E: Send + 'static> AsyncWorker<E>{ // E can be shared between threads
 
             pub fn new() -> Self{

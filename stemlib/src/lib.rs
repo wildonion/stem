@@ -27,6 +27,11 @@ mod dsl;
 mod test;
 
 
-pub async fn upAndRun(){
+pub async fn run(){
+
     log::info!("up and running from stemlib...");
+    
+    test::upAndRunStreaming().await;
+    test::upAndRunTalking().await;
+
 }
