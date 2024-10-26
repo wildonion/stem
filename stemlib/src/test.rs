@@ -1,14 +1,17 @@
 
 
 
-use neuron::{AppService, Broadcast, InjectPayload, ReceiveP2pResponse, ReceiveRpcResponse, RmqConfig, SendP2pRequest, SendRpcRequest, ShutDown, StartP2pSwarEventLoop, Subscribe};
+use crate::messages::*;
+use crate::schemas::*;
 use crate::*;
+use crate::impls::*;
+use crate::interfaces::*;
 use crate::dsl::*;
 
 
 pub async fn upAndRunStreaming(){
     
-    let (mut neuron, synprot) = NeuronActor::new(100,
+    let mut neuron = NeuronActor::new(100,
         Some(RmqConfig{ 
             host: String::from("0.0.0.0"), 
             port: 5672, 
@@ -112,7 +115,7 @@ pub async fn upAndRunStreaming(){
 
 pub async fn upAndRunTalking(){
 
-    let (mut neuron, synprot) = NeuronActor::new(100,
+    let mut neuron = NeuronActor::new(100,
         Some(RmqConfig{ 
             host: String::from("0.0.0.0"), 
             port: 5672, 
@@ -120,7 +123,6 @@ pub async fn upAndRunTalking(){
             password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
         }),
     ).await;
-
     
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
     let getNeuronId = neuron.peerId.to_base58();
@@ -144,28 +146,7 @@ pub async fn upAndRunTalking(){
     neuronComponentActor.send(
         InjectPayload{
             payload: String::from("0x01ff").as_bytes().to_vec(), 
-            method: neuron::TransmissionMethod::Remote(String::from("p2p-synapse"))
-        }
-    ).await;
-
-    // send rpc request to another neuron
-    neuronComponentActor.send(
-        SendRpcRequest{
-            local_spawn: todo!(),
-            notif_data: todo!(),
-            requestQueue: todo!(),
-            correlationId: todo!(),
-            encryptionConfig: todo!(),
-        }
-    ).await;
-
-    // receive rpc responses from another neuron
-    neuronComponentActor.send(
-        ReceiveRpcResponse{
-            local_spawn: todo!(),
-            notif_data: todo!(),
-            requestQueue: todo!(),
-            encryptionConfig: todo!(),
+            method: schemas::TransmissionMethod::Remote(String::from("p2p-synapse"))
         }
     ).await;
 
@@ -190,25 +171,28 @@ pub async fn upAndRunTalking(){
         }
     ).await;
 
-    // start the p2p swarm event loop 
+    // send a request to a neuron over eithre rmq or p2p
     neuronComponentActor.send(
-        StartP2pSwarEventLoop{
-            synprot
+        SendRequest{
+            rmqConfig: todo!(),
+            p2pConfig: todo!(),
+            encryptionConfig: todo!(),
         }
     ).await;
 
-    // send a p2p based request
-    neuronComponentActor.send(
-        SendP2pRequest{
-            message: todo!(),
-            peerId: todo!()
+    // receive a response from a neuron over eitehr rmq or p2p
+    let getResponse = neuronComponentActor.send(
+        ReceiveResposne{
+            rmqConfig: todo!(),
+            p2pConfig: todo!(),
+            encryptionConfig: todo!(),
         }
     ).await;
+    let Ok(resp) = getResponse else{
+        panic!("can't receive response from the neuron");
+    };
+    let res = resp.0.await; // await on the pinned box so the future can gets executed
 
-    // receive a p2p based response
-    neuronComponentActor.send(
-        ReceiveP2pResponse
-    ).await;
 
     log::info!("executed all..");
 

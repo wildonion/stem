@@ -192,6 +192,43 @@ pub fn passport(args: TokenStream, input: TokenStream) -> TokenStream {
 
 }
  
+
+#[proc_macro_attribute]
+pub fn handler(args: TokenStream, input: TokenStream) -> TokenStream{
+
+    pub trait Handler{}
+    // get function name 
+    // build struct from function name 
+    // impl Handler trait for the struct
+
+    // proc macro attrs can only be used on top of functions and impl blocks to extend 
+    // the function body and add some vars into it at compile time:
+    //     use proc macro with attrs to handle automatic task spawning and jobq chan creations
+    //     use decl macro to build dsl
+
+    // struct ProcessStruct;
+
+    // // also handle multiple passing params to function using macros with omitting the useless ones
+    // // do this:    
+    // #[processExt]
+    // impl ProcessStruct{
+    //     async fn start(&self){}
+    //     async fn stop(&self){}
+    // }
+    // // instead of:
+    // impl processExt for ProcessStruct{} 
+
+
+    // // when a function is annotated with distribute 
+    // // means it can distribute itself among networks
+    // #[distribute]
+    // pub async fn injectShellcodeLogic(){
+    // }
+
+    todo!()
+
+}
+
 #[proc_macro_attribute]
 pub fn go(args: TokenStream, input: TokenStream) -> TokenStream{
 

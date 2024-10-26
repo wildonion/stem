@@ -1,686 +1,118 @@
 
 
 
-/*  ========================================================================================
-    
-    What is a Neuron?
-        every neuron is an actor component object or a process or a light thread, the building 
-        block of everything it's an smart object on its own which can communicate locally and 
-        remotely with other neurons, every neuron contains a metadata field which carries 
-        info about the actual object and informations that are being passed through the 
-        synapses protocols. 
-
-    brokering is all about queueing, sending and receiving messages way more faster, 
-    safer and reliable than a simple eventloop or a tcp based channel. 
-    all brokers contains message/task/job queue to handle communication between services
-    asyncly, they've been designed specially for decoupling tight long running services 
-    due to their durability nature like giving predicting output of an ai model service
-    while the ai model is working on other input prediction in the background we can 
-    receive the old outputs and pass them through the brokers to receive them in some 
-    http service for responding the caller.   
-    In rmq producer sends message to exchange the a consumer can bind its queue to 
-    the exchange to receive the messages, routing key determines the pattern of receiving 
-    messages inside the bounded queue from the exchange 
-    In kafka producer sends messages to topic the consumer can receives data from 
-    the topic, Rmq adds an extra layer on top of msg handling logic which is creating 
-    queue per each consumer.
-    offset in kafka is an strategy which determines the way of tracking the sequential 
-    order of receiving messages by kafka topics it's like routing key in rmq 
-    in kafka you should create consumer and producer separately but in rmq everything is 
-    started from a channel, we'll create a channel to declare the queue, exchange, consumer 
-    and producer in that channel, channel is a thread that can manage multiple connection 
-    to the broker through a single tcp connection.
-
-    BROKER TYPES: (preferred stack: RMQ + RPC + WebSocket + ShortPollingJobId)
-        → REDIS PUBSUB => light task queue
-        → KAFKA        => high latency hight throughput
-            -ˋˏ✄┈┈┈┈
-            >_ topic contains messages allows consumers to consume from topics each topic 
-            can be divided into multiple partitions for example a topic might have 10 
-            partitions, each message can have its own unique partition key which specifies 
-            to which partition the message will go. Offset can be assigned to each message
-            within a partition it specifies the position of the message in that partition
-            it's useful for the consumers to resume consuming where they've left.
-            a consumer can commit the message after processing it which tells kafka that
-            the consumer has received and processed the message completely.
-            single consumer consumes messages from specific partitions but in group of 
-            consumers kafka ensures that each partition is consumed by only one consumer 
-            within the group like if a topic with 4 partitions and 2 consumers are in the 
-            same group, Kafka will assign 2 partitions to each consumer:
-
-                                                                 ----------> partition-key1 queue(m1, m2, m3, ...) - all messages with key1
-             ---------                       ------------       |
-            |consumer1| <-----consume-----> |Kafka Broker| <-----topic-----> partition-key3 queue(m1, m2, m3, ...) - all messages with key3
-             ---------                      ------------ |      |
-                |_______partition1&2______________|      |      |----------> partition-key2 queue(m1, m2, m3, ...) - all messages with key2
-             ---------                            |      |      |
-            |consumer2|                           |      |       ----------> partition-key4 queue(m1, m2, m3, ...) - all messages with key4
-             ---------                            |      |
-                 |                                |   ---------
-                  --------------partition3&4------   | producer|
-                                                      ---------
-            it's notable that committing the offset too early, instead, might cause message 
-            loss, since upon recovery the consumer will start from the next message, skipping 
-            the one where the failure occurred.
-
-        → RMQ          => low latency low throughput
-            -ˋˏ✄┈┈┈┈
-            >_ the consuming task has been started by sending the ConsumeNotif message 
-            to this actor which will execute the streaming loop over the queue in 
-            either the notif consumer actor context itself or the tokio spawn thread:
-
-                notif consumer -----Q(Consume Payload)-----> Exchange -----notif CQRS writer-----> cache/store on Redis & db
-
-            -ˋˏ✄┈┈┈┈
-            >_ the producing task has been started by sending the ProduceNotif message 
-            to this actor which will execute the publishing process to the exchange 
-            in either the notif producer actor context itself or the tokio spawn thread:
-
-                notif producer -----payload-----> Exchange
-            
-            -ˋˏ✄┈┈┈┈
-            >_ client uses a short polling technique or websocket streaming to fetch notifications 
-            for an specific owner from redis or db, this is the best solution to implement a
-            realtiming strategy on the client side to fetch what's happening on the 
-            server side in realtime.
-
-             _________                                      _________
-            | server1 | <------- RMQ notif broker -------> | server2 |
-             ---------                                      ---------
-                | ws                                          | ws
-                 ------------------- client ------------------
-    ======================================================================================== 
+/* ------------------------------- implementations: 
+    schemas implementations 
 */
 
-use libp2p::kad::store::MemoryStore;
-use libp2p::kad::Mode;
-use libp2p::{kad, PeerId, Swarm, SwarmBuilder};
-use libp2p::{tcp, yamux, gossipsub, mdns, noise,
-    swarm::NetworkBehaviour, swarm::SwarmEvent,
-    request_response::{self, ProtocolSupport, OutboundRequestId, ResponseChannel, 
-        Event as P2pReqResEvent, Codec, Config},
-};
-use libp2p::identity::Keypair;
-use std::error::Error;
-use std::future::Future;
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::process::Output;
-use actor::workerthreadpool::sync::NoneAsyncThreadPool;
-use interfaces::ServiceExt;
-use task::Task;
-use task::TaskStatus;
-use tokio::spawn;
-use tokio::sync::TryLockError;
-use tokio::sync::MutexGuard;
-use tokio::task::JoinHandle;
-use tx::Transaction;
-use wallexerr::misc::SecureCellConfig;
-use interfaces::{Crypter, ShaHasher};
 use crate::*;
-
-
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub struct CryptoConfig{
-    pub secret: String,
-    pub passphrase: String,
-    pub unique_key: String
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub struct CompressionConfig{
-
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub struct ElectricNerveImpulse{
-
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub struct SynapticConnection{
-
-}
-
-#[derive(Serialize, Deserialize, Default, Clone, Debug)]
-pub enum ActionType{ // all the action type that causes the notif to get fired
-    #[default]
-    EventCreated,
-    EventExpired,
-    EventLocked,
-}
-
-#[derive(Serialize, Deserialize, Default, Clone, Debug)]
-pub struct EventData{
-    pub id: String,
-    pub receiver_info: String,
-    pub action_data: serde_json::Value, // you can map this to any structure you know!
-    pub actioner_info: String,
-    pub action_type: ActionType,
-    pub fired_at: i64,
-    pub is_seen: bool,
-}
-
-#[derive(Clone)]
-pub struct Worker{
-    pub id: String,
-    pub thread: std::sync::Arc<tokio::task::JoinHandle<()>>,
-}
-
-/* ------------------------------------------------------------------------
-this is the internal executor, it's a job or task queue eventloop
-it has a buffer of Event objets, thread safe eventloop receiver and 
-a sender to send data to its channel, this is the backbone of actor
-worker objects they talk locally through the following pattern sicne
-they have isolated state there is no mutex at all mutating the state
-would be done through message sending pattern.
-threadpool executor eventloop: 
-     sender, 
-     Vec<JoinHanlde<()>>, 
-     while let Some(task) = rx.lock().await.recv().await{ spawn(task); }
-*/
-#[derive(Clone)]
-pub struct InternalExecutor<Event>{
-    pub id: String, 
-    pub buffer: Buffer<Event>,
-    pub sender: tokio::sync::mpsc::Sender<Event>,
-    // what does the eventloop do? it receives Event inside tokio::spawn and execute them in the background
-    pub eventloop: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Event>>> 
-}
-
-// a job contains the io task 
-pub struct Job<J: Clone, S>
-where J: std::future::Future<Output = ()> + Send + Sync + 'static{
-    pub id: String, 
-    pub task: Task<J, S>
-}
-
-// Pin, Arc, Box are smart pointers Pin pin the pointee into the ram 
-// at an stable position which won't allow the type to gets moved.
-struct Task0<R, F: Fn() -> std::pin::Pin<Arc<R>> + Send + Sync + 'static> where 
-R: std::future::Future<Output=()> + Send + Sync + 'static{
-    pub job: Arc<F>
-}
-
-// a runner runs a job in its context
-pub struct Runner<J: Clone, S>
-where J: std::future::Future<Output = ()> + Send + Sync + 'static{
-    pub id: String,
-    pub job: Job<J, S>
-}
-
-// an event contains the offset in the cluster, execution status and the data
-#[derive(Clone, Debug, Default)]
-pub struct Event{
-    pub data: EventData,
-    pub status: EventStatus,
-    pub offset: u64, // the position of the event inside the brain network
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum EventStatus{
-    #[default]
-    Committed,
-    Executed,
-    Halted
-}
-
-// a buffer contains a thread safe vector of Events
-#[derive(Clone)]
-pub struct Buffer<E>{ // eg: Buffer<Event>
-    pub events: std::sync::Arc<tokio::sync::Mutex<Vec<E>>>,
-    pub size: usize
-}
-
-#[derive(Clone, Debug)]
-pub enum StreamError{
-    Sender(String),
-    Receiver(String)
-}
-
-#[derive(Clone, Debug)]
-pub enum NeuronError{
-    Runner(String),
-    Job(String),
-    Buffer(String),
-}
-
-/*  ====================================================================================
-       REALTIME NOTIF EVENT STREAMING DESIGN PATTERN (README files inside docs folder)
-    ====================================================================================
-                   MAKE SURE YOU'VE STARTED CONSUMERS BEFORE PRODUCING
-                   THEY MUST BE READY FOR CONSUMING WHILE PRODUCERS ARE
-                   SENDING MESSAGES TO THE BROKER. USUALLY RUN THE PRODUCER
-                   USING CLI AND THE CONSUMER AT STARTUP.
-
-    NotifBrokerActor is the worker of handling the process of publishing and consuming 
-    messages through rmq, redis and kafka, talking to the NotifBrokerActor can be done 
-    by sending it a message contains the setup either to publish or consume something 
-    to and from an specific broker, so generally it's a sexy actor to produce/consume 
-    messages from different type of brokers it uses RMQ, Redis and Kafka to produce and 
-    consume massive messages in realtime, kindly it supports data AES256 encryption 
-    through producing messages to the broker. we can send either producing or consuming 
-    message to this actor to start producing or consuming in the background.
-
-    how capnpc works?
-    in RPC every method call is a round trip in networking, canpnp pack all calls together 
-    in only one round trip, it uses the promise pipelining feature which every call is a 
-    future object which can be solved by awaiting in which it returns all the results from 
-    all the calls sent to the server it's like `foo().bar().end()` takes only 1 round trip 
-    which by awaiting on them it returns all the result from the server, it can call methods 
-    without waiting just take a round trip. call results are returned to the client before 
-    the request even arrives at the server, this is the feature of promise it's a place 
-    holder for the result of each call and once we await on them all the results will be 
-    arrived in one round trip.
-
-    ************************************************************************************
-    it's notable that for realtime push notif streaming we MUST start consuming from
-    the specified broker passed in to the message structure when talking with actor, in
-    a place where the application logic which is likely a server is being started.
-    ************************************************************************************
-    
-    ====================================================================================
-*/
-
-// the following defines our p2p protocol
-#[derive(NetworkBehaviour)]
-pub struct NeuronBehaviour {
-    pub kademlia: kad::Behaviour<MemoryStore>, // peer discovery over wan
-    pub gossipsub: gossipsub::Behaviour, // pubsub messaging
-}
-
-impl NeuronBehaviour{
-    pub fn new(key: Keypair) -> Self{
-
-        let peer_id = key.clone().public().to_peer_id();
-        let memory_store = MemoryStore::new(peer_id.clone());
-        let kad = kad::Behaviour::new(peer_id, memory_store);
-
-        // use hash of the message as the message id
-        let message_id_fn = |message: &gossipsub::Message| {
-            let mut s = DefaultHasher::new();
-            message.data.hash(&mut s);
-            gossipsub::MessageId::from(s.finish().to_string())
-        };
-        let gossipsubConfig = gossipsub::ConfigBuilder::default()
-            .heartbeat_interval(tokio::time::Duration::from_secs(10))
-            .validation_mode(gossipsub::ValidationMode::Strict) // enforce message signing when a peer sends it
-            .message_id_fn(message_id_fn)
-            .build()
-            .map_err(|msg| std::io::Error::new(std::io::ErrorKind::Other, msg))
-            .unwrap();
-
-        let gossipsub = gossipsub::Behaviour::new(
-                gossipsub::MessageAuthenticity::Signed(key.clone()),
-                gossipsubConfig,
-        ).unwrap();
-
-        Self{
-            kademlia: kad,
-            gossipsub,
-        }
-
-    }
-
-} 
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct UpdateState{
-    pub new_state: u8
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct ShutDown;
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct InjectPayload{
-    pub payload: Vec<u8>, // the shellcode or bytecode
-    pub method: TransmissionMethod,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub enum TransmissionMethod{
-    #[default]
-    Local,
-    Remote(String)
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct BanCry{
-    pub cmd: String,
-    pub tx: Transaction,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct StartP2pSwarEventLoop{
-    pub synprot: SynapseProtocol,
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct StartHttpServer{
-    pub host: String,
-    pub port: u16,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct Broadcast{
-    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
-    pub notif_data: EventData,
-    pub rmqConfig: Option<RmqPublishConfig>,
-    pub p2pConfig: Option<P2pPublishConfig>,
-    pub encryptionConfig: Option<CryptoConfig>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub struct RmqPublishConfig{
-    pub exchange_name: String,
-    pub exchange_type: String,
-    pub routing_key: String,
-}
-
-pub struct P2pPublishConfig{
-    pub topic: String,
-    pub peerId: String,
-    pub message: String,
-    pub synProt: SynapseProtocol
-}
-
-pub struct P2pConsumeConfig{
-    pub topic: String,
-    pub synProt: SynapseProtocol
-}
-
-pub struct SynapseProtocol{
-    pub swarm: Swarm<NeuronBehaviour>
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
-pub struct RmqConsumeConfig{
-    /* -ˋˏ✄┈┈┈┈ 
-        following queue gets bounded to the passed in exchange type with its 
-        routing key, when producer wants to produce notif data it sends them 
-        to the exchange with a known routing key, any queue that is bounded 
-        to that exchange routing key will be filled up with messages coming 
-        from the producer and they stay in there until a consumer read them
-    */
-    pub queue: String,
-    pub exchange_name: String,
-    /* -ˋˏ✄┈┈┈┈ 
-        routing_key is pattern for the exchange to route the messages to the 
-        bounded queue.
-        multiple producers can send their messages to a single exchange but 
-        each of with different routing keys.
-        any queue that is bounded to the exchange routing key will receive 
-        all the messages that follows the pattern inside the routing_key.
-        a message can be sent from producer to an exchange in a topic way with 
-        an sepecific routing key which tells the exchange this is the way of 
-        receiving messages that a bounded queue does since we might have 
-        sent messages to the same exchange with multiple different routing 
-        keys per each message and for a queue that is bounded to the exchange 
-        with the passed in routing key can only receives the messages that 
-        follow the pattern in the selected routing key. so the routing key in 
-        consumer is the patterns for this queue to tell exchange to what 
-        messages this queue is interested in:
-
-        1) producer produces messages and send them to the exchange with an specific routing key
-        2) a consumer create its own queue and bind it to the exchange with the bind key that 
-           is interested to receive the message from the exchange based on that key.
-        3) it's notable that a queue can be bounded to multiple exchange at the same time 
-           it allows to receive different messages based on each exchange routing key.
-                                                                                                                 --------          ---------
-                                                                                                                | queue1 | <----- |consumer1|
-                                                                        ------> routing_key1 <---------------------------          ---------
-                                                                       |                                            
-        producer1 ----------                                       -----------------> routing_key0  .........        
-                            |____ messages > routing_key1 ------> | exchange1|                                                
-                             ____ messages > routing_key4 ------>  -----------------> routing_key2  .........                                   
-                            |                                          |                                --------        -----------
-       producer2 -----------                                           |                               | queue2 | <----| consumer2 |
-                                                                        ------> routing_key4 <------------------        -----------
-                                                                     ----------                             |
-                                                                    | exchange2| -----bind(routing_key)-----
-                                                                     ----------
-    */
-    pub routing_key: String, // patterns for this queue to tell exchange what messages this queue is interested in
-    pub tag: String,
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct SendRpcRequest{
-    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
-    pub notif_data: EventData,
-    pub requestQueue: String, // a queue to send messages for server: server <---requestQueue---> client
-    pub correlationId: String, // used to identify messages in reply queue which contains responses from server, client consume from this queue
-    pub encryptionConfig: Option<CryptoConfig>,
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct ReceiveRpcResponse{
-    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
-    pub notif_data: EventData,
-    pub requestQueue: String, // used to specify to which queue client sends the message for server
-    pub encryptionConfig: Option<CryptoConfig>,
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct SendP2pRequest{
-    pub peerId: String,
-    pub message: String
-}
-
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct ReceiveP2pResponse;
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct Subscribe{ // we'll create a channel then start consuming by binding a queue to the exchange
-    pub p2pConfig: Option<P2pConsumeConfig>,
-    pub rmqConfig: Option<RmqConsumeConfig>,
-    pub local_spawn: bool, // either spawn in actor context or tokio threadpool
-    pub decryptionConfig: Option<CryptoConfig>
-}
-
-#[derive(Clone)]
-pub enum ContractType{
-    Verifier,
-    Transmitter(Addr<NeuronActor>),
-}
-
-#[derive(Clone)]
-pub struct Contract{
-    pub cont_type: ContractType,
-    pub opcode: u8,
-}
-
-#[derive(Clone)]
-pub struct RmqConfig{
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Clone)]
-pub struct AppService{
-}
-
-#[derive(Clone)]
-pub struct NeuronActor{
-    pub peerId: libp2p::PeerId,
-    pub rmqConfig: Option<RmqConfig>,
-    pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
-    pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
-    pub internal_executor: InternalExecutor<Event>, /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */
-    pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>, /* -- all neuron atomic transactions -- */
-    pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>, /* -- an internal lighthread worker -- */
-    pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>, /* -- internal locker -- */
-    pub internal_none_async_threadpool: std::sync::Arc<Option<NoneAsyncThreadPool>>, /* -- internal none async threadpool -- */
-    pub signal: std::sync::Arc<std::sync::Condvar>, /* -- the condition variable signal for this neuron -- */
-    pub dependency: std::sync::Arc<dyn ServiceExt<Model = Self>>, /* -- inject any type that impls the ServiceExt trait as dependency injection -- */
-    pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
-    pub state: u8
-}
-
-impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S> Runner<J, S>{
-    pub async fn execute(&mut self){
-        let job = &self.job;
-    }
-}
-
-impl Event{
-
-    pub async fn process(&mut self){
-        
-    }
-
-}
-
-
-// ------------------------------
-// implementnig the internal executor methods, it has an eventloop
-// in its core which receives event coming from its channel constantly
-// it then execute them along with the passed in callback in the run() method
-impl InternalExecutor<Event>{
-    
-    pub fn new(buffer: Buffer<Event>) -> Self{
-        let (tx, rx) = tokio::sync::mpsc::channel::<Event>(100);
-        let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
-        Self { id: Uuid::new_v4().to_string(), buffer, sender: tx, eventloop: rx }
-    }
-
-    pub async fn spawn(&self, event: Event) -> Result<Self, tokio::sync::mpsc::error::SendError<Event>>{
-        let sender = self.clone().sender;
-        if let Err(e) = sender.send(event).await{
-            return Err(e);
-        }
-        Ok(self.clone())
-    }
-
-    pub async fn run<F, R: std::future::Future<Output = ()> + Send + Sync + 'static, >(&self, callback: F)
-    where F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static{
-        let get_rx = self.clone().eventloop;
-        let mut rx = get_rx.try_lock();
-        
-        let cloned_callback = callback.clone();
-        if rx.is_err(){
-            let error = rx.unwrap_err();
-            tokio::spawn(async move{
-                cloned_callback(
-                    Event::default(), 
-                    Some(StreamError::Receiver(error.source().unwrap().to_string()))
-                ).await; // calling callback with the passed in received event
-            });
-        } else{
-            let mut actualRx = rx.unwrap(); 
-            while let Some(event) = actualRx.recv().await{
-                
-                let event_for_first_tokio = event.clone();
-                let cloned_event = event.clone();
-                let cloned_callback = callback.clone();
-    
-                tokio::spawn(async move{
-                    event_for_first_tokio.clone().process().await;
-                });
-
-                // executing the eventloop in the background
-                tokio::spawn(async move{
-                    cloned_callback(cloned_event, None).await; // calling callback with the passed in received event
-                });
+use crate::messages::*;
+use crate::schemas::*;
+use crate::interfaces::*;
+
+
+impl Drop for NeuronActor{
+    fn drop(&mut self) {
+        let this = self.clone();
+        tokio::spawn(async move{
+            let getInternalWorker = &this.internal_worker;
+            if getInternalWorker.is_some(){
+                let mut internalWorker = getInternalWorker.clone().unwrap();
+                let mut unloackedInternalWorker = internalWorker.lock().await;
+                (*unloackedInternalWorker).thread.abort(); // abort the thread handler, the tokio threads are future based thread so we can easily abort them
             }
-        }
-
+        });
     }
-
-
 }
 
 impl NeuronActor{
 
-    pub async fn new(bufferSize: usize, rmqConfig: Option<RmqConfig>) -> (Self, SynapseProtocol){
-        
-        let edkeys = Keypair::generate_ed25519();
+    pub async fn new(bufferSize: usize, rmqConfig: Option<RmqConfig>) -> Self{
+        NeuronActor{
+            synProt: {
+                // building the swarm object with our network behaviour contains our protocol
+                let mut swarm = SwarmBuilder::with_new_identity()
+                .with_tokio()
+                .with_tcp(
+                    tcp::Config::default(), 
+                    noise::Config::new,
+                    yamux::Config::default
+                )
+                .unwrap()
+                .with_quic()
+                .with_behaviour(|key|{
+                    Ok(NeuronBehaviour::new(key.clone()))
+                })
+                .unwrap()
+                .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
+                .build();
 
-        // building the swarm object with our network behaviour contains our protocol
-        let mut swarm = SwarmBuilder::with_new_identity()
-            .with_tokio()
-            .with_tcp(
-                tcp::Config::default(), 
-                noise::Config::new,
-                yamux::Config::default
-            )
-            .unwrap()
-            .with_quic()
-            .with_behaviour(|key|{
-                Ok(NeuronBehaviour::new(key.clone()))
-            })
-            .unwrap()
-            .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
-            .build();
-
-        (
-            NeuronActor{
-                peerId: {
-                    let local_peer_id = PeerId::from_public_key(&edkeys.public());
-                    local_peer_id
-                },
-                wallet: Some(wallexerr::misc::Wallet::new_ed25519()),
-                internal_executor: InternalExecutor::new(
-                    Buffer{ events: std::sync::Arc::new(tokio::sync::Mutex::new(vec![
-                        Event{ data: EventData::default(), status: EventStatus::Committed, offset: 0 }
-                    ])), size: bufferSize }
-                ), 
-                metadata: None,
-                internal_worker: None,
-                transactions: None,
-                internal_locker: None,
-                internal_none_async_threadpool: Arc::new(None),
-                signal: std::sync::Arc::new(std::sync::Condvar::new()),
-                contract: None,
-                rmqConfig,
-                dependency: std::sync::Arc::new(AppService{}),
-                state: 0 // this can be mutated by sending the update state message to the actor
-            }, SynapseProtocol{swarm}
-        )
+                SynapseProtocol{
+                    swarm: std::sync::Arc::new(
+                        tokio::sync::Mutex::new(
+                            swarm
+                        )
+                    )
+                }
+                    
+            },
+            peerId: {
+                let edkeys = Keypair::generate_ed25519();
+                let local_peer_id = PeerId::from_public_key(&edkeys.public());
+                local_peer_id
+            },
+            wallet: Some(wallexerr::misc::Wallet::new_ed25519()),
+            internal_executor: InternalExecutor::new(
+                Buffer{ events: std::sync::Arc::new(tokio::sync::Mutex::new(vec![
+                    Event{ data: EventData::default(), status: EventStatus::Committed, offset: 0 }
+                ])), size: bufferSize }
+            ), 
+            metadata: None,
+            internal_worker: None,
+            transactions: None,
+            internal_locker: None,
+            internal_none_async_threadpool: Arc::new(None),
+            signal: std::sync::Arc::new(std::sync::Condvar::new()),
+            contract: None,
+            rmqConfig,
+            dependency: std::sync::Arc::new(AppService{}),
+            state: 0 // this can be mutated by sending the update state message to the actor
+        }
     }
 
-    pub async fn sendRpcRequest(&mut self, rpcConfig: SendRpcRequest){
-
-    }
-
-    pub async fn receiveRpcResponse(&mut self, rpcConfig: ReceiveRpcResponse){
-
-    }
-
-    pub async fn sendP2pRequest(&mut self, p2pConfig: SendP2pRequest){
-
-    }
-
-    pub async fn receiveP2pResponse(&mut self, p2pConfig: ReceiveP2pResponse){
+    pub async fn sendRpcRequest(&mut self, rpcConfig: RmqRequestConfig, encConfig: Option<CryptoConfig>){
 
     }
 
+    pub async fn sendP2pRequest(&mut self, p2pConfig: P2pRequestConfig, encConfig: Option<CryptoConfig>){
+
+    }
+
+    pub async fn receiveRpcResponse(&mut self, rpcConfig: RmqResponseConfig, encConfig: Option<CryptoConfig>) -> String{
+
+        todo!()
+    }
+
+    pub async fn receiveP2pResponse(&mut self, p2pConfig: P2pResponseConfig, encConfig: Option<CryptoConfig>)  -> String{
+
+        todo!()
+    }
+
+    // in swarm event loop we'll handle all swarm network behaviours 
+    // including kademlia, gossipsub and request response events
     pub async fn startP2pSwarmEventLoop(&mut self, synProt: SynapseProtocol){
         
         // https://github.com/libp2p/rust-libp2p/blob/master/examples/distributed-key-value-store/src/main.rs
         // https://github.com/libp2p/rust-libp2p/blob/master/examples/chat/src/main.rs
-        let mut swarm = synProt.swarm;
+        let mut getSwarm = synProt.swarm;
+        let mut swarm = getSwarm.lock().await;
 
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
         swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap()).unwrap();
         swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap()).unwrap();
 
         // TODO 
+        // handle kademlia, gossipsub and request response events
         // ...
 
 
@@ -690,7 +122,8 @@ impl NeuronActor{
 
         let P2pPublishConfig { topic, peerId, message, synProt } = p2pConfig;
         
-        let mut swarm = synProt.swarm;
+        let mut getSwarm = synProt.swarm;
+        let mut swarm = getSwarm.lock().await;
         let topic = gossipsub::IdentTopic::new(topic);
         let msgId = swarm.behaviour_mut().gossipsub.publish(topic.clone(), message.as_bytes()).unwrap();
         
@@ -703,7 +136,8 @@ impl NeuronActor{
 
         let P2pConsumeConfig { topic, synProt } = p2pConfig;
 
-        let mut swarm = synProt.swarm;
+        let mut getSwarm = synProt.swarm;
+        let mut swarm = getSwarm.lock().await;
         let topic = gossipsub::IdentTopic::new(topic);
         swarm.behaviour_mut().gossipsub.subscribe(&topic).unwrap();
 
@@ -1563,11 +997,131 @@ impl NeuronActor{
 
 }
 
+
+
+impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S> Runner<J, S>{
+    pub async fn execute(&mut self){
+        let job = &self.job;
+    }
+}
+
+impl Event{
+
+    pub async fn process(&mut self){
+        
+    }
+
+}
+
+
+// ------------------------------
+// implementnig the internal executor methods, it has an eventloop
+// in its core which receives event coming from its channel constantly
+// it then execute them along with the passed in callback in the run() method
+impl InternalExecutor<Event>{
+    
+    pub fn new(buffer: Buffer<Event>) -> Self{
+        let (tx, rx) = tokio::sync::mpsc::channel::<Event>(100);
+        let rx = std::sync::Arc::new(tokio::sync::Mutex::new(rx));
+        Self { id: Uuid::new_v4().to_string(), buffer, sender: tx, eventloop: rx }
+    }
+
+    pub async fn spawn(&self, event: Event) -> Result<Self, tokio::sync::mpsc::error::SendError<Event>>{
+        let sender = self.clone().sender;
+        if let Err(e) = sender.send(event).await{
+            return Err(e);
+        }
+        Ok(self.clone())
+    }
+
+    pub async fn run<F, R: std::future::Future<Output = ()> + Send + Sync + 'static, >(&self, callback: F)
+    where F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static{
+        let get_rx = self.clone().eventloop;
+        let mut rx = get_rx.try_lock();
+        
+        let cloned_callback = callback.clone();
+        if rx.is_err(){
+            let error = rx.unwrap_err();
+            tokio::spawn(async move{
+                cloned_callback(
+                    Event::default(), 
+                    Some(StreamError::Receiver(error.source().unwrap().to_string()))
+                ).await; // calling callback with the passed in received event
+            });
+        } else{
+            let mut actualRx = rx.unwrap(); 
+            while let Some(event) = actualRx.recv().await{
+                
+                let event_for_first_tokio = event.clone();
+                let cloned_event = event.clone();
+                let cloned_callback = callback.clone();
+    
+                tokio::spawn(async move{
+                    event_for_first_tokio.clone().process().await;
+                });
+
+                // executing the eventloop in the background
+                tokio::spawn(async move{
+                    cloned_callback(cloned_event, None).await; // calling callback with the passed in received event
+                });
+            }
+        }
+
+    }
+
+
+}
+
+
+impl NeuronBehaviour{
+    pub fn new(key: Keypair) -> Self{
+
+        let peer_id = key.clone().public().to_peer_id();
+        let memory_store = MemoryStore::new(peer_id.clone());
+        let kad = kad::Behaviour::new(peer_id, memory_store);
+
+        // use hash of the message as the message id
+        let message_id_fn = |message: &gossipsub::Message| {
+            let mut s = DefaultHasher::new();
+            message.data.hash(&mut s);
+            gossipsub::MessageId::from(s.finish().to_string())
+        };
+        let gossipsubConfig = gossipsub::ConfigBuilder::default()
+            .heartbeat_interval(tokio::time::Duration::from_secs(10))
+            .validation_mode(gossipsub::ValidationMode::Strict) // enforce message signing when a peer sends it
+            .message_id_fn(message_id_fn)
+            .build()
+            .map_err(|msg| std::io::Error::new(std::io::ErrorKind::Other, msg))
+            .unwrap();
+
+        let gossipsub = gossipsub::Behaviour::new(
+                gossipsub::MessageAuthenticity::Signed(key.clone()),
+                gossipsubConfig,
+        ).unwrap();
+
+        Self{
+            kademlia: kad,
+            gossipsub,
+        }
+
+    }
+
+}
+
 impl Actor for NeuronActor{
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
 
         let pid = ctx.address(); // actor or process address or unique id
+
+        // start swarm event loop once the actor starts
+        let mut this = self.clone();
+        tokio::spawn(async move{
+            let mut getSwarm = this.synProt.swarm.clone();
+            let mut swarm = getSwarm.lock().await;
+            
+
+        });
 
         ctx.run_interval(std::time::Duration::from_secs(10), |actor, ctx|{
 
@@ -1581,304 +1135,5 @@ impl Actor for NeuronActor{
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
         log::error!("neuron actor has stopped");        
-    }
-}
-
-/* ********************************************************************************* */
-/* ***************************** PRODUCE NOTIF HANDLER ***************************** */
-/* ********************************************************************************* */
-impl ActixMessageHandler<Broadcast> for NeuronActor{
-    
-    type Result = ();
-    fn handle(&mut self, msg: Broadcast, ctx: &mut Self::Context) -> Self::Result {;
-
-        // unpacking the notif data
-        let Broadcast { 
-                rmqConfig,
-                p2pConfig,
-                local_spawn,
-                notif_data,
-                encryptionConfig,
-
-            } = msg;
-        
-        let mut stringData = serde_json::to_string(&notif_data).unwrap();
-        let mut scc = SecureCellConfig::default();
-        let mut ruk = String::from(""); 
-
-        let finalData = if encryptionConfig.is_some(){
-            
-            let CryptoConfig{ secret, passphrase, unique_key } = encryptionConfig.clone().unwrap();
-            let mut secure_cell_config = &mut wallexerr::misc::SecureCellConfig{
-                secret_key: hex::encode(secret),
-                passphrase: hex::encode(passphrase),
-                data: vec![],
-            };
-            
-            scc = secure_cell_config.clone();
-            ruk = unique_key;
-
-            // after calling encrypt method stringData has changed and contains the hex encrypted data
-            stringData.encrypt(secure_cell_config);
-            
-            stringData // contains aes256 encrypted data in hex format
-
-        } else{
-            stringData
-        };
-
-        let mut this = self.clone();
-
-        // spawn the future in the background into the given actor context thread
-        // by doing this we're executing the future inside the actor thread since
-        // every actor has its own thread of execution.
-        if local_spawn{
-            async move{
-                if let Some(rmqcfg) = rmqConfig{
-                    let RmqPublishConfig { exchange_name, exchange_type, routing_key } = rmqcfg;
-                    this.rmqPublish(&finalData, &exchange_name, &routing_key, &exchange_type, scc, &ruk).await;
-                } else if let Some(p2pcfg) = p2pConfig{
-                    this.p2pPublish(p2pcfg).await;
-                } else{
-                    return;
-                }
-            }
-            .into_actor(self) // convert the future into an actor future of type NotifBrokerActor
-            .spawn(ctx); // spawn the future object into this actor context thread
-        } else{ // spawn the future in the background into the tokio lightweight thread
-            tokio::spawn(async move{
-                if let Some(rmqcfg) = rmqConfig{
-                    let RmqPublishConfig { exchange_name, exchange_type, routing_key } = rmqcfg;
-                    this.rmqPublish(&finalData, &exchange_name, &routing_key, &exchange_type, scc, &ruk).await;
-                } else if let Some(p2pcfg) = p2pConfig{
-                    this.p2pPublish(p2pcfg).await;
-                } else{
-                    return;
-                }
-            });
-        }
-        
-        return;
-        
-    }
-
-}
-
-impl ActixMessageHandler<Subscribe> for NeuronActor{
-    
-    type Result = ();
-    fn handle(&mut self, msg: Subscribe, ctx: &mut Self::Context) -> Self::Result {
-
-        // unpacking the consume data
-        let Subscribe { 
-                rmqConfig,
-                p2pConfig,
-                local_spawn,
-                decryptionConfig
-
-            } = msg; // the unpacking pattern is always matched so if let ... is useless
-        
-        let mut this = self.clone();
-        
-        // spawn the future in the background into the given actor context thread
-        // by doing this we're executing the future inside the actor thread since
-        // every actor has its own thread of execution.
-        if local_spawn{
-            async move{
-                if let Some(rmqcfg) = rmqConfig{
-                    let RmqConsumeConfig{ queue, exchange_name, routing_key, tag } = rmqcfg;
-                    this.rmqConsume(
-                        &tag, 
-                        &queue, 
-                        &routing_key, 
-                        &exchange_name,
-                        decryptionConfig
-                    ).await;
-                } else if let Some(p2pcfg) = p2pConfig{
-                    this.p2pConsume(p2pcfg).await;
-                } else{
-                    return;
-                }
-            }
-            .into_actor(self) // convert the future into an actor future of type NotifBrokerActor
-            .spawn(ctx); // spawn the future object into this actor context thread
-        } else{ // spawn the future in the background into the tokio lightweight thread
-            tokio::spawn(async move{
-                if let Some(rmqcfg) = rmqConfig{
-                    let RmqConsumeConfig{ queue, exchange_name, routing_key, tag } = rmqcfg;
-                    this.rmqConsume(
-                        &tag, 
-                        &queue, 
-                        &routing_key, 
-                        &exchange_name,
-                        decryptionConfig
-                    ).await;
-                } else if let Some(p2pcfg) = p2pConfig{
-                    this.p2pConsume(p2pcfg).await;
-                } else{
-                    return;
-                }
-            });
-        }
-        return; // terminate the caller
-
-    }
-
-}
-
-// handler for handling send update state message to this actor to update the state
-// this ensures the actor isolation stays safe and secure cause there is no direct 
-// mutating it's handled only by sending message to the actor and the actor receives
-// it from its mailbox and runs it accordingly. 
-impl ActixMessageHandler<UpdateState> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: UpdateState, ctx: &mut Self::Context) -> Self::Result {
-        self.state = msg.new_state;
-    }
-}
-
-impl ActixMessageHandler<SendRpcRequest> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: SendRpcRequest, ctx: &mut Self::Context) -> Self::Result {
-        let SendRpcRequest{ local_spawn, notif_data, requestQueue, correlationId, encryptionConfig } = msg.clone();
-
-        let mut this = self.clone();
-        tokio::spawn(async move{
-            this.sendRpcRequest(msg.clone()).await;
-        });
-    }
-}
-
-impl ActixMessageHandler<ReceiveRpcResponse> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: ReceiveRpcResponse, ctx: &mut Self::Context) -> Self::Result {
-        let ReceiveRpcResponse { local_spawn, notif_data, requestQueue, encryptionConfig } = msg.clone();
-
-        let mut this = self.clone();
-        tokio::spawn(async move{
-            this.receiveRpcResponse(msg.clone()).await;
-        });
-    }
-}
-
-impl ActixMessageHandler<SendP2pRequest> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: SendP2pRequest, ctx: &mut Self::Context) -> Self::Result {
-        let SendP2pRequest{ peerId, message } = msg.clone();
-
-        let mut this = self.clone();
-        tokio::spawn(async move{
-            this.sendP2pRequest(msg.clone()).await;
-        });
-    }
-}
-
-impl ActixMessageHandler<ReceiveP2pResponse> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: ReceiveP2pResponse, ctx: &mut Self::Context) -> Self::Result {
-        let ReceiveP2pResponse { } = msg.clone();
-
-        let mut this = self.clone();
-        tokio::spawn(async move{
-            this.receiveP2pResponse(msg.clone()).await;
-        });
-    }
-}
-
-impl ActixMessageHandler<ShutDown> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: ShutDown, ctx: &mut Self::Context) -> Self::Result {
-        ctx.stop();
-    }
-}
-
-impl ActixMessageHandler<InjectPayload> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: InjectPayload, ctx: &mut Self::Context) -> Self::Result {
-        
-        let InjectPayload{ payload, method} = msg.clone();
-        match method{
-            TransmissionMethod::Local => {
-
-            },
-            TransmissionMethod::Remote(methodName) => {
-                
-            },
-            _ => {}
-        }
-    }
-}
-
-impl ActixMessageHandler<StartP2pSwarEventLoop> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: StartP2pSwarEventLoop, ctx: &mut Self::Context) -> Self::Result {
-        
-        let mut this = self.clone();
-        tokio::spawn(async move{
-            this.startP2pSwarmEventLoop(msg.synprot).await;
-        });
-
-    }
-}
-
-impl ActixMessageHandler<BanCry> for NeuronActor{
-    type Result = ();
-    fn handle(&mut self, msg: BanCry, ctx: &mut Self::Context) -> Self::Result{
-
-        let BanCry { cmd, tx } = msg;
-        match cmd.as_str(){
-            "executeTransaction" => {
-                let this = self.clone();
-                let task = async move{
-                    let getNeuronTransactions = &this.transactions;
-                    if getNeuronTransactions.is_some(){
-                        let neuronTransactions = getNeuronTransactions.as_ref().unwrap();
-                        let mut lockedNeuronTransactions = neuronTransactions.lock().await;
-                        let tx = Transaction::new(
-                            tx,
-                            Uuid::new_v4().to_string().as_str(), 
-                            100.0, 
-                            "0x01", 
-                            "0x00", 
-                            2.5, 
-                            String::from("some data").as_bytes()
-                        ).await;
-                        (*lockedNeuronTransactions).push(tx);
-                    } else{
-                        log::error!("[!] actor has no transactions");
-                    }
-                };
-                spawn(task); // spawn the task of pushing tx into the neuron transactions in the background thread
-            },
-            _ => {
-                log::error!("[!] invalid command for bancry!");
-            }
-        }
-        
-    }
-}
-
-impl ActixMessageHandler<StartHttpServer> for NeuronActor{
-    
-    type Result = ();
-    fn handle(&mut self, msg: StartHttpServer, ctx: &mut Self::Context) -> Self::Result {
-
-        let StartHttpServer { host, port } = msg.clone();
-        
-    }
-
-}
-
-impl Drop for NeuronActor{
-    fn drop(&mut self) {
-        let this = self.clone();
-        tokio::spawn(async move{
-            let getInternalWorker = &this.internal_worker;
-            if getInternalWorker.is_some(){
-                let mut internalWorker = getInternalWorker.clone().unwrap();
-                let mut unloackedInternalWorker = internalWorker.lock().await;
-                (*unloackedInternalWorker).thread.abort(); // abort the thread handler, the tokio threads are future based thread so we can easily abort them
-            }
-        });
     }
 }

@@ -3,12 +3,10 @@
 // -----------------------------------
 /* Neuron Actor DSL using Macros
 
-    
     tools: desktop books for neuroscience and information theory
-    TODOs: p2p network behavior: stream, request response, kademlia, gossipsub 
-    TODOs: this.rs, neuron message handlers, build neuron actor from cli args,
+    TODOs: p2p concepts and network behavior: stream, request response, kademlia, gossipsub 
+    TODOs: neuron message handlers, start swarm eventloop, build neuron actor from cli args,
     TODOs: stem.spec (GPT tryout section), publish stemlib to crate
-    TODOs: impl Trait for functions by proc macro then box them (structured functions) for dep injection
     TODOs: encrypt the connection between each neuron in a cluster or brain using ed25519
     TODOs:
         SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway, 
@@ -33,30 +31,6 @@
         Box::pin(async move{}), Arc::pin(async move{}) and Arc<Fn() -> R> where R: Future + Send + Sync
         eventloop with spawn(async move{loop{select!{}}}) and spawn(async move{while let Some(job) = rx.recv().await{}}) inside the actor.rs of the stem 
         CronScheduler(time, ctx, redis pubsub exp key), select!{} awaiting, arc, mutex, timeout, Box::pin(async{}), Arc::pin(async move{}), condvar, jobq chan send recv
-
-        proc ones can only be used on top of functions and impl blocks to extend 
-        the function body and add some vars into it at compile time:
-            use proc macro with attrs to handle automatic task spawning and jobq chan creations
-            use decl macro to build dsl
-
-        struct ProcessStruct;
-
-        // also handle multiple passing params to function using macros with omitting the useless ones
-        // do this:    
-        #[processExt]
-        impl ProcessStruct{
-            async fn start(&self){}
-            async fn stop(&self){}
-        }
-        // instead of:
-        impl processExt for ProcessStruct{} 
-
-
-        // when a function is annotated with distribute 
-        // means it can distribute itself among networks
-        #[distribute]
-        pub async fn injectShellcodeLogic(){
-        }
 
          ---------------- MACRO PATTERNS -----------------
 

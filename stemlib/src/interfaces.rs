@@ -1,7 +1,9 @@
 
 
 use std::error::Error;
-use neuron::{AppService, StreamError};
+use crate::messages::*;
+use crate::impls::*;
+use crate::schemas::*;
 use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
 
@@ -195,7 +197,7 @@ pub trait ServiceExt: Send + Sync + 'static{
 }
 
 impl ServiceExt for AppService{
-    type Model = NeuronActor;
+    type Model = AppService;
     fn run(&mut self) {
         
     }

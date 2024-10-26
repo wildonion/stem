@@ -6,6 +6,9 @@ use futures::future::{BoxFuture, FutureExt};
 use tokio::net::tcp;
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
+use crate::schemas::*;
+use crate::messages::*;
+
 
 // static requires constant value and constant values must be only stack data like &[] and &str otherwise
 // we're not allowed to have heap data types like Vec, String, Box, Arc, Mutex in const and static as value
@@ -4837,6 +4840,27 @@ pub fn init_vm(){
 pub async fn neuron_actor_cruft(){
     // --------------------------------------------
     // --------------------------------------------
+
+    fn retFut() -> impl std::future::Future<Output = ()> + Send + Sync{
+        async move{}
+    }
+    // it's better to pin the future if we want to return it as a dynamic dispatch 
+    fn retFut1() -> std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync>>{
+        std::sync::Arc::pin(async move{})
+    }
+    // can't return future as a generic we should return a type that is already generic 
+    // like the return type of a closure
+    fn retFut2<F: Fn() -> R + Send + Sync, R>(param: Arc<F>) -> R 
+    where R: std::future::Future<Output = ()> + Send + Sync{
+        let task = param();
+        task
+    }
+    type FutOut = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync >>;
+    fn retFut3<F: Fn() -> FutOut + Send + Sync>(param: Arc<F>) -> FutOut{
+        let task = param();
+        task
+    }
+    
     trait Interface0{}
     struct Job1{}
     impl Interface0 for Job1{}
@@ -4878,7 +4902,7 @@ pub async fn neuron_actor_cruft(){
         task.await;
     }
     
-    async fn push<C, R>(topic: &str, event: neuron::Event, payload: &[u8], c: C) where 
+    async fn push<C, R>(topic: &str, event: schemas::Event, payload: &[u8], c: C) where 
         C: Fn() -> R + Send + Sync + 'static,
         R: std::future::Future<Output = ()> + Send + Sync + 'static{
         let arcedCallback = Arc::new(c);
@@ -5053,4 +5077,5 @@ pub async fn neuron_actor_cruft(){
 
     // --------------------------------------------
     // --------------------------------------------
+    
 }
