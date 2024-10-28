@@ -44,7 +44,7 @@ pub struct StartP2pSwarEventLoop{
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
-pub struct StartHttpServer{
+pub struct StartGateWay{
     pub host: String,
     pub port: u16,
 }

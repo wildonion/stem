@@ -3,53 +3,24 @@
 // -----------------------------------
 /* Neuron Actor DSL using Macros
 
-    tools: desktop books for neuroscience and information theory
-    TODOs: p2p concepts and network behavior: stream, request response, kademlia, gossipsub 
-    TODOs: neuron message handlers, start swarm eventloop, build neuron actor from cli args,
-    TODOs: stem.spec (GPT tryout section), publish stemlib to crate
-    TODOs: encrypt the connection between each neuron in a cluster or brain using ed25519
-    TODOs:
-        SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway, 
-        SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, proxy and dns server
-    main concepts:
-        dyn dispatch and dep injection with Arc::new(TypeImplsTrait{}) Box::new(TypeImplsTrait{}) Arc::pin(async move{}), Box::pin(async move{})
-        stat dyn dispatch, dep injecton and binding to trait, Box::pin(async move{}), Arc::pin(async move{}), Arc<Fn() -> R> where R: Future
-        Err(CstmError::new()) || ? on object of type CstmError who impls Error, From, Display traits || Err(Box::new(CstmError::new()))
-        use Box::pin(async move{}) or Arc::pin(async move{})  to return async future object in none async context that you can't await on future objects
-        make everything cloneable and break the cycle of self ref types using Arc and store on the heap using Box 
-        mutex, channel, spawn, select, trait closure for poly, dep inj, dyn and stat dispatch,
-        future objects in form of dyn dispatch with Box::pin(async move{}) or a job in closure return type with Arc::new(||async move{})
-        raft,dag,mdp,adjmat,merkletree,shard,replica,p2p::wrtc,udp,quic,tcp,ws,noise,gossipsub,kdht,swarm,lightthread
-        atomic,chan,arc,mutex,select,spawn,eventloop,CronScheduler,send,sync,static, static lazy arc mutex app ctx + send + sync
-        thread_local, actor id or address, std::alloc, jemalloc, GlobalAlloc, bumpalo and r3bl_rs_utils arena as a global allocator
-        zero copy, null pointer optimiser, unique storage key, dsl and feature based for stem
-        atomic transaction: ALL OR NONE with atomic syncing using static lazy Arc Mutex & Channels 
-        default type param, default const in struct, let ONION = const{}, Arc<Mutex< to mutate arced value vs Rc<RefCell< to mutate Rced value
-        interfaces and traits for poly, stat dyn dispatch, access types through a single interface, Any trait, dep injection
-        if you don't care about the result of the io task don't await on the spawn otherwise use static lazy arc mutex or chans and let the task gets executed in the background thread
-        spawn(async move{handleMsg().await}) in the background light thread (none blocking) without awaiting: thread per each task
-        Box::pin(async move{}), Arc::pin(async move{}) and Arc<Fn() -> R> where R: Future + Send + Sync
-        eventloop with spawn(async move{loop{select!{}}}) and spawn(async move{while let Some(job) = rx.recv().await{}}) inside the actor.rs of the stem 
-        CronScheduler(time, ctx, redis pubsub exp key), select!{} awaiting, arc, mutex, timeout, Box::pin(async{}), Arc::pin(async move{}), condvar, jobq chan send recv
+    ---------------- MACRO PATTERNS -----------------
 
-         ---------------- MACRO PATTERNS -----------------
+    rust types can be fallen into one the following categories
 
-        rust types can be fallen into one the following categories
-
-        item      ➔ an Item | an item, like a function, struct, module, etc.
-        block     ➔ a BlockExpression | a block (i.e. a block of statements and/or an expression, surrounded by braces)
-        stmt      ➔ a Statement without the trailing semicolon (except for item statements that require semicolons)
-        pat_param ➔ a PatternNoTopAlt
-        pat       ➔ at least any PatternNoTopAlt, and possibly more depending on edition
-        expr      ➔ an Expression
-        ty        ➔ a Type
-        ident     ➔ an IDENTIFIER_OR_KEYWORD or RAW_IDENTIFIER
-        path      ➔ a TypePath style path | a path (e.g. foo, ::std::mem::replace, transmute::<_, int>, …)
-        tt        ➔ a TokenTree (a single token or tokens in matching delimiters (), [], or {})
-        meta      ➔ an Attr, the contents of an attribute | a meta item; the things that go inside #[...] and #![...] attributes
-        lifetime  ➔ a LIFETIME_TOKEN
-        vis       ➔ a possibly empty Visibility qualifier
-        literal   ➔ matches -?LiteralExpression
+    item      ➔ an Item | an item, like a function, struct, module, etc.
+    block     ➔ a BlockExpression | a block (i.e. a block of statements and/or an expression, surrounded by braces)
+    stmt      ➔ a Statement without the trailing semicolon (except for item statements that require semicolons)
+    pat_param ➔ a PatternNoTopAlt
+    pat       ➔ at least any PatternNoTopAlt, and possibly more depending on edition
+    expr      ➔ an Expression
+    ty        ➔ a Type
+    ident     ➔ an IDENTIFIER_OR_KEYWORD or RAW_IDENTIFIER
+    path      ➔ a TypePath style path | a path (e.g. foo, ::std::mem::replace, transmute::<_, int>, …)
+    tt        ➔ a TokenTree (a single token or tokens in matching delimiters (), [], or {})
+    meta      ➔ an Attr, the contents of an attribute | a meta item; the things that go inside #[...] and #![...] attributes
+    lifetime  ➔ a LIFETIME_TOKEN
+    vis       ➔ a possibly empty Visibility qualifier
+    literal   ➔ matches -?LiteralExpression
 */
 
 
@@ -124,19 +95,16 @@ macro_rules! post {
     };
 }
 
-// a neuron is an actor, an isolated state talks locally and remotely through 
-// eventloop jobq channel and rpc rmq + p2p
+
 #[macro_export]
 macro_rules! neuron {
-    () => {
+    ($data:ident -> $chan:expr) => {
         {
             
         }
     };
 }
 
-// stream is tool helps to start streaming over a neuron actor 
-// either locally or remotely  
 #[macro_export]
 macro_rules! stream {
     () => {
@@ -146,8 +114,6 @@ macro_rules! stream {
     };
 }
 
-// layer contains one or more neurons inside itself, multiple 
-// layers form an onion brain
 #[macro_export]
 macro_rules! layer {
     () => {

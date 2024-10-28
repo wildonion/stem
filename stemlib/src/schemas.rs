@@ -12,6 +12,19 @@ use crate::handlers::*;
 
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct State;
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct Env{
+    pub states: Vec<State>
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct MdpFramework{
+    pub env: Env,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct RmqPublishConfig{
     pub exchange_name: String,
     pub exchange_type: String,
@@ -276,9 +289,9 @@ pub enum NeuronError{
 
 #[derive(Clone)]
 pub struct NeuronActor{
-    pub synProt: SynapseProtocol,
-    pub peerId: libp2p::PeerId,
-    pub rmqConfig: Option<RmqConfig>,
+    pub synProt: SynapseProtocol, /* -- synapse protocol -- */
+    pub peerId: libp2p::PeerId, /* -- p2p peer id -- */
+    pub rmqConfig: Option<RmqConfig>, /* -- rmq config -- */
     pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
     pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
     pub internal_executor: InternalExecutor<Event>, /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */

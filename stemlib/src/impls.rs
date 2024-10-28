@@ -99,7 +99,7 @@ impl NeuronActor{
     }
 
     // in swarm event loop we'll handle all swarm network behaviours 
-    // including kademlia, gossipsub and request response events
+    // including stream, kademlia, gossipsub and request response events
     pub async fn startP2pSwarmEventLoop(&mut self, synProt: SynapseProtocol){
         
         // https://github.com/libp2p/rust-libp2p/blob/master/examples/distributed-key-value-store/src/main.rs
@@ -112,7 +112,8 @@ impl NeuronActor{
         swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap()).unwrap();
 
         // TODO 
-        // handle kademlia, gossipsub and request response events
+        // swarm eventloop is a loop that waits for incoming events to 
+        // like kademlia, gossipsub and request response events
         // ...
 
 

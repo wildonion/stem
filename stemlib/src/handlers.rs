@@ -282,12 +282,12 @@ impl ActixMessageHandler<BanCry> for NeuronActor{
     }
 }
 
-impl ActixMessageHandler<StartHttpServer> for NeuronActor{
+impl ActixMessageHandler<StartGateWay> for NeuronActor{
     
     type Result = ();
-    fn handle(&mut self, msg: StartHttpServer, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: StartGateWay, ctx: &mut Self::Context) -> Self::Result {
 
-        let StartHttpServer { host, port } = msg.clone();
+        let StartGateWay { host, port } = msg.clone();
 
     }
 
