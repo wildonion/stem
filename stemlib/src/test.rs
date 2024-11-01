@@ -2,6 +2,7 @@
 
 
 use futures::channel::oneshot::channel;
+use libp2p::swarm::handler;
 use crate::messages::*;
 use crate::schemas::*;
 use crate::*;
@@ -12,7 +13,7 @@ use crate::dsl::*;
 
 pub async fn upAndRunStreaming(){
     
-    let mut neuron = NeuronActor::new(100,
+    let mut neuron = Neuron::new(100,
         Some(RmqConfig{ 
             host: String::from("0.0.0.0"), 
             port: 5672, 
@@ -116,7 +117,16 @@ pub async fn upAndRunStreaming(){
 
 pub async fn upAndRunTalking(){
 
-    let mut neuron = NeuronActor::new(100,
+    let mut neuron1 = Neuron::new(100,
+        Some(RmqConfig{ 
+            host: String::from("0.0.0.0"), 
+            port: 5672, 
+            username: String::from("rabbitmq"), 
+            password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
+        }),
+    ).await;
+
+    let mut neuron = Neuron::new(100,
         Some(RmqConfig{ 
             host: String::from("0.0.0.0"), 
             port: 5672, 
@@ -193,6 +203,15 @@ pub async fn upAndRunTalking(){
         panic!("can't receive response from the neuron");
     };
     let res = resp.0.await; // await on the pinned box so the future can gets executed
+
+
+    // talking between local actors
+    let neuronComponentActor1 = neuron1.start().recipient();
+    neuronComponentActor
+        .send(TalkTo{
+            neuron: neuronComponentActor1,
+            message: String::from("hello from neuronComponentActor")
+        }).await;
 
 
     log::info!("executed all..");

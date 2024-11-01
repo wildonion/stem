@@ -8,6 +8,8 @@
     runs it accordingly. 
 */
 
+use std::net::TcpStream;
+
 use crate::*;
 use crate::messages::*;
 use crate::schemas::*;
@@ -15,7 +17,7 @@ use crate::impls::*;
 
 
 
-impl ActixMessageHandler<Broadcast> for NeuronActor{
+impl ActixMessageHandler<Broadcast> for Neuron{
     
     type Result = ();
     fn handle(&mut self, msg: Broadcast, ctx: &mut Self::Context) -> Self::Result {;
@@ -92,7 +94,7 @@ impl ActixMessageHandler<Broadcast> for NeuronActor{
 
 }
 
-impl ActixMessageHandler<Subscribe> for NeuronActor{
+impl ActixMessageHandler<Subscribe> for Neuron{
     
     type Result = ();
     fn handle(&mut self, msg: Subscribe, ctx: &mut Self::Context) -> Self::Result {
@@ -154,14 +156,14 @@ impl ActixMessageHandler<Subscribe> for NeuronActor{
 
 }
 
-impl ActixMessageHandler<UpdateState> for NeuronActor{
+impl ActixMessageHandler<UpdateState> for Neuron{
     type Result = ();
     fn handle(&mut self, msg: UpdateState, ctx: &mut Self::Context) -> Self::Result {
         self.state = msg.new_state;
     }
 }
 
-impl ActixMessageHandler<SendRequest> for NeuronActor{
+impl ActixMessageHandler<SendRequest> for Neuron{
     type Result = ();
     fn handle(&mut self, msg: SendRequest, ctx: &mut Self::Context) -> Self::Result {
         let SendRequest{ rmqConfig, p2pConfig, encryptionConfig } = msg.clone();
@@ -179,7 +181,7 @@ impl ActixMessageHandler<SendRequest> for NeuronActor{
     }
 }
 
-impl ActixMessageHandler<ReceiveResposne> for NeuronActor{
+impl ActixMessageHandler<ReceiveResposne> for Neuron{
     type Result = ResponseData;
     fn handle(&mut self, msg: ReceiveResposne, ctx: &mut Self::Context) -> Self::Result {
         let ReceiveResposne { rmqConfig, p2pConfig, encryptionConfig } = msg.clone();
@@ -221,14 +223,14 @@ impl ActixMessageHandler<ReceiveResposne> for NeuronActor{
     }
 }
 
-impl ActixMessageHandler<ShutDown> for NeuronActor{
+impl ActixMessageHandler<ShutDown> for Neuron{
     type Result = ();
     fn handle(&mut self, msg: ShutDown, ctx: &mut Self::Context) -> Self::Result {
         ctx.stop();
     }
 }
 
-impl ActixMessageHandler<InjectPayload> for NeuronActor{
+impl ActixMessageHandler<InjectPayload> for Neuron{
     type Result = ();
     fn handle(&mut self, msg: InjectPayload, ctx: &mut Self::Context) -> Self::Result {
         
@@ -245,7 +247,7 @@ impl ActixMessageHandler<InjectPayload> for NeuronActor{
     }
 }
 
-impl ActixMessageHandler<BanCry> for NeuronActor{
+impl ActixMessageHandler<BanCry> for Neuron{
     type Result = ();
     fn handle(&mut self, msg: BanCry, ctx: &mut Self::Context) -> Self::Result{
 
@@ -282,7 +284,7 @@ impl ActixMessageHandler<BanCry> for NeuronActor{
     }
 }
 
-impl ActixMessageHandler<StartGateWay> for NeuronActor{
+impl ActixMessageHandler<StartGateWay> for Neuron{
     
     type Result = ();
     fn handle(&mut self, msg: StartGateWay, ctx: &mut Self::Context) -> Self::Result {
@@ -291,4 +293,25 @@ impl ActixMessageHandler<StartGateWay> for NeuronActor{
 
     }
 
+}
+
+// this handler used to send a message to a local actor 
+impl ActixMessageHandler<TalkTo> for Neuron{
+    type Result = ();
+    fn handle(&mut self, msg: TalkTo, ctx: &mut Self::Context) -> Self::Result {
+        let TalkTo { neuron, message } = msg.clone();
+        async move{
+            neuron.send(HeyThere { message }).await;
+        }.into_actor(self)
+        .spawn(ctx);
+    }
+}
+
+// this handler is used to receive a message sent by other local actors
+impl ActixMessageHandler<HeyThere> for Neuron{
+    type Result = ();
+    fn handle(&mut self, msg: HeyThere, ctx: &mut Self::Context) -> Self::Result {
+        let HeyThere { message } = msg.clone();
+        log::info!("message received from: {message:}");
+    }
 }

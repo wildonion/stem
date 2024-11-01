@@ -225,15 +225,15 @@ impl<C> Activation<C> for &'static [u8]{
 pub struct Synapse<A>{id: A}
 
 #[derive(Default)]
-pub struct Neuron<A=u8>{
+pub struct Neuron1<A=u8>{
     pub data: Option<Synapse<A>>,
 }
 
 /* 
-    this must be implemented for Neuron<Synapse<A>>
+    this must be implemented for Neuron1<Synapse<A>>
     to be able to call get_inner_receptor() method
 */
-impl<A: Default> NodeReceptor for Neuron<Synapse<A>>
+impl<A: Default> NodeReceptor for Neuron1<Synapse<A>>
 where Self: Clone + Send + Sync + 'static + Activation<String>, 
 <Self as Activation<String>>::Acivator: Default{
 
@@ -250,7 +250,7 @@ where Self: Clone + Send + Sync + 'static + Activation<String>,
     this must be implemented for Neuron<String>
     to be able to call get_inner_receptor() method
 */
-impl NodeReceptor for Neuron<String>{
+impl NodeReceptor for Neuron1<String>{
 
     type InnerReceptor = Synapse<String>;
     fn get_inner_receptor(&self) -> Self::InnerReceptor {
@@ -264,7 +264,7 @@ impl NodeReceptor for Neuron<String>{
     this must be implemented for Neuron<A>
     to be able to call get_inner_receptor() method
 */
-impl NodeReceptor for Neuron<u8>{
+impl NodeReceptor for Neuron1<u8>{
 
     type InnerReceptor = Synapse<u8>;
     fn get_inner_receptor(&self) -> Self::InnerReceptor {
@@ -361,7 +361,7 @@ pub fn fire<'valid, N, T: 'valid + NodeReceptor>(cmd: N, cmd_receptor: impl Node
             impl NodeReceptor for Neuron<Synapse<A>>{}
     */
     let neuron = cmd;
-    let neuron_ = Neuron::<String>::default();
+    let neuron_ = Neuron1::<String>::default();
     
     cmd_receptor.get_inner_receptor();
     neuron.get_inner_receptor()
@@ -4838,6 +4838,38 @@ pub fn init_vm(){
 
 
 pub async fn neuron_actor_cruft(){
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+    // it's better the result of a future would be nothing 
+    // and use channel to move its result around different scopes
+    struct Job00;
+    struct Task00
+        (pub std::pin::Pin<Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>>);
+    let task = Task00(
+        Box::pin(async move{
+            tx.send(Job00).await;
+        })
+    );
+    
+    tokio::spawn(async move{
+        task.run().await;
+    });
+
+
+    tokio::spawn(async move{
+        while let Some(job) = rx.recv().await{
+            // once the task gets executed we'll 
+            // receive its output and result in here
+        }
+    });
+    
+    impl Task00{
+        pub async fn run(self){
+            let t = self.0;
+            t.await;
+        }
+    }
+    
     // --------------------------------------------
     // --------------------------------------------
 
@@ -4922,7 +4954,7 @@ pub async fn neuron_actor_cruft(){
         R: std::future::Future<Output = ()> + Send + Sync + 'static;
 
     let router = String::from("/login"); // this variable gets effected
-    NeuronActor::na_runInterval(move || {
+    Neuron::na_runInterval(move || {
         let clonedRouter = router.clone();
         let clonedRouter1 = router.clone();
         async move{
@@ -5053,27 +5085,27 @@ pub async fn neuron_actor_cruft(){
     }
 
     pub trait Interface{
-        fn call(&self);
+        fn callMe(&self);
     }
     pub trait InterfaceCls{
-        fn call(&self);
+        fn callMe(&self);
     }
     impl Interface for fn(){
-        fn call(&self){
+        fn callMe(&self){
             self();
         }
     }
     impl<T> InterfaceCls for T where T: Fn(){
-        fn call(&self) {
+        fn callMe(&self) {
             self();
         }
     }
     
     fn getUser(){}
     let func = getUser;
-    func.call();
+    func.callMe();
     let cls = ||{};
-    cls.call();
+    cls.callMe();
 
     // --------------------------------------------
     // --------------------------------------------

@@ -61,7 +61,7 @@ struct Execute{
 #[rtype(result = "()")]
 struct Send2Pool{
     pub tx: Transaction,
-    pub tx_producer: Addr<NeuronActor>, // use this actor to send produce message to it
+    pub tx_producer: Addr<Neuron>, // use this actor to send produce message to it
     pub spawn_local: bool
 }
 
@@ -86,6 +86,7 @@ pub static WALLET: Lazy<std::sync::Arc<tokio::sync::Mutex<wallexerr::misc::Walle
     create tx object with unique id -> publish to rmq 
     receive tx in txpool -> commit tx -> execute tx -> update records -> record in treasury
     all or none to avoid double spending which is sending same amount for two destinations but charge only once 
+    also assign a unique global id to each tx to avoid double spending issue
 
     once a tx object is made publish it to the rmq exchange so consumer 
     can consume it for committing and executing all tx objects finally 

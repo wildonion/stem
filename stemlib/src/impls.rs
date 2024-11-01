@@ -5,13 +5,15 @@
     schemas implementations 
 */
 
+use std::fmt::Display;
+
 use crate::*;
 use crate::messages::*;
 use crate::schemas::*;
 use crate::interfaces::*;
 
 
-impl Drop for NeuronActor{
+impl Drop for Neuron{
     fn drop(&mut self) {
         let this = self.clone();
         tokio::spawn(async move{
@@ -25,10 +27,10 @@ impl Drop for NeuronActor{
     }
 }
 
-impl NeuronActor{
+impl Neuron{
 
     pub async fn new(bufferSize: usize, rmqConfig: Option<RmqConfig>) -> Self{
-        NeuronActor{
+        Neuron{
             synProt: {
                 // building the swarm object with our network behaviour contains our protocol
                 let mut swarm = SwarmBuilder::with_new_identity()
@@ -47,6 +49,7 @@ impl NeuronActor{
                 .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
                 .build();
 
+                // a shareable, cloneable and thread safe p2p swarm object
                 SynapseProtocol{
                     swarm: std::sync::Arc::new(
                         tokio::sync::Mutex::new(
@@ -61,7 +64,7 @@ impl NeuronActor{
                 let local_peer_id = PeerId::from_public_key(&edkeys.public());
                 local_peer_id
             },
-            wallet: Some(wallexerr::misc::Wallet::new_ed25519()),
+            wallet: Some(wallexerr::misc::Wallet::new_ed25519()), // wallexerr wallet for this neuron
             internal_executor: InternalExecutor::new(
                 Buffer{ events: std::sync::Arc::new(tokio::sync::Mutex::new(vec![
                     Event{ data: EventData::default(), status: EventStatus::Committed, offset: 0 }
@@ -808,14 +811,18 @@ impl NeuronActor{
         dispatch way using Arc or Box or impl Future or even as the return 
         type of a closure trait method, so a future task would be one of 
         the following types: 
+        note that Arcing and Boxing closure traits as generic would 
+        need no dyn keyword behind the trait or generic type.
 
-            1) Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
-            2) Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
-            3) Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
-            4) Box<dyn Fn() -> Pin<Box<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
-            5) Arc<Mutex<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>> where R: Future<Output = ()> + Send + Sync + 'static
-            6) job: F where F: Future<Output = ()> + Send + Sync + 'static
+            1) task: Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
+            2) task: Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
+            3) task: Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
+            4) task: Box<dyn Fn() -> Pin<Box<R>> + Send + Sync + 'static> where R: Future<Output = ()> + Send + Sync + 'static
+            5) task: Arc<Mutex<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>> where R: Future<Output = ()> + Send + Sync + 'static
+            6) task: F where F: Future<Output = ()> + Send + Sync + 'static
             7) task: impl Future<Output = ()> + Send + Sync + 'static
+            8) task: Arc<F> where F: Fn() -> R + Send + Sync + 'static where R: Future<Output = ()> + Send + Sync + 'static
+            9) task: Box<F> where F: Fn() -> R + Send + Sync + 'static where R: Future<Output = ()> + Send + Sync + 'static
 
         NOTE: mutex requires the type to be Sized and since traits are not sized at 
         compile time we should annotate them with dyn keyword and put them behind a 
@@ -1109,7 +1116,7 @@ impl NeuronBehaviour{
 
 }
 
-impl Actor for NeuronActor{
+impl Actor for Neuron{
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
 
@@ -1137,4 +1144,5 @@ impl Actor for NeuronActor{
     fn stopped(&mut self, ctx: &mut Self::Context) {
         log::error!("neuron actor has stopped");        
     }
+    
 }

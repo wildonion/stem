@@ -85,8 +85,8 @@ pub trait OnionStream{
         (&mut self, streamer: &str, eventType: &str, callback: F) -> Self::Model;
 }
 
-impl OnionStream for NeuronActor{
-    type Model = NeuronActor;
+impl OnionStream for Neuron{
+    type Model = Neuron;
     async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
             F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
             (&mut self, streamer: &str, eventType: &str, callback: F) -> Self::Model {

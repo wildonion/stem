@@ -147,7 +147,7 @@ pub struct NeuronBehaviour {
 #[derive(Clone)]
 pub enum ContractType{
     Verifier,
-    Transmitter(Addr<NeuronActor>),
+    Transmitter(Addr<Neuron>),
 }
 
 #[derive(Clone)]
@@ -288,7 +288,7 @@ pub enum NeuronError{
 }
 
 #[derive(Clone)]
-pub struct NeuronActor{
+pub struct Neuron{
     pub synProt: SynapseProtocol, /* -- synapse protocol -- */
     pub peerId: libp2p::PeerId, /* -- p2p peer id -- */
     pub rmqConfig: Option<RmqConfig>, /* -- rmq config -- */
@@ -303,4 +303,18 @@ pub struct NeuronActor{
     pub dependency: std::sync::Arc<dyn ServiceExt<Model = AppService>>, /* -- inject any type that impls the ServiceExt trait as dependency injection -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
+}
+
+// custom error handler for the stem
+#[derive(Debug)]
+pub struct StemError{
+    pub message: String, 
+    pub code: u16,
+    pub error: ErrorKind
+}
+
+#[derive(Debug)]
+pub enum ErrorKind{
+    Io(std::io::Error),
+    StreamError
 }

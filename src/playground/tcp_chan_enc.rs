@@ -259,3 +259,24 @@ macro_rules! bootstrap_tcp {
         }
     };
 }
+
+// simple vpn 
+async fn proxy(mut inbound: TcpStream){
+
+    let bannedAddr = "banned.com:80";
+    let mut outbound = tokio::net::TcpStream::connect(bannedAddr).await.unwrap();
+
+    // we should move both halves into a single tokio spawn
+    let (mut inputReader, mut inputWriter) = inbound.split(); // split the input stream into reader and writer 
+    let (mut outputReader, mut outputWriter) = outbound.split(); // split the output stream into the reader and writer
+
+    // stream reader: read data from the stream | stream writer: write data into the stream 
+    tokio::try_join!{
+        // copy the reader stream of the client into the writer stream of the target stream: client ----> target
+        tokio::io::copy(&mut inputReader, &mut outputWriter), // needs &mut to mutate the underlying data
+        // copy the io bytes of the target reader stream into the writer stream of the client: client <---- target
+        tokio::io::copy(&mut outputReader, &mut inputWriter) // needs &mut to mutate the underlying data
+    };
+    
+
+}

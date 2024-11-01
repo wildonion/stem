@@ -1,7 +1,6 @@
 
 
-
-tools: desktop books for neuroscience and information theory
+ُTODOs: desktop books for neuroscience and information theory
 TODOs: dsl/mod.rs macros
 TODOs: p2p concepts and network behavior: stream, request response, kademlia, gossipsub 
 TODOs: neuron message handlers, start swarm eventloop, build neuron actor from cli args,
@@ -30,8 +29,6 @@ main concepts:
         Box::pin(async move{}), Arc::pin(async move{}) and Arc<Fn() -> R> where R: Future + Send + Sync
         eventloop with spawn(async move{loop{select!{}}}) and spawn(async move{while let Some(job) = rx.recv().await{}}) inside the actor.rs of the stem 
         CronScheduler(time, ctx, redis pubsub exp key), select!{} awaiting, arc, mutex, timeout, Box::pin(async{}), Arc::pin(async move{}), condvar, jobq chan send recv
-
-
 
 
 ▶ ownership, borrowing, interface and Rust lang concepts:

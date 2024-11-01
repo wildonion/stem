@@ -36,10 +36,17 @@ pub struct BanCry{
     pub tx: Transaction,
 }
 
-#[derive(Message)]
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
-pub struct StartP2pSwarEventLoop{
-    pub synprot: SynapseProtocol,
+pub struct TalkTo{
+    pub neuron: Recipient<HeyThere>, // we send a HeyThere message to the Neuron actor of type Recipient
+    pub message: String,
+}
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct HeyThere{
+    pub message: String
 }
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
@@ -87,3 +94,9 @@ pub struct Subscribe{ // we'll create a channel then start consuming by binding 
     pub decryptionConfig: Option<CryptoConfig>
 }
 
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Schedule{
+    pub int: u64,
+    pub job: Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>,
+}

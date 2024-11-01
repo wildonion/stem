@@ -107,11 +107,17 @@ macro_rules! neuron {
 
 #[macro_export]
 macro_rules! stream {
-    () => {
-        {
+    ($data:ident -> $sender:expr) => {{
+        $sender.send($data).await;
+    }};
 
+    ($data:ident <- $receiver:expr) => {
+        {
+            if let Some(value) = $receiver.recv().await{
+                $data = value;
+            }
         }
-    };
+    }
 }
 
 #[macro_export]
