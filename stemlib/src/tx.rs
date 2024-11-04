@@ -171,17 +171,17 @@ impl Transaction{
         
     }
 
-    pub fn on_error<E, R>(e: E) where E: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    pub fn on_error<E, R>(e: E) where E: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, 
     { // error is of type a closure trait
         let arced_e = Arc::new(e);
     }
 
-    pub fn on_success<S, R>(s: S) where S: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    pub fn on_success<S, R>(s: S) where S: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, 
     { // success is of type a closure trait
         let arced_s = Arc::new(s);
     }
 
-    pub fn on_reject<J, R>(r: J) where J: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    pub fn on_reject<J, R>(r: J) where J: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, 
     { // reject is of type a closure trait
         let arced_r = Arc::new(r);
     }

@@ -261,22 +261,24 @@ macro_rules! bootstrap_tcp {
 }
 
 // simple vpn 
-async fn proxy(mut inbound: TcpStream){
+async fn proxy(mut clientStream: TcpStream){
 
     let bannedAddr = "banned.com:80";
-    let mut outbound = tokio::net::TcpStream::connect(bannedAddr).await.unwrap();
+    let mut destination = tokio::net::TcpStream::connect(bannedAddr).await.unwrap();
 
     // we should move both halves into a single tokio spawn
-    let (mut inputReader, mut inputWriter) = inbound.split(); // split the input stream into reader and writer 
-    let (mut outputReader, mut outputWriter) = outbound.split(); // split the output stream into the reader and writer
+    let (mut clientReader, mut clientWriter) = clientStream.split(); // split the input stream into reader and writer 
+    let (mut destinationReader, mut destinationWriter) = destination.split(); // split the destination stream into the reader and writer
 
+
+    // in here we're forwarding the packets between clientStream and destination
     // stream reader: read data from the stream | stream writer: write data into the stream 
     tokio::try_join!{
-        // copy the reader stream of the client into the writer stream of the target stream: client ----> target
-        tokio::io::copy(&mut inputReader, &mut outputWriter), // needs &mut to mutate the underlying data
-        // copy the io bytes of the target reader stream into the writer stream of the client: client <---- target
-        tokio::io::copy(&mut outputReader, &mut inputWriter) // needs &mut to mutate the underlying data
+        // copy the reader stream of the clientStream into the writer stream of the destinationStream : clientStream ----> destinationStream
+        tokio::io::copy(&mut clientReader, &mut destinationWriter),
+        // copy the io bytes of the destinationStream reader stream into the writer stream of the clientStream: clientStream <---- destinationStream
+        tokio::io::copy(&mut destinationReader, &mut clientWriter)
     };
-    
 
+    
 }
