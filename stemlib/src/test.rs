@@ -24,6 +24,8 @@ pub async fn upAndRunStreaming(){
 
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
 
+    let executor = neuron.internal_executor.clone();
+
     /* --------------------------
         execution thread process for solving future:
         await on async task suspend it to get the result but won't block thread 
@@ -45,17 +47,7 @@ pub async fn upAndRunStreaming(){
     neuron
         .on("local", "receive", move |event, error| async move{
 
-            if error.is_some(){
-                println!("an error accoured during receiving: {:?}", error.unwrap());
-                return;
-            }
-
-            println!("received task: {:?}", event);
-
-            // do whatever you want to do with received task:
-            // storing in db or cache on redis 
-            // ...
-
+            log::info!("received event: {:#?}", event);
 
         }).await
         .on("rmq", "send", move |event, error| async move{
@@ -64,7 +56,7 @@ pub async fn upAndRunStreaming(){
                 println!("an error accoured during sending: {:?}", error.unwrap());
                 return;
             }
-            
+
             println!("sent task: {:?}", event);
 
             // do whatever you want to do with sent task:
@@ -72,18 +64,41 @@ pub async fn upAndRunStreaming(){
             // ...
 
         }).await
-        .on("rmq", "receive", move |event, error| async move{
+        .on("rmq", "receive", move |event, error| {
             
-            if error.is_some(){
-                println!("an error accoured during receiving: {:?}", error.unwrap());
-                return;
+            let clonedExecutor = executor.clone();
+            
+            // ------------------ the async task ------------------
+            async move{
+
+                if error.is_some(){
+                    println!("an error accoured during receiving: {:?}", error.unwrap());
+                    return;
+                }
+    
+                println!("received task: {:?}", event);
+    
+                // use the eventloop of the internal executor to receive the event 
+                // the event has sent from where we've subscribed to incoming events
+                let eventloop = clonedExecutor.eventloop.clone();
+                tokio::spawn(async move{
+                    let mut rx = eventloop.lock().await;
+                    while let Some(e) = rx.recv().await{
+                        
+                        log::info!("received event: {:?}", event);
+
+                        // ...
+
+                    } 
+                });
+
+                
+                // cache event on redis
+                // ...
+    
+    
             }
-
-            println!("received task: {:?}", event);
-
-            // store the event in db or cache on redis
-            // ...
-
+            // ------------------------------------------------------
         }).await
         .on("p2p", "send", move |event, error| async move{
             
@@ -214,7 +229,102 @@ pub async fn upAndRunTalking(){
         }).await;
 
 
+    // execute an async io task inside the neuron actor thread priodically
+    neuronComponentActor.send(
+        Execute{
+            period: 40,
+            job: Arc::new(
+                ||{
+                    Box::pin(async move{
+                        println!("inside async io task...");
+                    })
+                }
+            )
+        }
+    ).await;
+
     log::info!("executed all..");
 
 
+}
+
+pub async fn upAndRunExecutor(){
+    use tokio::sync::mpsc;
+    use tokio::spawn;
+
+    type Io = std::sync::Arc<dyn Fn() -> 
+            std::pin::Pin<Box<dyn std::future::Future<Output=()> 
+            + Send + Sync + 'static>> 
+            + Send + Sync + 'static>;
+            
+    // eventloop
+    #[derive(Clone)]
+    struct EventLoop{
+        pub sender: tokio::sync::mpsc::Sender<Task>, 
+        pub receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Task>>>
+    }
+    
+    impl EventLoop{
+        pub fn new() -> Self{
+            let(tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);
+            Self{
+                sender: tx,
+                receiver: std::sync::Arc::new(
+                    tokio::sync::Mutex::new(
+                        rx
+                    )
+                )
+            }            
+        }
+        pub async fn spawn(&mut self, task: Task){
+            let sender = self.clone().sender;
+            sender.send(task).await;
+        }
+        pub async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F)
+        where R: std::future::Future<Output=()> + Send + Sync + 'static{
+            let this = self.clone();
+            let arcedCallback = std::sync::Arc::new(cb);
+            spawn(async move{
+                let clonedArcedCallback = arcedCallback.clone();
+                let getRx = this.clone().receiver;
+                let mut rx = getRx.lock().await;
+                while let Some(task) = rx.recv().await{
+                    println!("received task from eventloop, executing in a thread of the eventloop");
+                    spawn(
+                        clonedArcedCallback(task)
+                    );
+                }
+            });
+        }
+    }
+    
+    // task struct with not generic; it needs to pin the future object
+    // no need to have output for the future, we'll be using channels
+    // Arc<F>, F: Fn() -> R + Send + Sync + 'static where R: Future<Output=()> + Send + Sync + 'static
+    // use Box<dyn or Arc<dyn for dynamic dispatch and R: Trait for static dispatch
+    // in dynamic dispatch the instance of the type whose impls the trait must be wrapped into the Arc or Box
+    #[derive(Clone)]
+    struct Task{
+        pub job: Io 
+    }
+    
+    
+    let mut eventLoop = EventLoop::new();
+    
+    let task = Task{
+        job: std::sync::Arc::new(
+            ||{
+                Box::pin(async move{
+                    println!("executing an intensive io...");
+                })
+            }
+        )
+    };
+    eventLoop.spawn(task).await;
+    
+    eventLoop.run(|task| async move{
+        println!("inside the callback, playing with received task");
+        let job = task.job;
+        spawn(job());
+    }).await;
 }
