@@ -287,6 +287,13 @@ pub enum NeuronError{
     Buffer(String),
 }
 
+/* ----------------------------
+    use elixir, neuron actor worker and wrangler worker to execute async io processes workload 
+    and functions inside an isolated environment like light thread which doesn't share memory 
+    with other isolates, each worker gets compiled to wasm to be executed in a single v8 
+    engine, each neuron actor worker execute tasks in it arbiter event loop in a thread 
+    in the background.
+*/
 #[derive(Clone)]
 pub struct Neuron{
     pub synProt: SynapseProtocol, /* -- synapse protocol -- */
