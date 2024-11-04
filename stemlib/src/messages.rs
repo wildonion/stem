@@ -96,7 +96,13 @@ pub struct Subscribe{ // we'll create a channel then start consuming by binding 
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct Schedule{
-    pub int: u64,
-    pub job: Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>,
+pub struct Execute{
+    pub period: u64,
+    pub job: Io,
 }
+
+// an io type is an arced closure which returns a pinned boxed 
+// version of an async object or future trait
+type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
+    + Send + Sync + 'static>> 
+    + Send + Sync + 'static>;

@@ -8,8 +8,6 @@
     runs it accordingly. 
 */
 
-use std::net::TcpStream;
-
 use crate::*;
 use crate::messages::*;
 use crate::schemas::*;
@@ -313,5 +311,20 @@ impl ActixMessageHandler<HeyThere> for Neuron{
     fn handle(&mut self, msg: HeyThere, ctx: &mut Self::Context) -> Self::Result {
         let HeyThere { message } = msg.clone();
         log::info!("message received from: {message:}");
+    }
+}
+
+impl ActixMessageHandler<Execute> for Neuron{
+    type Result = ();
+    fn handle(&mut self, msg: Execute, ctx: &mut Self::Context) -> Self::Result {
+
+        let Execute{period, job} = msg;
+        let clonedJob = job.clone(); // return type of closure is async io task
+
+        // a callback is called after ticking the time during the interval process
+        // we'll execute the job in each period of time. 
+        ctx.run_interval(std::time::Duration::from_secs(period), move |actor, ctx|{
+            tokio::spawn(clonedJob());
+        });
     }
 }
