@@ -95,25 +95,6 @@ macro_rules! post {
     };
 }
 
-
-#[macro_export]
-macro_rules! neuron {
-    ($data:ident -> $chan:expr) => {
-        {
-            
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! layer {
-    () => {
-        {
-
-        }
-    };
-}
-
 #[macro_export]
 macro_rules! o_O {
     

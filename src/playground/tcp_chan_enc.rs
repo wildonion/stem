@@ -266,10 +266,12 @@ async fn proxy(mut clientStream: TcpStream){
     let bannedAddr = "banned.com:80";
     let mut destination = tokio::net::TcpStream::connect(bannedAddr).await.unwrap();
 
+    // Reader: reads from the stream, client input 
+    // Writer: write into the stream, client output
+
     // we should move both halves into a single tokio spawn
     let (mut clientReader, mut clientWriter) = clientStream.split(); // split the input stream into reader and writer 
     let (mut destinationReader, mut destinationWriter) = destination.split(); // split the destination stream into the reader and writer
-
 
     // in here we're forwarding the packets between clientStream and destination
     // stream reader: read data from the stream | stream writer: write data into the stream 
@@ -280,5 +282,4 @@ async fn proxy(mut clientStream: TcpStream){
         tokio::io::copy(&mut destinationReader, &mut clientWriter)
     };
 
-    
 }

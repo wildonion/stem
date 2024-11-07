@@ -812,7 +812,9 @@ impl Neuron{
         type of a closure trait method, so a future task would be one of 
         the following types: 
         note that Arcing and Boxing closure traits as generic would 
-        need no dyn keyword behind the trait or generic type.
+        need no dyn keyword behind the trait or generic type also we 
+        can't await on an Arced future! use number 10 instead which is 
+        having future object as separate type without using generics.
 
             1) task: Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
             2) task: Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
@@ -823,6 +825,7 @@ impl Neuron{
             7) task: impl Future<Output = ()> + Send + Sync + 'static
             8) task: Arc<F> where F: Fn() -> R + Send + Sync + 'static where R: Future<Output = ()> + Send + Sync + 'static
             9) task: Box<F> where F: Fn() -> R + Send + Sync + 'static where R: Future<Output = ()> + Send + Sync + 'static
+            10) task: Arc<dyn Fn() -> Pin<Box<dyn Future<Output=()> + Send + Sync + 'static>>> => Arc::new(||Box::pin(async move{}))
 
         NOTE: mutex requires the type to be Sized and since traits are not sized at 
         compile time we should annotate them with dyn keyword and put them behind a 

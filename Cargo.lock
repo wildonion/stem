@@ -57,7 +57,7 @@ dependencies = [
  "ahash 0.8.11",
  "base64 0.22.1",
  "bitflags 2.5.0",
- "brotli",
+ "brotli 6.0.0",
  "bytes",
  "bytestring",
  "derive_more",
@@ -989,6 +989,17 @@ name = "brotli"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74f7971dbd9326d58187408ab83117d8ac1bb9c17b085fdacd1cf2f598719b6b"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "brotli-decompressor",
+]
+
+[[package]]
+name = "brotli"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc97b8f16f944bba54f0433f07e30be199b6dc2bd25937444bbad560bcea29bd"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
@@ -2786,7 +2797,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.7",
  "tokio",
  "tower-service",
  "tracing",
@@ -4318,9 +4329,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "803801d3d3b71cd026851a53f974ea03df3d179cb758b260136a6c9e22e196af"
+checksum = "570074cc999d1a58184080966e5bd3bf3a9a4af650c3b05047c2621e7405cd17"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -4332,9 +4343,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-http"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d8c2b76e5f7848a289aa9666dbe56b16f8a22a4c5246ef37a14941818d2913"
+checksum = "6351496aeaa49d7c267fb480678d85d1cd30c5edb20b497c48c56f62a8c14b99"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4344,9 +4355,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-semantic-conventions"
-version = "0.25.0"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b8e442487022a943e2315740e443dc5ee95fd541c18f509a5a6251b408a9f95"
+checksum = "db945c1eaea8ac6a9677185357480d215bb6999faa9f691d0c4d4d641eab7a09"
 
 [[package]]
 name = "ordered-float"
@@ -5516,9 +5527,9 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 
 [[package]]
 name = "salvo"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e4cc13f72403c1fd5e5f46a90b36fc2168abc05ae21491941a4e37e14367818"
+checksum = "5b6e981dc1f94ac549e6fb32e2c84f2fa70c01935d1e5a8a91311047c2a8a51a"
 dependencies = [
  "salvo-cache",
  "salvo-compression",
@@ -5539,9 +5550,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-cache"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6df4cfbda62aafa4e6a52886ff4fa328efc1f3c6953f9a6d9498f4045ec891e3"
+checksum = "acface17e49b818f8944fca2952dce92de68cd377c0ce679f1ccac64e617e884"
 dependencies = [
  "bytes",
  "moka",
@@ -5551,11 +5562,11 @@ dependencies = [
 
 [[package]]
 name = "salvo-compression"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eda01558b65b7030437306badfc0edb72095f34a06fc9d1b84c264ebe683fe88"
+checksum = "dfe33d27336886f133776fc62c383fe72f80fb5e9dc40d01d5ae920dd941ab09"
 dependencies = [
- "brotli",
+ "brotli 7.0.0",
  "bytes",
  "flate2",
  "futures-util",
@@ -5569,9 +5580,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-cors"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac5149423090dd5ac55447c93169c3512d1ed1f621e447d68126a942ce9b8831"
+checksum = "4d742bb50d4a535120479ba2145096ee5ef1307cdbf055ad187beb7ff35b4e7d"
 dependencies = [
  "bytes",
  "salvo_core",
@@ -5580,18 +5591,18 @@ dependencies = [
 
 [[package]]
 name = "salvo-craft"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b1d2dc619fdccc146325bcd7171e547031031a57ae0e252a8af6d1cf46e7f7"
+checksum = "edbe52db55dc8c74d8b6089bc66bcbf805732ae866f1b1de3ccab629cf9402c9"
 dependencies = [
  "salvo-craft-macros",
 ]
 
 [[package]]
 name = "salvo-craft-macros"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0542ecbfc3390e17289ae2ac83fd661af853c07548f4593298766e8b5053fbf"
+checksum = "1b4db098a3a2410472788a1e6ea4001a223303cbc0240a5dd54e9b62bd4b2f23"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -5602,9 +5613,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-csrf"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8493ec15ffbddd473b592063c6d4168cd8f84ff77e9098a559e1165a955df0c"
+checksum = "ae9c8001e8c4a28aa3ac80256fe48baf896e03a76c7620f781bc6d9480c60af5"
 dependencies = [
  "aead",
  "aes-gcm",
@@ -5623,9 +5634,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-flash"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99c901d5395c3a653bc14e45fc2dee28b93f340ad50f3c77ceb27cbb3ed59424"
+checksum = "6778b0077fcc6cbea77a3f5296fd836c7347cfd148ee5f9bb1d72d385526df70"
 dependencies = [
  "salvo-session",
  "salvo_core",
@@ -5654,9 +5665,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-jwt-auth"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61848965f0701294d8240744ad3e008dc42e1aaa29c136ad3b9acda5e9e1e4df"
+checksum = "6d68d36f865869b2df93cff759116507210a6dc6c0b9dffa66607d0eebf9d889"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -5674,9 +5685,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-oapi"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07d980ec0e32819dbdc3a7dec63dd9e9e4e98afe0da299fa2ef1f81e40142c9a"
+checksum = "f45cfc6ea8b6b483e1ae9992e51fdf78d5b7d6bdc388ca48d843a522c1867af4"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -5707,9 +5718,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-oapi-macros"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d32e9e4051b64490d1e6c4286dc165c56882deb71cdb4c04437d269f49428e9"
+checksum = "d7c50f695b43da7cc0b07b3814cc305ac43265fb0c1493ba74e4ae4ec618ff13"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -5722,9 +5733,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-otel"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5d383046278bf354de15fb8961f7d85f6596c1747cb4aec1b72c6a859db2fc8"
+checksum = "41172f4d3d00d3b38de68d9f7479891ac3febc8b4c62c77d8155dc164167a6ca"
 dependencies = [
  "opentelemetry",
  "opentelemetry-http",
@@ -5735,9 +5746,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-proxy"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d0267be46461b91efbd8480a7eff6dfd76575d7f3c2d7a620b3329607321eff"
+checksum = "a90adb408d17016e408cfb21d9f3a4a1926343d566e3cc596688fd2adbe671f1"
 dependencies = [
  "fastrand 2.0.2",
  "futures-util",
@@ -5753,9 +5764,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-rate-limiter"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9bf630b8304ebb1efe80a6be7d33e3d4b37babe15be1819e0d847c29082180e"
+checksum = "bc0fabe6285e2fdc9aec65cfaa3fe4d7bfd80c4b7db1e3cef76d3b69b8359f22"
 dependencies = [
  "moka",
  "salvo_core",
@@ -5767,9 +5778,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-serde-util"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f568f3050f43e828615121a27ae38450987d3d6aa8ac072dce6d3171df6b383"
+checksum = "1671d97c0da8679a4bdab0f7bf4186416a1c90a0b428db723615ebb88c3fa166"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5778,9 +5789,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-serve-static"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa5419a742476fedb21c67c37adc707cba3b938795e3871752874e3b9018507"
+checksum = "8820fd0435c6b21862a8f58ed8db388d37fca8e4a85748365d510f6efe85e8fc"
 dependencies = [
  "hex",
  "mime",
@@ -5798,9 +5809,9 @@ dependencies = [
 
 [[package]]
 name = "salvo-session"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e5e15d68455acbed26f6ec4c2a71205762158e83b4d8a0e97453174a41152cc"
+checksum = "2770e865aaef7340ab2702ca3eb5433f5044d6d5e8982afa0567dcebd7f13376"
 dependencies = [
  "async-session",
  "cookie 0.18.1",
@@ -5810,14 +5821,14 @@ dependencies = [
 
 [[package]]
 name = "salvo_core"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd9b1f503bd44bd338ccdeefcdd4f26303c420511e0fa6f97281cc5f20b73c38"
+checksum = "6836bcbe87e81b7f688588865b7f688d783e77a86a0e486f4b88e9e48c7a6e8a"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
- "brotli",
+ "brotli 7.0.0",
  "bytes",
  "cookie 0.18.1",
  "encoding_rs",
@@ -5873,9 +5884,9 @@ dependencies = [
 
 [[package]]
 name = "salvo_extra"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48a710542f6bda62e9439c3e17519bcf48601248b221cf851f8b8c3889010217"
+checksum = "f198f0ec04b1506fe1a496577833b6fde08178f82fda8bcf88ff1adacc93fa69"
 dependencies = [
  "base64 0.22.1",
  "etag",
@@ -5895,9 +5906,9 @@ dependencies = [
 
 [[package]]
 name = "salvo_macros"
-version = "0.73.0"
+version = "0.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "133c2af83a634ba861135b431ba45921e42373903db92a87eb8f0553772338e8"
+checksum = "9e12911dcbe104634cdf86ea1fb4009edba34dc87d8314b986765287337bf587"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -6433,7 +6444,7 @@ checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
 name = "stem"
-version = "0.2.0-dev.1"
+version = "0.2.0-dev.2"
 dependencies = [
  "actix",
  "actix-web",

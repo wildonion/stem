@@ -1,6 +1,6 @@
 Rust Macro World
 
-> collection of Rust macro examples. Macros extend the AST at compile time useful to do something at compile time rather than runtime like sending data to SQL database before runtime.
+> collection of Rust macro. Macros extend the AST at compile time useful to do something at compile time rather than runtime like sending data to SQL database before runtime.
 
 ## Types
 
