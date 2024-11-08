@@ -1,31 +1,19 @@
 
 
-
-use futures::channel::oneshot::channel;
-use libp2p::swarm::handler;
-use crate::messages::*;
-use crate::schemas::*;
+use std::sync::Arc;
 use crate::*;
-use crate::impls::*;
-use crate::interfaces::*;
-use crate::dsl::*;
+use stemlib::schemas::{Neuron, TransmissionMethod, *};
+use stemlib::messages::*;
+use stemlib::interfaces::OnionStream;
+
 
 
 pub async fn upAndRunStreaming(){
     
-    let mut neuron = Neuron::new(100,
-        Some(RmqConfig{ 
-            host: String::from("0.0.0.0"), 
-            port: 5672, 
-            username: String::from("rabbitmq"), 
-            password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
-        }),
-    ).await;
-
-    let getNeuronWallet = neuron.wallet.as_ref().unwrap();
-
+    let mut neuron = Neuron::new(100, "Neuron1").await;
+    let neuronWallet = neuron.wallet.as_ref().unwrap();
     let executor = neuron.internal_executor.clone();
-
+ 
     /* --------------------------
         execution thread process for solving future:
         await on async task suspend it to get the result but won't block thread 
@@ -78,6 +66,7 @@ pub async fn upAndRunStreaming(){
     
                 println!("received task: {:?}", event);
     
+                // we can also use the internal eventloop to receive event:
                 // use the eventloop of the internal executor to receive the event 
                 // the event has sent from where we've subscribed to incoming events
                 let eventloop = clonedExecutor.eventloop.clone();
@@ -85,7 +74,7 @@ pub async fn upAndRunStreaming(){
                     let mut rx = eventloop.lock().await;
                     while let Some(e) = rx.recv().await{
                         
-                        log::info!("received event: {:?}", event);
+                        log::info!("received event: {:?}", e);
 
                         // ...
 
@@ -132,28 +121,17 @@ pub async fn upAndRunStreaming(){
 
 pub async fn upAndRunTalking(){
 
-    let mut neuron1 = Neuron::new(100,
-        Some(RmqConfig{ 
-            host: String::from("0.0.0.0"), 
-            port: 5672, 
-            username: String::from("rabbitmq"), 
-            password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
-        }),
-    ).await;
-
-    let mut neuron = Neuron::new(100,
-        Some(RmqConfig{ 
-            host: String::from("0.0.0.0"), 
-            port: 5672, 
-            username: String::from("rabbitmq"), 
-            password: String::from("geDteDd0Ltg2135FJYQ6rjNYHYkGQa70") 
-        }),
-    ).await;
+    let mut neuron1 = Neuron::new(100, "Neuron1").await;
+    let mut neuron = Neuron::new(100, "Neuron2").await;
     
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
     let getNeuronId = neuron.peerId.to_base58();
-    
+
+    // -----------------------------------------------------------------
     // ------- sending message through actor mailbox eventloop receiver:
+    // by default actors run on the system arbiter thread using 
+    // its eventloop, we can run multiple instances of an actor 
+    // in parallel with SyncArbiter. 
     // actor mailbox is the eventloop receiver of actor jobq mpsc channel
     // which receive messages and execute them in a light thread or process 
 
@@ -172,7 +150,7 @@ pub async fn upAndRunTalking(){
     neuronComponentActor.send(
         InjectPayload{
             payload: String::from("0x01ff").as_bytes().to_vec(), 
-            method: schemas::TransmissionMethod::Remote(String::from("p2p-synapse"))
+            method: TransmissionMethod::Remote(String::from("p2p-synapse"))
         }
     ).await;
 
@@ -211,7 +189,7 @@ pub async fn upAndRunTalking(){
         ReceiveResposne{
             rmqConfig: todo!(),
             p2pConfig: todo!(),
-            encryptionConfig: todo!(),
+            decryptionConfig: todo!(),
         }
     ).await;
     let Ok(resp) = getResponse else{
@@ -266,7 +244,7 @@ pub async fn upAndRunExecutor(){
     
     impl EventLoop{
         pub fn new() -> Self{
-            let(tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);            
             Self{
                 sender: tx,
                 receiver: std::sync::Arc::new(
@@ -274,7 +252,7 @@ pub async fn upAndRunExecutor(){
                         rx
                     )
                 )
-            }            
+            }
         }
         pub async fn spawn(&mut self, task: Task){
             let sender = self.clone().sender;

@@ -60,11 +60,11 @@ jobs:
       - name: Check and Create Tag if None Exist
         run: |
           if [ -z "$(git tag)" ]; then
-            echo "No tags found, creating initial tag from Cargo.toml version."
+            echo "No tags found, creating initial tag from Cargo.toml version, from now on semantic-release uses this tag"
             git tag "v${{ env.PACKAGE_VERSION }}"  # Use the PACKAGE_VERSION stored in GITHUB_ENV
             git push origin "v${{ env.PACKAGE_VERSION }}"
           else
-            echo "Tags found, proceeding with semantic-release!"
+            echo "Tags found, semantic-release uses this tag to bump version"
           fi
 
       # Install semantic-release and the exec plugin

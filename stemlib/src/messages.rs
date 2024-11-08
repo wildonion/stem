@@ -79,7 +79,7 @@ pub struct SendRequest{
 pub struct ReceiveResposne{
     pub rmqConfig: Option<RmqResponseConfig>,
     pub p2pConfig: Option<P2pResponseConfig>,
-    pub encryptionConfig: Option<CryptoConfig>,
+    pub decryptionConfig: Option<CryptoConfig>,
 }
 
 #[derive(MessageResponse)]

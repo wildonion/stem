@@ -10,6 +10,7 @@ use crate::messages::*;
 use crate::impls::*;
 use crate::handlers::*;
 
+pub type LapinPoolConnection = deadpool_lapin::Pool;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct State;
@@ -156,12 +157,16 @@ pub struct Contract{
     pub opcode: u8,
 }
 
-#[derive(Clone)]
-pub struct RmqConfig{
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
+#[derive(Clone, Serialize, Deserialize)]
+pub struct YmlConfig{
+    pub rmqHost: String,
+    pub rmqPort: u16,
+    pub rmqUsername: String,
+    pub rmqPassword: String,
+    pub redisHost: String,
+    pub redisPort: u16,
+    pub redisUsername: String,
+    pub redisPassword: String,
 }
 
 #[derive(Clone)]
@@ -252,14 +257,14 @@ where J: std::future::Future<Output = ()> + Send + Sync + 'static{
 }
 
 // an event contains the offset in the cluster, execution status and the data
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Event{
     pub data: EventData,
     pub status: EventStatus,
     pub offset: u64, // the position of the event inside the brain network
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum EventStatus{
     #[default]
     Committed,
@@ -296,9 +301,10 @@ pub enum NeuronError{
 */
 #[derive(Clone)]
 pub struct Neuron{
+    pub name: String,
     pub synProt: SynapseProtocol, /* -- synapse protocol -- */
     pub peerId: libp2p::PeerId, /* -- p2p peer id -- */
-    pub rmqConfig: Option<RmqConfig>, /* -- rmq config -- */
+    pub rmqPool: Arc<LapinPoolConnection>, /* -- rmq config -- */
     pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
     pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
     pub internal_executor: InternalExecutor<Event>, /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */

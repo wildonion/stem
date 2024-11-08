@@ -18,7 +18,7 @@ use crate::impls::*;
 impl ActixMessageHandler<Broadcast> for Neuron{
     
     type Result = ();
-    fn handle(&mut self, msg: Broadcast, ctx: &mut Self::Context) -> Self::Result {;
+    fn handle(&mut self, msg: Broadcast, ctx: &mut Self::Context) -> Self::Result {
 
         // unpacking the notif data
         let Broadcast { 
@@ -182,7 +182,7 @@ impl ActixMessageHandler<SendRequest> for Neuron{
 impl ActixMessageHandler<ReceiveResposne> for Neuron{
     type Result = ResponseData;
     fn handle(&mut self, msg: ReceiveResposne, ctx: &mut Self::Context) -> Self::Result {
-        let ReceiveResposne { rmqConfig, p2pConfig, encryptionConfig } = msg.clone();
+        let ReceiveResposne { rmqConfig, p2pConfig, decryptionConfig } = msg.clone();
 
         let mut this = self.clone();
         // we can't do async io tasks inside the handle methods hence 
@@ -197,10 +197,10 @@ impl ActixMessageHandler<ReceiveResposne> for Neuron{
     
                 tokio::spawn(async move{
                     if let Some(rmqcfg) = rmqConfig{
-                        let res = this.receiveRpcResponse(rmqcfg, encryptionConfig).await;
+                        let res = this.receiveRpcResponse(rmqcfg, decryptionConfig).await;
                         tx.send(res).await;
                     } else if let Some(p2pcfg) = p2pConfig{
-                        let res = this.receiveP2pResponse(p2pcfg, encryptionConfig).await;
+                        let res = this.receiveP2pResponse(p2pcfg, decryptionConfig).await;
                         tx.send(res).await;
                     } else{
                         return;
@@ -287,6 +287,7 @@ impl ActixMessageHandler<StartGateWay> for Neuron{
     type Result = ();
     fn handle(&mut self, msg: StartGateWay, ctx: &mut Self::Context) -> Self::Result {
 
+        // forward the received packets to destination
         let StartGateWay { host, port } = msg.clone();
 
     }

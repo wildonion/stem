@@ -46,7 +46,7 @@ env_logger = "0.11"
 bytes = { version = "1", features = ["serde"] }
 wallexerr = "0.3.3"
 hex = "0.4"
-clap = { version = "4.5.17", features = ["derive"] }
+clap = { version = "4.5.20", features = ["derive"] }
 thiserror = "1.0"
 percentage = "0.1.0"
 themis = "0.14.0"

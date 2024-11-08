@@ -829,6 +829,24 @@ fn but_the_point_is1(){
         user_ids = userIds.into_iter()
             .map(|uid| uid.len_utf8())
             .collect::<_>();
+
+
+    // ---------------- MUTATING NAME WITH PINNING
+    // mutating with pinned pointer 
+    let mut name = String::from("");
+    // pinned is an smart pointer of the pinned mutable pointer of the name 
+    // into the ram so mutating it mutate the underlying data as well.
+    let mut pinned = std::pin::Pin::new(&mut name);
+    (*pinned) = String::from("wildonion");
+    println!("pinned value : {:?}", pinned);
+    // noramlly we can't print the address of pinned like the following
+    // and we must use &pinned with {:p} but since the pinned contains the 
+    // mutable pointer of the name this is ok! cause smart poitners are wrapper
+    // around the actual data and they keep the actual data features.
+    println!("pinned address : {:p}", pinned); 
+    println!("name address : {:p}", &name);
+    println!("name value: {:?}", name);
+    // ----------------
     
 }
 

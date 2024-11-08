@@ -1,16 +1,21 @@
 
-
 ُREAD: desktop books for neuroscience and information theory
 READ: quantum computing, codeforces, graph and ai algos with nalgebra
 READ: publish stemlib to crate cicd from main branch
 TODOs:
-        1 -> pubsub system with arbiter for neuron actors, dsl/mod.rs macros
-        2 -> cancel or stop an executed io task or job like uploading file in the background thread inside the eventloop queue (upAndRunExecutor method)
-        3 -> neuron message handlers, start swarm eventloop, build neuron actor from cli args, (send received messages in subscriber to internal executor eventloop channel through the sender)
-        4 -> custom error handler with boxed error trait and casting to error object with ?
-        5 -> p2p concepts and network behavior: stream, request response, kademlia, gossipsub 
+        1 -> neuron message handlers, dsl/mod.rs macros, stemplugins and self.on() method
+        2 -> p2p concepts and network behavior: stream, request response, kademlia, gossipsub, start swarm eventloop
                 SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway, 
                 SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, proxy and dns server
+                ▶ gaming, Ai pipelining, robotic blockchain dex and cex with Rust using 
+                  cloudflare worker wrangler with neuron actor cli for the p2p based Dex and Cex:
+                  they talk with each other through messge sending we can use 
+                        Dex AMM liquidity pool, escrow and orders contracts.
+                        create bridge between chains
+                        Cex broker order book and match engine rmq contains all orders.
+                        Atomic orderTx with neuron actor 
+                        Ws, wrtc, tcp, udp, ed25519 noise for live orders with IPFS raft crypter graph concept
+                ▶ onion protocol with tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer
                 ▶ cpu task scheduling, weighted round robin dns, vector clock
                 ▶ iptables and ssh tunneling
                 ▶ simd BTreeMap, HashMap lookup and divide and conquer based vectorization using rayon multithreading
@@ -49,22 +54,11 @@ TODOs:
                         ▶ our VPS must detect the amount of CPU and RAM that every servers needs to get, without running the app
                         ▶ our VPS must detect the number of instances of every servers needs to be run and the load balancing algorithm 
                         bpf based proxy, firewall, vpns, packet sniffer and load balancer
-        6 -> AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution 
-        7 -> encrypt the connection between each neuron in a cluster or brain using crypter
-        8 -> onion protocol with tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer
-        9 -> neuron crypter based operations:
+        3 -> AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution 
+        4 -> neuron crypter based operations:
                 contract and wallet over zk
-                noise (ed25519) and rustls for secure communication (playground/app.rs)
+                noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
                 #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network
-BUILD: 
-        gaming, Ai pipelining, robotic blockchain dex and cex with Rust using 
-        cloudflare worker wrangler with neuron actor for the p2p based Dex and Cex:
-        they talk with each other through messge sending we can use 
-                Dex AMM liquidity pool, escrow and orders contracts.
-                Cex order book broker and match engine rmq contains all orders.
-                Atomic orderTx with neuron actor 
-                Ws, wrtc, tcp, udp, ed25519 noise for live orders with IPFS raft crypter graph concept
-
 https://www.youtube.com/watch?v=rht1vO2MBIg
 https://medium.com/@harshiljani2002/building-stock-market-engine-from-scratch-in-rust-ii-0c7b5d8a60b6
 https://github.com/MikeECunningham/rust-trader-public/tree/main 

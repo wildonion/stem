@@ -1,0 +1,9 @@
+
+rmqUsername: "hoopoe"
+rmqPassword: "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70"
+rmqHost: "0.0.0.0"
+rmqPort: 5672
+redisUsername: ""
+redisPassword: "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70"
+redisHost: "0.0.0.0"
+redisPort: 6379

@@ -40,7 +40,7 @@ git push origin main
 
 ### CI/CD Notes:
 
-at the start of each workflow, by default github creates unique `GITHUB_TOKEN` secrets per each workflow, make sure it has read and write permissions for the current workflow: `Settings > Actions > General`.
+at the start of each workflow, by default github creates unique `GITHUB_TOKEN` secrets per each workflow, make sure it has read and write permissions for the current workflow: `Settings > Actions > General > Workflow permissions`.
 
 ### Just in Case:
 

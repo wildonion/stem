@@ -124,7 +124,6 @@ use crate::impls::*;
     the request even arrives at the server, this is the feature of promise it's a place 
     holder for the result of each call and once we await on them all the results will be 
     arrived in one round trip.
-
     ************************************************************************************
     it's notable that for realtime push notif streaming we MUST start consuming from
     the specified broker passed in to the message structure when talking with actor, in
@@ -168,28 +167,17 @@ use tokio::task::JoinHandle;
 use tx::Transaction;
 use wallexerr::misc::SecureCellConfig;
 use interfaces::{Crypter, ShaHasher};
-
+use clap::{Parser, Subcommand};
 
 const APP_NAME: &str = "STEM";
 
-mod cruft;
-mod task;
-mod actor;
-mod tx;
-mod interfaces;
-mod dsl;
-mod test;
-mod schemas; 
-mod messages;
-mod impls;
-mod handlers;
-
-
-pub async fn run(){
-
-    log::info!("up and running from stemlib...");
-    
-    test::upAndRunStreaming().await;
-    test::upAndRunTalking().await;
-
-}
+pub mod cruft;
+pub mod task;
+pub mod actor;
+pub mod tx;
+pub mod interfaces;
+pub mod dsl;
+pub mod schemas; 
+pub mod messages;
+pub mod impls;
+pub mod handlers;
