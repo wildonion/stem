@@ -14,7 +14,7 @@ members = [
 crypter = { path = "crypter", name = "crypter" }
 stemlib = { path = "stemlib", name = "stemlib"}
 stemplugins = { path = "stemplugins", name = "stemplugins"}
-salvo = { version = "0.74.0", features = ["full"] }
+salvo = { version = "0.74.2", features = ["full"] }
 actix = "0.13.5"
 actix-web = "4"
 tokio = { version = "1", features = ["full"] }
@@ -29,7 +29,6 @@ sha2 = "0.10"
 is_type = "0.2.1"
 rayon = "1.10.0"
 rand = "0.8"
-rslock = "0.4.0"
 futures = "0.3"
 deadpool-lapin = { version = "0.12.1", features = ["serde", "rt_tokio_1"] }
 deadpool-redis = "0.18.0"
@@ -47,14 +46,14 @@ bytes = { version = "1", features = ["serde"] }
 wallexerr = "0.3.3"
 hex = "0.4"
 clap = { version = "4.5.20", features = ["derive"] }
-thiserror = "1.0"
+thiserror = "2.0.3"
 percentage = "0.1.0"
 themis = "0.14.0"
 base58 = "0.2.0"
 rand_chacha = "0.3"
 chacha20 = "0.9"
-indexmap = "2.4"
-wasmer = "4.4.0"
+indexmap = "2.6"
+wasmer = "5.0.1"
 wasmer-wasi = "3.1.1"
 
 [[bin]]

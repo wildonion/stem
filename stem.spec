@@ -1,21 +1,23 @@
 
 ُREAD: desktop books for neuroscience and information theory
-READ: quantum computing, codeforces, graph and ai algos with nalgebra
+READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
 READ: publish stemlib to crate cicd from main branch
 TODOs:
+        0 -> game mmq and exchnage order book match engine engine with neuron actor framework 
+             cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex:
+                talking with the engine through rmq (rpc and streaming) p2p req-res
+                WalletServiceActorWorker (updatePrice/txCrawler) 
+                Dex AMM liquidity pool, escrow and orders contracts.
+                create bridge between chains
+                Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
+                Atomic orderTx in WalletServiceActorWorker and neuron actor
+                live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise  
         1 -> neuron message handlers, dsl/mod.rs macros, stemplugins and self.on() method
-        2 -> p2p concepts and network behavior: stream, request response, kademlia, gossipsub, start swarm eventloop
+        2 -> p2p concepts and network behavior: stream, request response, kademlia, gossipsub, startP2pSwarmEventLoop()
                 SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway, 
                 SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, proxy and dns server
-                ▶ gaming, Ai pipelining, robotic blockchain dex and cex with Rust using 
-                  cloudflare worker wrangler with neuron actor cli for the p2p based Dex and Cex:
-                  they talk with each other through messge sending we can use 
-                        Dex AMM liquidity pool, escrow and orders contracts.
-                        create bridge between chains
-                        Cex broker order book and match engine rmq contains all orders.
-                        Atomic orderTx with neuron actor 
-                        Ws, wrtc, tcp, udp, ed25519 noise for live orders with IPFS raft crypter graph concept
                 ▶ onion protocol with tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer
+                ▶ gateway and vpn at the tcp layer using packet forwarding tokio io copy / send packet through proxy in code level using salvo
                 ▶ cpu task scheduling, weighted round robin dns, vector clock
                 ▶ iptables and ssh tunneling
                 ▶ simd BTreeMap, HashMap lookup and divide and conquer based vectorization using rayon multithreading
