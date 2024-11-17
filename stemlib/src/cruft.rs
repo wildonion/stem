@@ -4900,7 +4900,7 @@ pub async fn neuron_actor_cruft(){
     }
     // can't return future as a generic we should return a type that is already generic 
     // like the return type of a closure
-    fn retFut2<F: Fn() -> R + Send + Sync, R>(param: Arc<F>) -> R 
+    async fn retFut2<F: Fn() -> R + Send + Sync, R>(param: Arc<F>) -> R 
     where R: std::future::Future<Output = ()> + Send + Sync{
         let task = param();
         task
@@ -4941,12 +4941,25 @@ pub async fn neuron_actor_cruft(){
     type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
     type Task1 = std::sync::Arc<dyn FnOnce() 
         -> std::pin::Pin<std::sync::Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+    type Task2 = std::sync::Arc<dyn FnOnce() 
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
     // dependency injection and dynamic dispatching is done by:
     // Arc::pin(async move{}) or Box::pin(async move{})
     // Pin<Arc<dyn Trait>> or Pin<Box<dyn Trait>>
     // R: Future<Output=()> + Send + Sync + 'static
     use std::{pin::Pin, sync::Arc};
     type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>; // an arced closure trait which returns an arced pinned future trait object
+
+    // an async task can be: 
+    // an arced closure trait which returns future object 
+    // a generic which is bounded to a closure trait which returns future object
+    // an arced closure trait which returns a pinned boxed of a future obejct
+    fn execCb<F: Fn(String) -> R + Send + Sync + 'static, R>(
+        cb: Arc<dyn Fn(String) -> R + Send + Sync + 'static>,
+        cb1: F,
+        cb2: Arc<dyn Fn(String) -> std::pin::Pin<Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>> + Send + Sync + 'static>
+    )
+        where R: std::future::Future<Output=()> + Send + Sync + 'static{}
 
     async fn getTask(task: impl std::future::Future<Output = ()> + Send + Sync + 'static){
         task.await;
