@@ -2,12 +2,14 @@
 
 use std::sync::Arc;
 use crate::*;
+use interfaces::ObjectStorage;
+use sha2::digest::Output;
 use stemlib::schemas::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
 use stemlib::interfaces::OnionStream;
 
 
-
+#[tokio::test]
 pub async fn upAndRunStreaming(){
     
     let mut neuron = Neuron::new(100, "Neuron1").await;
@@ -209,8 +211,8 @@ pub async fn upAndRunTalking(){
 
     // execute an async io task inside the neuron actor thread priodically
     neuronComponentActor.send(
-        Execute{
-            period: 40,
+        ExecutePriodically{
+            period: 40, // every 40 seconds
             job: Arc::new(
                 ||{
                     Box::pin(async move{
@@ -226,7 +228,14 @@ pub async fn upAndRunTalking(){
 
 }
 
+#[tokio::test]
 pub async fn upAndRunExecutor(){
+    
+    // eventloop executor is an actor object which has two methods
+    // run and spawn in which the eventloop receiver will be started
+    // receiving io tasks and execute them in a tokio threads and for 
+    // the spawn method the io task will be sent to the channel.
+    
     use tokio::sync::mpsc;
     use tokio::spawn;
 
@@ -237,12 +246,48 @@ pub async fn upAndRunExecutor(){
             
     // eventloop
     #[derive(Clone)]
-    struct EventLoop{
+    struct OnionActor{
         pub sender: tokio::sync::mpsc::Sender<Task>, 
-        pub receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Task>>>
+        pub receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Task>>>,
     }
-    
-    impl EventLoop{
+
+    // the OnionActor structure has two spawn and run logics to send and
+    // receive io jobs from the channel so we could execute them inside 
+    // the background light thread using tokio runtime and scheduler
+    trait EventLoopExt{
+        async fn spawn(&self, task: Task);
+        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static;
+    }
+
+    impl EventLoopExt for OnionActor{
+        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static{
+            let this = self.clone();
+            let arcedCallback = std::sync::Arc::new(cb);
+            // receiving inside a light thread
+            spawn(async move{
+                let clonedArcedCallback = arcedCallback.clone();
+                let getRx = this.clone().receiver;
+                let mut rx = getRx.lock().await;
+                while let Some(task) = rx.recv().await{
+                    println!("received task from eventloop, executing in a thread of the eventloop");
+                    // executing the callback inside a light thread
+                    spawn(
+                        clonedArcedCallback(task) // when we run the callback closure trait it returns future object as its return type 
+                    );
+                }
+            });   
+        }
+        
+        async fn spawn(&self, task: Task) {
+            let this = self.clone();
+            let sender = this.sender;
+            tokio::spawn(async move{
+                sender.send(task).await;
+            });
+        }
+    }
+
+    impl OnionActor{
         pub fn new() -> Self{
             let (tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);            
             Self{
@@ -251,28 +296,8 @@ pub async fn upAndRunExecutor(){
                     tokio::sync::Mutex::new(
                         rx
                     )
-                )
+                ),
             }
-        }
-        pub async fn spawn(&mut self, task: Task){
-            let sender = self.clone().sender;
-            sender.send(task).await;
-        }
-        pub async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F)
-        where R: std::future::Future<Output=()> + Send + Sync + 'static{
-            let this = self.clone();
-            let arcedCallback = std::sync::Arc::new(cb);
-            spawn(async move{
-                let clonedArcedCallback = arcedCallback.clone();
-                let getRx = this.clone().receiver;
-                let mut rx = getRx.lock().await;
-                while let Some(task) = rx.recv().await{
-                    println!("received task from eventloop, executing in a thread of the eventloop");
-                    spawn(
-                        clonedArcedCallback(task)
-                    );
-                }
-            });
         }
     }
     
@@ -285,24 +310,198 @@ pub async fn upAndRunExecutor(){
     struct Task{
         pub job: Io 
     }
+
+    impl Task{
+        pub fn new() -> Self{
+            Self { job: std::sync::Arc::new(
+                ||{
+                    Box::pin(async move{
+                        println!("executing an intensive io...");
+                    })
+                }
+            ) }
+        }
+    }
+
+    pub trait OnionService{
+        type Service; 
+        async fn runner(&mut self);
+        async fn stop(&self);
+        async fn spawner(&self, task: Task);
+    }
+
+    impl OnionService for OnionActor{
+        type Service = Self;
+        async fn spawner(&self, task: Task) {
+            self.spawn(task).await; // spawn io task into the eventloop thread
+        }
+        async fn stop(&self) {
+            
+        }
+        async fn runner(&mut self){
+            // run() method takes a callback with the received task as its param
+            // inside the method we'll start receiving from the channel then pass
+            // the received task to the callback, inside the callback however the
+            // task is being exeucted inside another light thread 
+            self.run(|task| async move{ 
+                println!("inside the callback, executing received task");
+                let job = task.job;
+                spawn(job());
+            }).await;
+        } 
+    }
+    
+    let mut eventLoopService = OnionActor::new();
+    eventLoopService.spawner(Task::new()).await;
+    eventLoopService.runner().await;
     
     
-    let mut eventLoop = EventLoop::new();
+
+}
+
+#[tokio::test]
+pub async fn uploadFile(){
+
+
+    let file = tokio::fs::File::open("").await.unwrap();
+    let mut driver = MinIoDriver{source: Arc::new(file)};
+    driver.upload().await;
+
+
+}
+
+#[tokio::test]
+pub async fn makeMeService(){
     
-    let task = Task{
-        job: std::sync::Arc::new(
-            ||{
-                Box::pin(async move{
-                    println!("executing an intensive io...");
-                })
-            }
-        )
+    // step1) make object as service and add make a container from it
+    // step2) deploy object to the cloud
+    // step3) execute the shellcode or bytecode of the object directly from the ram
+    // step4) compress data in ram / in memory code execution 
+
+    // --------------------------------------------
+    // simulating the pause and resume process
+    // deref pointers using *: this can be Box, Arc and Mutex 
+    // --------------------------------------------
+    let fileStatus = std::sync::Mutex::new(String::from("pause"));
+    let signal = std::sync::Condvar::new();
+    let sigstat = Arc::new((signal, fileStatus));
+    let clonedSigStat = sigstat.clone();
+
+    // the caller thread gets blocked until it able to acquire the mutex 
+    // since at the time of acquireing the mutex might be busy by another thread
+    // hence to avoid data races we should block the requester thread until the 
+    // mutex is freed to be used.
+    // we can use mutex to update it globally even inside a thread
+    std::thread::spawn(move || {
+        let (sig, stat) = &*clonedSigStat; // deref the Arc smart pointer then borrow it to prevent moving
+        let mut lock = stat.lock().unwrap();
+        *lock = String::from("resume");
+        sig.notify_one();
+    });
+
+    let (sig, stat) = &*sigstat; // deref the Arc smart pointer then borrow it to prevent moving
+    let mut getStat = stat.lock().unwrap();
+    while *getStat != String::from("resume"){
+        getStat = sig.wait(getStat).unwrap(); // the result of the wait is the updated version of the getStat
+    }
+
+
+    // make an object as a service through as single interface trait
+    // we can inject service as dependency inside the body of an structure 
+    // but the trait object must be object safe trait 
+    // dependency injection or trait interface: sdk and plugin writing
+    // each componenet can be an actor object as well as a service through 
+    // implementing the interface trait for the struct
+    // the size of object safe trait must not be known and must be accessible through pointer
+    // if we want to pin heap data it's better to pin the boxed of them
+    // since pinning is about stick the data into an stable position inside 
+    // the ram and because of the reallocation process for heap data this 
+    // can violates the rule of pinning.
+    pub trait ServiceInterface{
+        type Model;
+        fn start(&self);
+        fn stop(&self);
+        fn getInfo(&self) -> &Self::Model;
+    }
+
+    impl ServiceInterface for Vec<u8>{
+        type Model = Vec<u8>;
+        fn start(&self) {
+            
+        }
+        fn getInfo(&self) -> &Self::Model {
+            &self
+        }
+        fn stop(&self) {
+            
+        }
+    }
+
+    pub struct UserComponent<T>{ pub id: String, pub service: Box<dyn ServiceInterface<Model = T>> }
+    impl<T> ServiceInterface for UserComponent<T>{ // make UserComponent as a service
+        type Model = UserComponent<T>;
+        fn start(&self) {
+            
+        }
+        fn stop(&self){
+
+        }
+        fn getInfo(&self) -> &Self {
+            &self
+        }
+    }
+
+    let userCmp = UserComponent{
+        id: Uuid::new_v4().to_string(),
+        service: Box::new(vec![0, 10])
     };
-    eventLoop.spawn(task).await;
+
+
+    use std::collections::HashMap;
+    type Inputs = Vec<HashMap<String, String>>;
+    type InputsKey = String;
+    let mut inputs: HashMap<InputsKey, Inputs> = HashMap::new();
     
-    eventLoop.run(|task| async move{
-        println!("inside the callback, playing with received task");
-        let job = task.job;
-        spawn(job());
-    }).await;
+    let mut input1 = HashMap::new();
+    input1.insert(
+        String::from("image1_file_path"),
+        String::from("/path/to/file1")
+    );
+    input1.insert(
+        String::from("image2_file_path"),
+        String::from("/path/to/file2")
+    );
+
+    let mut input2 = HashMap::new();
+    input2.insert(
+        String::from("image2_file_path"),
+        String::from("/path/to/file1")
+    );
+    input2.insert(
+        String::from("image2_file_path"),
+        String::from("/path/to/file2")
+    );
+    input2.insert(
+        String::from("metadata"),
+        String::from(serde_json::to_string(&1).unwrap())
+    );
+
+    inputs.insert(String::from("inputs"), vec![input1, input2]);
+
+    let mut filesMap: HashMap<String, String> = HashMap::new();
+    let mut metaMap: HashMap<String, String> = HashMap::new();
+    for (_, inputs) in inputs{
+        for idx in 0..inputs.len(){
+            let map = inputs[idx].clone(); // should clone in here since accessing data by index move out of the type
+            for (k, v) in map{
+                if k.ends_with("_file_path"){
+                    filesMap.insert(format!("{k}_{idx:}"), v);
+                } else{
+                    metaMap.insert(format!("{k}_{idx:}"), v);
+                }
+            }
+        }
+    }
+
+
 }
