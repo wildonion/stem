@@ -18,6 +18,7 @@ use futures::StreamExt;
 use log4rs::append;
 use rayon::string;
 use uuid::timestamp::context;
+use wallexerr::misc::Wallet;
 use crate::*;
 use crate::messages::*;
 use crate::schemas::*;
@@ -139,7 +140,7 @@ impl Neuron{
         // https://github.com/libp2p/rust-libp2p/blob/master/examples/chat/src/main.rs
         let mut getSwarm = self.clone().synProt.clone().swarm;
         let mut swarm = getSwarm.lock().await;
-
+        
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
         // listen on both udp and tcp
         swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap()).unwrap();
@@ -163,8 +164,8 @@ impl Neuron{
         
         // this can be inside the swarm eventloop and publishing the message constantly 
         let msgId = swarm.behaviour_mut().gossipsub.publish(topic.clone(), message.as_bytes()).unwrap();
-        
-        // ...
+
+        log::info!("message has published with Id [{}]", std::str::from_utf8(&msgId.0).unwrap());
 
     }   
 
@@ -386,16 +387,19 @@ impl Neuron{
                                 while let Some(delivery) = consumer.next().await{
                                     match delivery{
                                         Ok(delv) => {
-                                            log::info!("[*] received delivery from queue#<{}>", q.name());
-                                            let consumedBuffer = delv.data.clone();
                                             
+                                            log::info!("[*] received delivery from queue#<{}>", q.name());
+                                            
+                                            let consumedBuffer = delv.data.clone(); 
                                             let clonedIntExSender = intex_sender.clone();
+                                            
                                             // handle the message in the background light thread asyncly and concurrently
                                             // by spawning a light thread for the async task
                                             tokio::spawn(async move{
                                                 // either decrypted or the raw data as string
                                                 log::info!("[*] received data: {:?}", hex::encode(&consumedBuffer));
                                                 
+                                                // we've assumed that the received data is not encrypted
                                                 // decoding the string data into the Event structure (convention)
                                                 let get_event = serde_json::from_slice::<Event>(&consumedBuffer);
                                                 match get_event{
@@ -403,7 +407,10 @@ impl Neuron{
 
                                                         log::info!("[*] deserialized data: {:?}", event);
 
-                                                        // send to the internal executor channel
+                                                        // send the subscribed message to the internal executor channel 
+                                                        // so we could receive it inside the callback or other scopes like 
+                                                        // handling rmq messages over websocket, we'll use the receiver 
+                                                        // inside the websocket server.
                                                         clonedIntExSender.send(event).await;
 
                                                     },
@@ -422,11 +429,10 @@ impl Neuron{
                             },
                             Err(e) => {
                                 log::error!("can't get the consumer");
+                                return;
                             }
                         }
                     });
-
-
             },
             Err(e) => {
                 log::error!("can't create channel!");
@@ -447,6 +453,8 @@ impl Neuron{
         need no dyn keyword behind the trait or generic type also we 
         can't await on an Arced future! use number 10 instead which is 
         having future object as separate type without using generics.
+        number1 is not a safe io task to be sharead between threads
+        number10 is a safe thread io task tha can be sharead between threads
 
             1) task: Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>
             2) task: Pin<Arc<dyn Future<Output = ()> + Send + Sync + 'static>
@@ -616,6 +624,9 @@ impl Neuron{
         tokio::spawn(async move{
             // run a task intervally in the background light thread
             this.runInterval(move || {
+                // ----------------------------------------------------------------
+                // -------- clone before going into the async move{} scope
+                // ----------------------------------------------------------------
                 // we must clone them inside the closure body 
                 // before sending them inside the tokio spawn
                 let cloned_tx = tx.clone();
@@ -633,9 +644,7 @@ impl Neuron{
         // in another light thread in the background
         tokio::spawn(async move{
             while let Some(job) = eventloop.recv().await{
-                tokio::spawn(async move{
-                    job().await
-                });
+                tokio::spawn(job());
             }
         });
 
@@ -779,7 +788,216 @@ impl Actor for Neuron{
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
-        log::error!("neuron actor has stopped");        
+        log::error!("neuron actor has stopped working");        
     }
     
+}
+
+impl ObjectStorage for MinIoDriver{
+
+    type Driver = Self;
+    async fn download(&mut self) {
+        
+    }
+    async fn upload(&mut self) {
+        
+    }
+    async fn getFile(&mut self, fId: String) {
+        
+    }
+}
+
+impl ObjectStorage for SeaFileDriver{
+
+    type Driver = Self;
+    async fn download(&mut self) {
+        
+    }
+    async fn upload(&mut self) {
+        
+    }
+    async fn getFile(&mut self, fId: String) {
+        
+    }
+}
+
+// make C3 as an isolated actor worker (message passing, interval execution in light thread) 
+impl Actor for C3{
+    type Context = Context<Self>;
+}
+
+// impl the interface for any T
+// impl<T> ServiceExt1 for T{
+//     fn startService(&mut self) {}
+//     fn stopService(&mut self) {}
+// }
+impl ServiceExt1 for C3{
+    fn startService(&mut self) {}
+    fn stopService(&mut self) {}
+}
+
+impl OnionStream for Neuron{
+    type Model = Neuron;
+
+    async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
+            F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
+            (&mut self, streamer: &str, eventType: &str, callback: F) -> Self::Model {
+                
+        // execute callback instead of directly caching and storing the received 
+        // or sent events on redis or inside db , the process can be done inside 
+        // the callback instead of handling it in here
+
+        let get_internal_executor = &self.clone().internal_executor;
+        let get_events = get_internal_executor.buffer.events.lock().await;
+        let cloned_get_internal_executor = get_internal_executor.clone();
+        let last_event = get_events.last().unwrap();
+
+        // in order to use * or deref mark on last_event the Copy trait must be implemented 
+        // for the type since the Copy is not implemented for heap data types thus we should 
+        // use clone() method on them to return the owned type.
+        let owned_las_event = last_event.clone();
+
+        match eventType{
+            "crash" => {
+
+                drop(self.clone());
+                self.clone()
+            },
+            "shutdown" => {
+                
+                drop(self.clone());
+                self.clone()
+            },
+            "send" => {
+                
+                match streamer{
+                    "local" => {
+                        // sending in the background
+                        let first_token_last_event = owned_las_event.clone();
+                        
+                        // spawn an event for the executor, this would send the event into the channel
+                        // in the background lightweight thread
+                        tokio::spawn(async move{
+                            match cloned_get_internal_executor.spawn(first_token_last_event).await{
+                                Ok(this) => {
+                                    tokio::spawn(
+                                        callback(
+                                            owned_las_event.to_owned(), 
+                                            None
+                                        )
+                                    );
+                                },
+                                Err(e) => {
+                                    tokio::spawn(
+                                        callback(
+                                            owned_las_event.to_owned(), 
+                                            Some(StreamError::Sender(e.source().unwrap().to_string()))
+                                        )
+                                    );
+                                }
+                            }
+                        });
+
+                        self.clone()
+
+                    },
+                    "rmq" => {
+                        self.clone()
+                    },
+                    _ => {
+                        log::error!("unknown streamer!");
+                        self.clone()
+                    }
+                }
+            },
+            "receive" => {
+                
+                match streamer{
+                    "local" => {
+                        // running the eventloop to receive event streams from the channel 
+                        // this would be done in the background lightweight thread, we've passed
+                        // the callback to execute it in there
+                        tokio::spawn(async move{
+                            cloned_get_internal_executor.run(callback).await;
+                        });
+                        self.clone()
+                    },
+                    "rmq" => {
+                        self.clone()
+                    },
+                    _ => {
+                        log::error!("unknown streamer!");
+                        self.clone()
+                    }
+                }
+
+            },
+            _ => {
+                log::info!("unknown event type!");
+                self.clone()
+            }
+        }
+
+    }
+    
+}
+
+// used for en(de)crypting data in form of string
+impl Crypter for String{
+    fn decrypt(&mut self, secure_cell_config: &mut SecureCellConfig){
+
+        // encrypt convert the raw string into hex encrypted thus
+        // calling decrypt method on the hex string returns the 
+        // raw string
+        secure_cell_config.data = hex::decode(&self).unwrap();
+        match Wallet::secure_cell_decrypt(secure_cell_config){ // passing the redis secure_cell_config instance
+            Ok(data) => {
+
+                // update the self by converting the data into string format from its utf8
+                *self = std::str::from_utf8(&data).unwrap().to_string();
+
+                secure_cell_config.data = data;
+            },
+            Err(e) => {
+
+                // don't update data field in secure_cell_config instance
+                // the encrypted data remains the same as before.
+            }
+        };
+
+    }
+    fn encrypt(&mut self, secure_cell_config: &mut SecureCellConfig){
+
+        // use the self as the input data to be encrypted
+        secure_cell_config.data = self.clone().as_bytes().to_vec();
+        
+        match Wallet::secure_cell_encrypt(secure_cell_config){
+            Ok(encrypted) => {
+                
+                let stringified_data = hex::encode(&encrypted);
+                
+                // update the self or the string with the hex encrypted data
+                *self = stringified_data;
+
+                // update the data field with the encrypted content bytes
+                secure_cell_config.data = encrypted; 
+
+            },
+            Err(e) => {
+                
+                // don't update data field in secure_cell_config instance
+                // the raw data remains the same as before.
+            }
+        };
+
+    }
+
+}
+
+
+impl ShaHasher for String{
+    fn hash(&mut self) {
+        let hashed = Wallet::generate_sha256_from(&self);
+        *self = hex::encode(hashed);
+    }
 }
