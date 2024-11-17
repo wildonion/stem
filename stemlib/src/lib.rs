@@ -169,7 +169,7 @@ use wallexerr::misc::SecureCellConfig;
 use interfaces::{Crypter, ShaHasher};
 use clap::{Parser, Subcommand};
 
-const APP_NAME: &str = "STEM";
+const APP_NAME: &str = "stemlib";
 
 pub mod cruft;
 pub mod task;

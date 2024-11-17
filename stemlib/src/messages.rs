@@ -96,7 +96,7 @@ pub struct Subscribe{ // we'll create a channel then start consuming by binding 
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct Execute{
+pub struct ExecutePriodically{
     pub period: u64,
     pub job: Io,
 }

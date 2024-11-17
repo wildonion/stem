@@ -315,17 +315,20 @@ impl ActixMessageHandler<HeyThere> for Neuron{
     }
 }
 
-impl ActixMessageHandler<Execute> for Neuron{
+impl ActixMessageHandler<ExecutePriodically> for Neuron{
     type Result = ();
-    fn handle(&mut self, msg: Execute, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ExecutePriodically, ctx: &mut Self::Context) -> Self::Result {
 
-        let Execute{period, job} = msg;
+        let ExecutePriodically{period, job} = msg;
         let clonedJob = job.clone(); // return type of closure is async io task
 
         // a callback is called after ticking the time during the interval process
         // we'll execute the job in each period of time. 
         ctx.run_interval(std::time::Duration::from_secs(period), move |actor, ctx|{
+            
+            // execute the passed in task inside the tokio light thread in the background
             tokio::spawn(clonedJob());
+
         });
     }
 }

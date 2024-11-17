@@ -22,8 +22,8 @@ use stemlib::*;
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>{
 
     tests::upAndRunTalking().await;
-    tests::upAndRunExecutor().await;
-    tests::upAndRunStreaming().await;
+    // tests::upAndRunExecutor().await;
+    // tests::upAndRunStreaming().await;
 
     Ok(())
 
