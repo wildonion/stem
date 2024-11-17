@@ -5,6 +5,8 @@
     schemas and structures
 */
 
+use interfaces::ObjectStorage;
+use interfaces::ServiceExt1;
 use crate::*;
 use crate::messages::*;
 use crate::impls::*;
@@ -330,4 +332,53 @@ pub struct StemError{
 pub enum ErrorKind{
     Io(std::io::Error),
     StreamError
+}
+
+/* --------------------------------------------------
+    reusable components are trait objects that can be implemented 
+    for any type which enables us to access different types through 
+    a single interface, can be used for testing, building sdks with 
+    multiple engine like ObjectStorage trait for File handler that
+    can supports uploading file to multiple backends, building actor 
+    worker isoalted componenets that can talk with each other and other parts
+    of the app through message sending, app contexts or services through
+    dependency injection and dynamic dispatching.  
+
+    accessing multiple types through a single interface
+    we can use the interface trait to register a service 
+    of any type whose impls the ServiceExt trait, build 
+    reusable componenets, sdks and testing logics.
+    by implementing Actor trait for the C3 each instance 
+    of C3 can talk to each other and other components of 
+    the app through message sending pattern.
+
+    solid design pattern: n different type of services can be accessible 
+    through a single interface like implementing Actor trait for a component
+    with dep inj, dyn dist and poly which enables us for isolated talking
+*/
+pub struct C3{ // Context Container Component
+    pub id: String,
+    pub name: String,
+    pub task: Arc<dyn Fn() -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
+    pub service: Box<dyn ServiceExt1> // the trait must be object safe trait for dep injection through dyn dispatch pattern
+}
+
+impl ServiceExt for AppService{
+    type Model = AppService;
+    fn start(&mut self) {
+        
+    }
+    fn status(&self) {
+        
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MinIoDriver{
+    pub source: Arc<tokio::fs::File>
+}
+
+#[derive(Clone, Debug)]
+pub struct SeaFileDriver{
+    pub source: Arc<tokio::fs::File>
 }
