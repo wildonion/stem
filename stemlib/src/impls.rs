@@ -47,8 +47,8 @@ impl Neuron{
             /* *********************************************************** */
             /* **************** BUILDING SYNAPSE PROTOCOL **************** */
             /* *********************************************************** */
-            synProt: {
-                // building the swarm object with our network behaviour contains our protocol
+            synProt: { 
+                // building the swarm object with our network behaviour contains our synapse protocol
                 let mut swarm = SwarmBuilder::with_new_identity()
                 .with_tokio()
                 .with_tcp(
@@ -65,7 +65,10 @@ impl Neuron{
                 .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
                 .build();
 
-                // a shareable, cloneable and thread safe p2p swarm object
+                // as soon as the actor is started the swarm eventloop will be executed
+                // and set to be listened on different ports.
+                // a shareable, cloneable and thread safe p2p swarm object containing 
+                // all the network behaviours
                 SynapseProtocol{
                     swarm: std::sync::Arc::new(
                         tokio::sync::Mutex::new(
@@ -137,11 +140,13 @@ impl Neuron{
     pub async fn startP2pSwarmEventLoop(&mut self){
         
         // https://github.com/libp2p/rust-libp2p/blob/master/examples/distributed-key-value-store/src/main.rs
+        // https://github.com/libp2p/rust-libp2p/blob/master/examples/file-sharing/src/network.rs
         // https://github.com/libp2p/rust-libp2p/blob/master/examples/chat/src/main.rs
+        // https://github.com/libp2p/rust-libp2p/blob/master/examples/stream/src/main.rs
         let mut getSwarm = self.clone().synProt.clone().swarm;
         let mut swarm = getSwarm.lock().await;
-        
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
+        
         // listen on both udp and tcp
         swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap()).unwrap();
         swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap()).unwrap();
@@ -149,8 +154,12 @@ impl Neuron{
         // TODO 
         // swarm eventloop is a loop that waits for incoming events of
         // kademlia, gossipsub and request response ones and we can handle 
-        // them in realtime as they're coming 
+        // them in realtime as they're coming, process various events emitted
+        // by the swarm
         // ...
+
+        // use select inside a loop to control multiple execution flow of the app 
+        // during runtime
     }
 
     // gossipsub publish 
@@ -179,7 +188,7 @@ impl Neuron{
         let topic = gossipsub::IdentTopic::new(topic);
         swarm.behaviour_mut().gossipsub.subscribe(&topic).unwrap();
 
-        // ...
+        // we'll log the received and subscribed messages inside the swarm eventloop
 
     }
 
@@ -770,8 +779,7 @@ impl Actor for Neuron{
 
         let pid = ctx.address(); // actor or process address or unique id
 
-        // start swarm event loop in the background 
-        // thread once the actor starts
+        // start swarm event loop in the background thread
         let mut this = self.clone();
         tokio::spawn(async move{
             this.startP2pSwarmEventLoop().await
@@ -999,5 +1007,15 @@ impl ShaHasher for String{
     fn hash(&mut self) {
         let hashed = Wallet::generate_sha256_from(&self);
         *self = hex::encode(hashed);
+    }
+}
+
+impl ServiceExt for AppService{
+    type Model = AppService;
+    fn start(&mut self) {
+        
+    }
+    fn status(&self) {
+        
     }
 }

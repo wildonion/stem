@@ -55,6 +55,7 @@ chacha20 = "0.9"
 indexmap = "2.6"
 wasmer = "5.0.1"
 wasmer-wasi = "3.1.1"
+mmap = "0.1.1"
 
 [[bin]]
 name = "stem"

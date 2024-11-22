@@ -5,6 +5,8 @@
     schemas and structures
 */
 
+use std::pin::Pin;
+
 use interfaces::ObjectStorage;
 use interfaces::ServiceExt1;
 use crate::*;
@@ -241,7 +243,8 @@ pub struct InternalExecutor<Event>{
 pub struct Job<J: Clone, S>
 where J: std::future::Future<Output = ()> + Send + Sync + 'static{
     pub id: String, 
-    pub task: Task<J, S>
+    pub task: Task<J, S>,
+    pub io: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>> + Send + Sync + 'static >
 }
 
 // Pin, Arc, Box are smart pointers Pin pin the pointee into the ram 
@@ -251,7 +254,7 @@ R: std::future::Future<Output=()> + Send + Sync + 'static{
     pub job: Arc<F>
 }
 
-// a runner runs a job in its context
+// a runner runs a job in its context thread
 pub struct Runner<J: Clone, S>
 where J: std::future::Future<Output = ()> + Send + Sync + 'static{
     pub id: String,
@@ -304,18 +307,18 @@ pub enum NeuronError{
 #[derive(Clone)]
 pub struct Neuron{
     pub name: String,
-    pub synProt: SynapseProtocol, /* -- synapse protocol -- */
-    pub peerId: libp2p::PeerId, /* -- p2p peer id -- */
-    pub rmqPool: Arc<LapinPoolConnection>, /* -- rmq config -- */
-    pub wallet: Option<wallexerr::misc::Wallet>, /* -- a cryptography indentifier for each neuron -- */
-    pub metadata: Option<serde_json::Value>, /* -- json object contains the actual info of an object which is being carried by this neuron -- */
-    pub internal_executor: InternalExecutor<Event>, /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */
-    pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>, /* -- all neuron atomic transactions -- */
-    pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>, /* -- an internal lighthread worker -- */
-    pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>, /* -- internal locker -- */
+    pub synProt: SynapseProtocol,                                                    /* -- synapse protocol -- */
+    pub peerId: libp2p::PeerId,                                                      /* -- p2p peer id -- */
+    pub rmqPool: Arc<LapinPoolConnection>,                                           /* -- rmq config -- */
+    pub wallet: Option<wallexerr::misc::Wallet>,                                     /* -- a cryptography indentifier for each neuron -- */
+    pub metadata: Option<serde_json::Value>,                                         /* -- json object contains the actual info of an object which is being carried by this neuron -- */
+    pub internal_executor: InternalExecutor<Event>,                                  /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */
+    pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,  /* -- all neuron atomic transactions -- */
+    pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,         /* -- an internal lighthread worker -- */
+    pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
     pub internal_none_async_threadpool: std::sync::Arc<Option<NoneAsyncThreadPool>>, /* -- internal none async threadpool -- */
-    pub signal: std::sync::Arc<std::sync::Condvar>, /* -- the condition variable signal for this neuron -- */
-    pub dependency: std::sync::Arc<dyn ServiceExt<Model = AppService>>, /* -- inject any type that impls the ServiceExt trait as dependency injection -- */
+    pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
+    pub dependency: std::sync::Arc<dyn ServiceExt<Model = AppService>>,              /* -- inject any type that impls the ServiceExt trait as dependency injection -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
@@ -363,22 +366,12 @@ pub struct C3{ // Context Container Component
     pub service: Box<dyn ServiceExt1> // the trait must be object safe trait for dep injection through dyn dispatch pattern
 }
 
-impl ServiceExt for AppService{
-    type Model = AppService;
-    fn start(&mut self) {
-        
-    }
-    fn status(&self) {
-        
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct MinIoDriver{
-    pub source: Arc<tokio::fs::File>
+    pub source: Arc<tokio::fs::File> // thread safe file
 }
 
 #[derive(Clone, Debug)]
 pub struct SeaFileDriver{
-    pub source: Arc<tokio::fs::File>
+    pub source: Arc<tokio::fs::File> // thread safe file
 }
