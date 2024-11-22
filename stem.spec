@@ -1,10 +1,21 @@
 
-ُREAD: desktop books for neuroscience and information theory
+ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
-READ: publish stemlib to crate cicd from main branch
+DO: publish stemlib to crate cicd from main branch
 TODOs:
-        0 -> game mmq and exchnage order book match engine engine with neuron actor framework 
+        0 -> makeMeService(), uploadFile() methods and neuron message handlers, dsl/mod.rs macros, stemplugins and self.on() method
+        1 -> p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
+                startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
+        2 -> game mmq and exchnage order book match engine engine with neuron actor framework 
              cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex:
+                OTC:
+                        build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
+                        update tokens with locking in light thread db atomically inside the app 
+                        in withdraw the user sends a withdraw request so we can transfer money to his acc
+                MATCH ENGINE ORDER BOOK: 
+                        receive order from queue
+                        find the match with that order based on amount, quantity, side and the base/qoute
+                        build atomic tx and execute the tx inside a lock and a light thread
                 talking with the engine through rmq (rpc and streaming) p2p req-res
                 WalletServiceActorWorker (updatePrice/txCrawler) 
                 Dex AMM liquidity pool, escrow and orders contracts.
@@ -12,10 +23,30 @@ TODOs:
                 Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
                 live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise  
-        1 -> neuron message handlers, dsl/mod.rs macros, stemplugins and self.on() method
-        2 -> p2p concepts and network behavior: stream, request response, kademlia, gossipsub, startP2pSwarmEventLoop()
-                SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway, 
-                SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, proxy and dns server
+                wrangler, salvo, p2p and raft docs for stockBot, vr/ar, game, iot and sexchange dsl engine with raft over neuron actor:
+                workflow pipelining using github runner, job, task and executor
+                rmq rpc streaming + p2p tcp, quic, ws, wrtc swarm: stream req-res gossipsub, kad + salvo http2, grpc
+                client <---salvo http2/ws--> server <---neuron(rmq-rcp/grpc/p2p/send)---> microservices(wallet, market)
+                DSL design:
+                        marke!{
+                                otc, // exchange type || meob
+                                // use neuron wallet tx structure
+                                // impl interface trait for a service like objstorage to run it as an external microservice
+                                // dyn stat dist, poly and dep injection
+                                1 -> create tx
+                                2 -> send tx to txRawQueue queue through rmq
+                                3 -> receive tx using neuron actor inside the market service
+                                4 -> inside the trade function:
+                                                do the trade process (light thread + locking + channels + double spending issue):
+                                                1 - tx.commit
+                                                2 - tx.executeAtomically
+                                        sotre tx inside db
+                                send tx to txConfirmedQueue queue receive tx using neuron actor, inside the walle service
+                                add tx to wallet
+                        }
+        3 -> other features inside the stemlib
+                SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
+                SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns server, packet sniffer
                 ▶ onion protocol with tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer
                 ▶ gateway and vpn at the tcp layer using packet forwarding tokio io copy / send packet through proxy in code level using salvo
                 ▶ cpu task scheduling, weighted round robin dns, vector clock
@@ -56,9 +87,10 @@ TODOs:
                         ▶ our VPS must detect the amount of CPU and RAM that every servers needs to get, without running the app
                         ▶ our VPS must detect the number of instances of every servers needs to be run and the load balancing algorithm 
                         bpf based proxy, firewall, vpns, packet sniffer and load balancer
-        3 -> AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution 
-        4 -> neuron crypter based operations:
+        4 -> AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution 
+        5 -> neuron crypter based operations:
                 contract and wallet over zk
+                encrypt the neuron object instance using aes256 encryption 
                 noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
                 #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network
 https://www.youtube.com/watch?v=rht1vO2MBIg
@@ -219,3 +251,83 @@ design patters:
         https://www.hackingwithrust.net/2023/10/29/unlocking-the-power-of-rust-exploring-the-extension-object-pattern-for-ultimate-flexibility/
         https://www.hackingwithrust.net/2023/10/28/easy-delegation-in-rust-the-delegation-pattern/
         https://www.hackingwithrust.net/2023/11/05/a-guide-to-flexible-easy-thread-safe-rust-unveiling-the-multiton-pattern-for-efficient-lazy-initialization/
+https://github.com/wildonion/cs-concepts
+https://crates.io/crates/mnist
+https://crates.io/crates/wasi-nn
+https://crates.io/crates/wasmtime-wasi-nn
+https://ngoldbaum.github.io/posts/python-vs-rust-nn/
+https://towardsdatascience.com/machine-learning-and-rust-part-4-neural-networks-in-torch-85ee623f87a
+https://crates.io/crates/rusty-machine
+https://crates.io/crates/nd_array
+https://crates.io/crates/ndarray-linalg
+https://www.learnpytorch.io/
+https://pytorch.org
+https://github.com/LaurentMazare/tch-rs
+https://nalgebra.org/ => impl dl and ml algos
+https://drive.google.com/drive/folders/1elbMIrg5_NlNMzrKAX_KNjJzgD-MvNQd
+https://drive.google.com/file/d/1n_7VZtBk5Vy_RLyb2IXNtWKurZ9NSwyn/view?usp=sharing
+https://docs.timescale.com/ai/latest/
+https://drive.google.com/drive/folders/18yLzjMke-FD_onY-ayqDo03uqxUS-cHc => Google Drive Books
+https://github.com/atcold/pytorch-Deep-Learning/ => DL tutorial
+https://github.com/ritchieng/deep-learning-wizard => DL tutorial
+https://julienbeaulieu.gitbook.io => DS tutorial
+https://drive.google.com/drive/folders/1vNTdWOWXI3MetTYlIxnxDuWRK6M5VGZH => Google Drive CSR folder
+https://docs.google.com/document/d/1E-aacOX8zj2RQeQZ0IXAM7RNy5bEAX3aqUJ4K2kSxtg/edit => ideas
+https://github.com/wildonion/cs-concepts => CS Concepts and Roadmap
+https://competitions.codalab.org/
+http://colah.github.io/posts/2015-09-Visual-Information/
+https://drive.google.com/file/d/1N7BHIT7awygV5Qm5izbaYdBNfnFgF08n/view?usp=sharing
+https://drive.google.com/file/d/1kSRp1hQd9M56zS_Bfj4xQAmTSn66gl5l/view?usp=sharing
+https://drive.google.com/file/d/1-8M8BNMabNPzPZM43ekWqX_D456KaUvT/view?usp=sharing
+https://github.com/visioncortex/vtracer
+https://neurosciencenews.com/ -> get brain schemas from here
+https://en.wikipedia.org/wiki/Unconscious_mind
+https://www.sas.upenn.edu/~cavitch/pdf-library/Solms_Unconscious.pdf
+https://writings.stephenwolfram.com/2024/08/whats-really-going-on-in-machine-learning-some-minimal-models/
+https://drive.google.com/file/d/1Es7Ew8fqkRKGFYfcmFZ8gGJWYOzncA6v/view?usp=sharing
+https://drive.google.com/file/d/1K2uO8D_qLhXWcAHDpICmbfFx3hfQ4Sah/view?usp=share_link -> Models of the Mind
+https://drive.google.com/file/d/17aF74xeydgx_BulPknWv6NiU4wgTBwfQ/view?usp=share_link -> Descartes' Error
+https://www.biorxiv.org/content/10.1101/703801v1.full.pdf -> neuralink
+https://github.com/wildonion/gvm/
+https://github.com/wildonion/cs-concepts
+https://github.com/wildonion/cs-concepts
+https://openai.com/blog/measuring-goodharts-law/
+https://openreview.net/pdf?id=ar92oEosBIg => TSP using GNN
+https://likegeeks.com/python-dijkstras-algorithm/
+https://www.cantorsparadise.com/dijkstras-shortest-path-algorithm-in-python-d955744c7064
+https://www.bogotobogo.com/python/python_Dijkstras_Shortest_Path_Algorithm.php
+https://benalexkeen.com/implementing-djikstras-shortest-path-algorithm-with-python/
+https://towardsdatascience.com/a-self-learners-guide-to-shortest-path-algorithms-with-implementations-in-python-a084f60f43dc
+https://medium.com/basecs/finding-the-shortest-path-with-a-little-help-from-dijkstra-613149fbdc8e
+https://www.geeksforgeeks.org/python-program-for-dijkstras-shortest-path-algorithm-greedy-algo-7/
+https://www.youtube.com/watch?v=cme1jxw78-0
+https://www.youtube.com/watch?v=9lrHm_BsuU4
+https://www.youtube.com/watch?v=3GAfjE_ChRI
+https://www.youtube.com/watch?v=M3KTWnTrU_c
+https://www.youtube.com/watch?v=eJCLpORhfc0
+https://medium.com/@pasdan/genetic-algorithm-the-travelling-salesman-problem-via-python-deap-f238e0dd1a73
+https://towardsdatascience.com/evolution-of-a-salesman-a-complete-genetic-algorithm-tutorial-for-python-6fe5d2b3ca35
+https://github.com/ahmedfgad/GeneticAlgorithmPython
+https://github.com/gmichaelson/GA_in_python/blob/master/GA%20example.ipynb
+➤ create best objective function to find the most rewarded (less cost actions) path in the network graph env (route planning) greedily using:
+        - hybrid tech algorithms like NN, GA and neurofuzzy(ANFIS)
+        - none gradient optimization methods like GA and FA
+        - gradient optimization methods like stochastic gradient descent 
+        - graph theory and heuristic search algorithms like dijkstras, floyd, bellman, DFS, BFS and A*
+        - reinforcement learning algorithms like qlearning using mdp and bellman equation with off and on policy methods based on markov decision process and markov chain
+        - other algorithms using greedy, dynamic programming, backtracking, divide and conquer, recursive and brute forcing methods
+➤ greedy heuristic search estimates how close to the final state we are by compute an optimal solution by selecting the lowest regret decision at each step
+➤ use GNN as a heuristic search to find those features that are related to outcomes for solving tsp
+➤ define the butterfly effect for the agent to avoid choosing most rewarded path greedily dangerous in a selecting the most reliable node or peer in graph env
+continuously means sequences of chained steps in which randomness is imitating determinism and 
+the increasing of entropy only makes it more complicated and brings more feature to imitate a 
+deterministic environment and produce the butterfly effect; so if we can find a way 
+using AI RL algos to detect the increasing of entropy or when we'll get the butterfly effect 
+we can prove that the cosmos is continuously moving forward with a lots of features and 
+increased entropy by the time. 
+it's all about sequence learning which means we're learning constantly from the past thus in order to 
+have a stable system we have to put inputs inside a contiguous environment so it can learn from the 
+past and predict the future from the past or complete an unseen and lost part of the input.
+andomness is an unordered set so if we could make it bigger by adding more entropy we could 
+generate an ordered set since complexity produce a contiguous environment which contains ordered sets.
+small world and the strength of weak ties effect is based on the butterfly effect.

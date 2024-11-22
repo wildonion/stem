@@ -2,9 +2,6 @@
 
 
 
-mod stream;
-mod schemas;
-mod mathista;
 mod tests;
 
 use schemas::Neuron;
