@@ -101,6 +101,10 @@ pub struct ExecutePriodically{
     pub job: Io,
 }
 
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct Execute(pub Io, pub bool);
+
 // an io type is an arced closure which returns a pinned boxed 
 // version of an async object or future trait
 type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 

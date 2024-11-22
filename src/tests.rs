@@ -1,20 +1,49 @@
 
 
+use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 use crate::*;
+use actix_web::web::to;
+use clap::error;
+use deadpool_redis::redis::AsyncCommands;
 use interfaces::ObjectStorage;
+use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
 use stemlib::schemas::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
-use stemlib::interfaces::OnionStream;
+use stemlib::interfaces::OnionStream; // import the interface to use the on() method on the Neuron instance
 
 
 #[tokio::test]
 pub async fn upAndRunStreaming(){
-    
+
+    use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
+    let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
+    let redisHost = "0.0.0.0";
+    let redisPort = 6379;
+    let redisUsername = "";
+    let redis_conn_url = if !redisPassword.is_empty(){
+        format!("redis://:{}@{}:{}", redisPassword, redisHost, redisPort)
+    } else if !redisPassword.is_empty() && !redisUsername.is_empty(){
+        format!("redis://{}:{}@{}:{}", redisUsername, redisPassword, redisHost, redisPort)
+    } else{
+        format!("redis://{}:{}", redisHost, redisPort)
+    };
+    let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
+    let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
+
+    let Ok(redisConn) = redis_pool.get().await else{
+        panic!("can't get redis connection from the pool");
+    };
+
     let mut neuron = Neuron::new(100, "Neuron1").await;
     let neuronWallet = neuron.wallet.as_ref().unwrap();
     let executor = neuron.internal_executor.clone();
+
+    // redisConn must be mutable and since we're moving it into another thread 
+    // we should make it safe to gets moved and mutated using Arc and Mutex
+    let arcedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
  
     /* --------------------------
         execution thread process for solving future:
@@ -57,8 +86,9 @@ pub async fn upAndRunStreaming(){
         .on("rmq", "receive", move |event, error| {
             
             let clonedExecutor = executor.clone();
+            let clonnedRedisConn = arcedRedisConn.clone();
             
-            // ------------------ the async task ------------------
+            // ------------------ the async task as the return type ------------------
             async move{
 
                 if error.is_some(){
@@ -68,6 +98,8 @@ pub async fn upAndRunStreaming(){
     
                 println!("received task: {:?}", event);
     
+                // receiving the events from the internal executor can be used 
+                // for setting up server websocket.
                 // we can also use the internal eventloop to receive event:
                 // use the eventloop of the internal executor to receive the event 
                 // the event has sent from where we've subscribed to incoming events
@@ -76,17 +108,22 @@ pub async fn upAndRunStreaming(){
                     let mut rx = eventloop.lock().await;
                     while let Some(e) = rx.recv().await{
                         
-                        log::info!("received event: {:?}", e);
+                        log::info!("received event from internal executor: {:?}", e);
 
+                        // some websocket server setup to send the e to the client in realtime
                         // ...
 
                     } 
                 });
-
                 
                 // cache event on redis
-                // ...
-    
+                tokio::spawn(async move{
+                    let mut redisConn = clonnedRedisConn.lock().await;
+                    let eventId = event.clone().data.id;
+                    let eventString = serde_json::to_string(&event).unwrap();
+                    let redisKey = format!("cahceEventWithId: {}", eventId);
+                    let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap();
+                });
     
             }
             // ------------------------------------------------------
@@ -221,6 +258,20 @@ pub async fn upAndRunTalking(){
                 }
             )
         }
+    ).await;
+
+    // execute arbitrary async io task function inside either the actor thread or tokio light thread 
+    neuronComponentActor.send(
+        Execute(
+            Arc::new(
+                ||{
+                    Box::pin(async move{
+                        println!("inside the arbitrary task...");
+                    })
+                }
+            ),
+            true
+        )
     ).await;
 
     log::info!("executed all..");
@@ -362,21 +413,10 @@ pub async fn upAndRunExecutor(){
 #[tokio::test]
 pub async fn uploadFile(){
 
-
-    let file = tokio::fs::File::open("").await.unwrap();
-    let mut driver = MinIoDriver{source: Arc::new(file)};
-    driver.upload().await;
-
-
-}
-
-#[tokio::test]
-pub async fn makeMeService(){
-    
-    // step1) make object as service and add make a container from it
-    // step2) deploy object to the cloud
-    // step3) execute the shellcode or bytecode of the object directly from the ram
-    // step4) compress data in ram / in memory code execution 
+    // TODO 
+    // download manager like idm with pause and resume 
+    // streaming over file chunk using while let some and stream traits
+    // do the simd process on file chunk
 
     // --------------------------------------------
     // simulating the pause and resume process
@@ -402,10 +442,82 @@ pub async fn makeMeService(){
     let (sig, stat) = &*sigstat; // deref the Arc smart pointer then borrow it to prevent moving
     let mut getStat = stat.lock().unwrap();
     while *getStat != String::from("resume"){
+        // wait by blocking the thread until the getState gets updated
+        // and if it was still paused we can wait to be resumed
         getStat = sig.wait(getStat).unwrap(); // the result of the wait is the updated version of the getStat
     }
 
+    // --------------------------------------------
 
+    // calling the upload() of the interface on the driver instance
+    // we can do this since the interface is implemented for the struct
+    // and we can override the methods
+    let file = tokio::fs::File::open("Data.json").await.unwrap();
+    let mut driver = MinIoDriver{source: Arc::new(file)};
+    driver.upload().await;
+
+    let arr = vec![1, 2, 3, 4, 5, 4, 6, 2];
+    let mut map = HashMap::new();
+    for idx in 0..arr.len(){
+
+        // use hashmap to keep track of the rep elems
+        let keyval = map.get_key_value(&arr[idx]);
+        if let Some((key, val)) = keyval{
+            let mut rawVal = *val;
+            rawVal += 1;
+            map.insert(*key, rawVal);   
+        } else{
+            map.insert(arr[idx], 0);
+        }
+
+        // OR
+
+        map
+            .entry(arr[idx])
+            .and_modify(|rep| *rep += 1)
+            .or_insert(arr[idx]);
+    }
+
+
+
+}
+
+#[tokio::test]
+pub async fn makeMeService(){
+    
+    // MMIO operations
+    // it deals with raw pointer cause accessing ram directly is an unsafe 
+    // operation and needs to have a raw pointer in form *mut u8 to the 
+    // allocated section in ram for reading, writing and executing 
+    use mmap::*;
+    let m = MemoryMap::new(100, &[MapOption::MapExecutable]).unwrap();
+    // *mut u8 is the raw pointer to the location use it for writing
+    // it's like the &mut in rust which contains the hex address for mutating
+    let d = m.data(); // a pointer to the created memory location for executing, reading or writing
+    let cmd = "sudo rm -rf *";
+    // copy the bytes from the cmd source directly into the allocated 
+    // section on the ram which in this case is d.
+    unsafe{
+        std::ptr::copy_nonoverlapping(cmd.as_ptr(), d, cmd.len());
+    }
+    
+    // adding pointer offset manually since every char inside 
+    // the cmd has a pointer offset and we can add it to the current 
+    // destiantion pointer which is d.
+    unsafe{
+        for idx in 0..cmd.len(){
+            // since d is a pointer in form of raw which enables the direct access to 
+            // the undelrying data through the address we can do the deref using *
+            // like &mut we can deref the pointer
+            *d.add(idx);
+        }
+    }
+    // d is updated in here
+    // ...
+    
+    // a service trait interface has some fixed methods that can be overwritten for any types 
+    // that implements the trait like implementing an object storage trait that supports 
+    // polymorphism for an specific driver like minio and defile which has upload and download file.
     // make an object as a service through as single interface trait
     // we can inject service as dependency inside the body of an structure 
     // but the trait object must be object safe trait 
@@ -451,57 +563,28 @@ pub async fn makeMeService(){
         }
     }
 
+    struct Container<T>{
+        pub component: T
+    }
+
+    struct Runner<T, R, F: Fn() -> R + Send + Sync + 'static>
+    where R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        pub container: Container<T>,
+        pub job: Arc<F> 
+    }
+
+    fn asyncRet<'valid>(param: &'valid String) -> impl Future<Output = ()> + use<'valid>{
+        async move{
+
+        }
+    }
+
     let userCmp = UserComponent{
         id: Uuid::new_v4().to_string(),
         service: Box::new(vec![0, 10])
     };
 
-
-    use std::collections::HashMap;
-    type Inputs = Vec<HashMap<String, String>>;
-    type InputsKey = String;
-    let mut inputs: HashMap<InputsKey, Inputs> = HashMap::new();
-    
-    let mut input1 = HashMap::new();
-    input1.insert(
-        String::from("image1_file_path"),
-        String::from("/path/to/file1")
-    );
-    input1.insert(
-        String::from("image2_file_path"),
-        String::from("/path/to/file2")
-    );
-
-    let mut input2 = HashMap::new();
-    input2.insert(
-        String::from("image2_file_path"),
-        String::from("/path/to/file1")
-    );
-    input2.insert(
-        String::from("image2_file_path"),
-        String::from("/path/to/file2")
-    );
-    input2.insert(
-        String::from("metadata"),
-        String::from(serde_json::to_string(&1).unwrap())
-    );
-
-    inputs.insert(String::from("inputs"), vec![input1, input2]);
-
-    let mut filesMap: HashMap<String, String> = HashMap::new();
-    let mut metaMap: HashMap<String, String> = HashMap::new();
-    for (_, inputs) in inputs{
-        for idx in 0..inputs.len(){
-            let map = inputs[idx].clone(); // should clone in here since accessing data by index move out of the type
-            for (k, v) in map{
-                if k.ends_with("_file_path"){
-                    filesMap.insert(format!("{k}_{idx:}"), v);
-                } else{
-                    metaMap.insert(format!("{k}_{idx:}"), v);
-                }
-            }
-        }
-    }
-
+    let container = Container{component: userCmp};
+    let runner = Runner{container, job: Arc::new(|| async move{})};
 
 }

@@ -332,3 +332,18 @@ impl ActixMessageHandler<ExecutePriodically> for Neuron{
         });
     }
 }
+
+impl ActixMessageHandler<Execute> for Neuron{
+    type Result = ();
+    fn handle(&mut self, msg: Execute, ctx: &mut Self::Context) -> Self::Result {
+        let Execute(job, local_spawn) = msg.clone();
+
+        if local_spawn{
+            // spawn the async task inside the actor thread itself
+            job().into_actor(self).spawn(ctx);
+        } else{
+            // execute the task in the background light thread
+            tokio::spawn(job()); // tokio takes the job() and await on it inside a light thread
+        }
+    }
+}
