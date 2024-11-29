@@ -18,151 +18,8 @@ use wallexerr::misc::SecureCellConfig; // import the interface to use the on() m
 use stemlib::dsl::*;
 
 
+
 #[tokio::test]
-pub async fn upAndRunStreaming(){
-
-    use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
-    let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
-    let redisHost = "0.0.0.0";
-    let redisPort = 6379;
-    let redisUsername = "";
-    let redis_conn_url = if !redisPassword.is_empty(){
-        format!("redis://:{}@{}:{}", redisPassword, redisHost, redisPort)
-    } else if !redisPassword.is_empty() && !redisUsername.is_empty(){
-        format!("redis://{}:{}@{}:{}", redisUsername, redisPassword, redisHost, redisPort)
-    } else{
-        format!("redis://{}:{}", redisHost, redisPort)
-    };
-    let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
-    let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
-
-    let Ok(redisConn) = redis_pool.get().await else{
-        panic!("can't get redis connection from the pool");
-    };
-    
-    // redisConn must be mutable and since we're moving it into another thread 
-    // we should make it safe to gets moved and mutated using Arc and Mutex
-    let arcedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
-
-    let mut neuron = Neuron::new(100, "Neuron1").await;
-    let neuronWallet = neuron.wallet.as_ref().unwrap();
-    let executor = neuron.internal_executor.clone();
-
- 
-    /* --------------------------
-        execution thread process for solving future:
-        await on async task suspend it to get the result but won't block thread 
-        means the light thread can continue executing other tasks
-        future objects are being done in the background awaiting on or polling  
-        them tells runtime that we need the result if the future was ready he sends the 
-        result to the caller otherwise it forces the thread to get another task 
-        from the eventloop to execute it meanwhile the future is being solved, 
-        this allows to execute tasks in a none blocking manner 
-    */
-    neuron.runInterval(|| async move{
-        println!("i'm running every 10 seconds, with retries of 12 and timeout 0");
-    }, 10, 12, 0).await;
-
-    // streaming over neuron, the on() method belongs the StreamRmq interface
-    // enables us to start streaming over a neuron object either locally or 
-    // remotely, the method however takes a callback closure in which we have
-    // access to the sent or received event.
-    neuron
-        .on("local", "receive", move |event, error| async move{
-
-            log::info!("received event: {:#?}", event);
-
-        }).await
-        .on("rmq", "send", move |event, error| async move{
-            
-            if error.is_some(){
-                println!("an error accoured during sending: {:?}", error.unwrap());
-                return;
-            }
-
-            println!("sent task: {:?}", event);
-
-            // do whatever you want to do with sent task:
-            // please shiaf the sent task!
-            // ...
-
-        }).await
-        .on("rmq", "receive", move |event, error| {
-            
-            let clonedExecutor = executor.clone();
-            let clonnedRedisConn = arcedRedisConn.clone();
-            
-            // ------------------ the async task as the return type ------------------
-            async move{
-
-                if error.is_some(){
-                    println!("an error accoured during receiving: {:?}", error.unwrap());
-                    return;
-                }
-    
-                println!("received task: {:?}", event);
-    
-                // receiving the events from the internal executor can be used 
-                // for setting up server websocket.
-                // we can also use the internal eventloop to receive event:
-                // use the eventloop of the internal executor to receive the event 
-                // the event has sent from where we've subscribed to incoming events
-                let eventloop = clonedExecutor.eventloop.clone();
-                tokio::spawn(async move{
-                    let mut rx = eventloop.lock().await;
-                    while let Some(e) = rx.recv().await{
-                        
-                        log::info!("received event from internal executor: {:?}", e);
-
-                        // some websocket server setup to send the e to the client in realtime
-                        // ...
-
-                    } 
-                });
-                
-
-                // cache event on redis inside the callback
-                tokio::spawn(async move{
-                    let mut redisConn = clonnedRedisConn.lock().await;
-                    let eventId = event.clone().data.id;
-                    let eventString = serde_json::to_string(&event).unwrap();
-                    let redisKey = format!("cahceEventWithId: {}", eventId);
-                    let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap();
-                });
-    
-            }
-            // ------------------------------------------------------
-        }).await
-        .on("p2p", "send", move |event, error| async move{
-            
-            if error.is_some(){
-                println!("an error accoured during sending: {:?}", error.unwrap());
-                return;
-            }
-            
-            println!("sent task: {:?}", event);
-
-            // do whatever you want to do with sent task:
-            // please shiaf the sent task!
-            // ...
-
-        }).await
-        .on("p2p", "receive", move |event, error| async move{
-            
-            if error.is_some(){
-                println!("an error accoured during receiving: {:?}", error.unwrap());
-                return;
-            }
-
-            println!("received task: {:?}", event);
-
-            // store the event in db or cache on redis
-            // ...
-
-        }).await;
-
-}
-
 pub async fn testNeuronActor(){
 
     use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
@@ -194,6 +51,23 @@ pub async fn testNeuronActor(){
     
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
     let getNeuronId = neuron.peerId.to_base58();
+
+    let neuronWallet = neuron.wallet.as_ref().unwrap();
+    let executor = neuron.internal_executor.clone();
+
+    /* --------------------------
+        execution thread process for solving future:
+        await on async task suspend it to get the result but won't block thread 
+        means the light thread can continue executing other tasks
+        future objects are being done in the background awaiting on or polling  
+        them tells runtime that we need the result if the future was ready he sends the 
+        result to the caller otherwise it forces the thread to get another task 
+        from the eventloop to execute it meanwhile the future is being solved, 
+        this allows to execute tasks in a none blocking manner 
+    */
+    neuron.runInterval(|| async move{
+        println!("i'm running every 10 seconds, with retries of 12 and timeout 0");
+    }, 10, 12, 0).await;
 
     // -----------------------------------------------------------------
     // ------- sending message through actor mailbox eventloop receiver:
@@ -253,7 +127,9 @@ pub async fn testNeuronActor(){
                     we're receiving a massive of transactions through subsription 
                     process, for each tx we'll send it to the wallet service 
                     through gRPC or cache it on redis
-                    ... */
+                    */
+                        
+                    //    ... 
     
                     // cache event on redis inside the callback
                     tokio::spawn(async move{
@@ -269,7 +145,7 @@ pub async fn testNeuronActor(){
             })),
             decryptionConfig: todo!(),
         }
-    ).await;
+    ).await.unwrap();
 
     // send a request to a neuron over eithre rmq or p2p (req, res model)
     neuronComponentActor.send(

@@ -18,10 +18,7 @@ use stemlib::*;
 #[actix_web::main] // use actix_web main context since we have actors
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>{
 
-    tests::testNeuronActor().await;
-    // tests::upAndRunExecutor().await;
-    // tests::upAndRunStreaming().await;
-
+    
     Ok(())
 
 }

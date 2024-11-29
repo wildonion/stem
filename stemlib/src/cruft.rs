@@ -1,6 +1,7 @@
 
 
 use core::num;
+use std::pin::Pin;
 use std::{collections::HashMap};
 use futures::future::{BoxFuture, FutureExt};
 use tokio::net::tcp;
@@ -5288,5 +5289,66 @@ pub async fn makeMeService(){
         }
     }
 
+
+    pub trait Streamer: Sized + Clone{
+        type Model;
+        fn next(&mut self) -> Self{
+            println!("inside the body of next() default method");
+            self.clone()
+        }
+    }
+
+
+    #[derive(Clone)]
+    struct Data;
+    
+    impl Streamer for Data{
+        type Model = Data;
+        
+        // don't overwrite the next() since it has a default implementation already
+        // ...
+    }
+    
+    let mut data = Data{};
+    data.next();
+
+
+    // this is the best type for defining a callback which returns a future object 
+    type Io = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> 
+        + Send + Sync + 'static>> + Send + Sync + 'static>;
+    #[derive(Clone)]
+    pub struct Asyncs{
+        // since we can't store future objects directly we should 
+        // store them as dependency like Box<dyn Future<Output=()>>
+        // or Arc<dyn Future<Output=()>> also awaiting them enforces us 
+        // to pin them into the ram since they're self-ref types 
+        // which enforces us to pin their smart pointers into the ram
+        // to have the ability of solving them later with their same 
+        // address
+        pub data: Io
+    }
+
+    // impl iterator for Asyncs to stream over the any Asyncs instance
+    impl Iterator for Asyncs{
+        type Item = Self;
+        fn next(&mut self) -> Option<Self::Item> {
+            Some(
+                self.clone() // can't move out of self when it's behind a shared reference
+            )
+        }
+    }
+
+    let mut asyncs = Asyncs{
+        data: task!{
+            {
+                println!("inside the task");
+            }
+        }
+    };
+
+    while let Some(fut) = asyncs.next(){
+        let getFut = fut.data;
+        getFut().await;
+    }
 
 }
