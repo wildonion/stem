@@ -6,7 +6,6 @@
 */
 
 use std::pin::Pin;
-
 use interfaces::ObjectStorage;
 use interfaces::ServiceExt1;
 use crate::*;
@@ -72,7 +71,6 @@ pub struct RmqResponseConfig{
     pub requestQueue: String, // used to specify to which queue client sends the message for server
     pub encryptionConfig: Option<CryptoConfig>,
 }
-
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct P2pResponseConfig;
@@ -318,7 +316,7 @@ pub struct Neuron{
     pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
     pub internal_none_async_threadpool: std::sync::Arc<Option<NoneAsyncThreadPool>>, /* -- internal none async threadpool -- */
     pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
-    pub dependency: std::sync::Arc<dyn ServiceExt<Model = AppService>>,              /* -- inject any type that impls the ServiceExt trait as dependency injection -- */
+    pub dependency: std::sync::Arc<dyn ServiceExt>,                                  /* -- inject any type that impls the ServiceExt trait as a dependency -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
@@ -368,10 +366,15 @@ pub struct C3{ // Context Container Component
 
 #[derive(Clone, Debug)]
 pub struct MinIoDriver{
-    pub source: Arc<tokio::fs::File> // thread safe file
+    pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
 }
 
 #[derive(Clone, Debug)]
 pub struct SeaFileDriver{
-    pub source: Arc<tokio::fs::File> // thread safe file
+    pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
+}
+
+#[derive(Clone, Debug)]
+pub struct DigiSpaces{
+    pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
 }

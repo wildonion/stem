@@ -3,7 +3,7 @@
 use std::error::Error;
 use crate::messages::*;
 use crate::impls::*;
-use crate::schemas::*;
+use crate::dto::*;
 use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
 
@@ -26,7 +26,6 @@ pub trait OnionStream{
 }
 
 pub trait ServiceExt: Send + Sync + 'static{
-    type Model;
     fn start(&mut self);
     fn status(&self);
 }

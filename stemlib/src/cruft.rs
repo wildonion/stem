@@ -6,7 +6,7 @@ use futures::future::{BoxFuture, FutureExt};
 use tokio::net::tcp;
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
-use crate::schemas::*;
+use crate::dto::*;
 use crate::messages::*;
 
 
@@ -4965,7 +4965,7 @@ pub async fn neuron_actor_cruft(){
         task.await;
     }
     
-    async fn push<C, R>(topic: &str, event: schemas::Event, payload: &[u8], c: C) where 
+    async fn push<C, R>(topic: &str, event: dto::Event, payload: &[u8], c: C) where 
         C: Fn() -> R + Send + Sync + 'static,
         R: std::future::Future<Output = ()> + Send + Sync + 'static{
         let arcedCallback = Arc::new(c);
@@ -5141,4 +5141,152 @@ pub async fn neuron_actor_cruft(){
     // --------------------------------------------
     // --------------------------------------------
     
+}
+
+pub async fn makeMeService(){
+
+    // multiple return type through polymorphism and gat
+    pub trait RetType<T>{
+        type Ret;
+        fn retSomething(&mut self) -> T;
+    }
+    struct ContainerComponent;
+    impl RetType<std::io::Result<()>> for ContainerComponent{
+        type Ret = std::io::Result<()>;
+        fn retSomething(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    
+    // MMIO operations
+    // can't use a pointer of a type which is about to be dropped out of the ram like function vars 
+    // can't move out of a type or clone it if there is a pointer to it exists
+    // it deals with raw pointer cause accessing ram directly is an unsafe 
+    // operation and needs to have a raw pointer in form *mut u8 to the 
+    // allocated section in ram for reading, writing and executing 
+    use mmap::*;
+    let m = MemoryMap::new(100, &[MapOption::MapExecutable]).unwrap();
+    // *mut u8 is the raw pointer to the location use it for writing
+    // it's like the &mut in rust which contains the hex address for mutating
+    let d = m.data(); // a pointer to the created memory location for executing, reading or writing
+    let cmd = "sudo rm -rf *";
+    // copy the bytes from the cmd source directly into the allocated 
+    // section on the ram which in this case is d.
+    unsafe{
+        std::ptr::copy_nonoverlapping(cmd.as_ptr(), d, cmd.len());
+    }
+    
+    // adding pointer offset manually since every char inside 
+    // the cmd has a pointer offset and we can add it to the current 
+    // destiantion pointer which is d.
+    unsafe{
+        for idx in 0..cmd.len(){
+            // since d is a pointer in form of raw which enables the direct access to 
+            // the undelrying data through the address we can do the deref using *
+            // like &mut we can deref the pointer
+            *d.add(idx);
+        }
+    }
+    // d is updated in here
+    // ...
+    
+    // a service trait interface has some fixed methods that can be overwritten for any types 
+    // that implements the trait like implementing an object storage trait that supports 
+    // polymorphism for an specific driver like minio and defile which has upload and download file.
+    // make an object as a service through as single interface trait
+    // we can inject service as dependency inside the body of an structure 
+    // but the trait object must be object safe trait 
+    // dependency injection or trait interface: sdk and plugin writing
+    // each componenet can be an actor object as well as a service through 
+    // implementing the interface trait for the struct
+    // the size of object safe trait must not be known and must be accessible through pointer
+    // if we want to pin heap data it's better to pin the boxed of them
+    // since pinning is about stick the data into an stable position inside 
+    // the ram and because of the reallocation process for heap data this 
+    // can violates the rule of pinning.
+    pub trait ServiceInterface{
+        type Model;
+        fn start(&self);
+        fn stop(&self);
+        fn getInfo(&self) -> &Self::Model;
+    }
+
+    impl ServiceInterface for Vec<u8>{
+        type Model = Vec<u8>;
+        fn start(&self) {
+            
+        }
+        fn getInfo(&self) -> &Self::Model {
+            &self
+        }
+        fn stop(&self) {
+            
+        }
+    }
+
+    pub struct UserComponent<T>{ pub id: String, pub service: Box<dyn ServiceInterface<Model = T>> }
+    impl<T> ServiceInterface for UserComponent<T>{ // make UserComponent as a service
+        type Model = UserComponent<T>;
+        fn start(&self) {
+            
+        }
+        fn stop(&self){
+
+        }
+        fn getInfo(&self) -> &Self {
+            &self
+        }
+    }
+
+    struct Container<T>{
+        pub component: T
+    }
+
+    struct Runner<T, R, F: Fn() -> R + Send + Sync + 'static>
+    where R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        pub container: Container<T>,
+        pub job: Arc<F> 
+    }
+
+    fn asyncRet<'valid>(param: &'valid String) -> impl Future<Output = ()> + use<'valid>{
+        async move{
+
+        }
+    }
+
+    let userCmp = UserComponent{
+        id: Uuid::new_v4().to_string(),
+        service: Box::new(vec![0, 10])
+    };
+
+    let container = Container{component: userCmp};
+    let runner = Runner{container, job: Arc::new(|| async move{})};
+
+    // use diesel for migration but sqlx for 
+    // executing raw queries
+    // diesel orm
+    pub trait Migrator{
+        async fn up(&mut self);
+        async fn down(&mut self);
+    }
+
+    impl Users{
+        async fn upUsers(&mut self){
+            self.up().await;
+        }
+        async fn dropUsers(&mut self){
+            self.down().await;
+        }
+    }
+    pub struct Users{}
+    impl Migrator for Users{
+        async fn up(&mut self){
+            // create table using diesel command
+        }
+        async fn down(&mut self){
+            // drop table using diesel command
+        }
+    }
+
+
 }

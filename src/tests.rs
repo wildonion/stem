@@ -7,12 +7,15 @@ use crate::*;
 use actix_web::web::to;
 use clap::error;
 use deadpool_redis::redis::AsyncCommands;
-use interfaces::ObjectStorage;
+use interfaces::{Crypter, ObjectStorage};
 use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
-use stemlib::schemas::{Neuron, TransmissionMethod, *};
+use stemlib::dto::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
-use stemlib::interfaces::OnionStream; // import the interface to use the on() method on the Neuron instance
+use stemlib::interfaces::OnionStream;
+use tokio::io::AsyncReadExt;
+use wallexerr::misc::SecureCellConfig; // import the interface to use the on() method on the Neuron instance
+use stemlib::dsl::*;
 
 
 #[tokio::test]
@@ -36,14 +39,15 @@ pub async fn upAndRunStreaming(){
     let Ok(redisConn) = redis_pool.get().await else{
         panic!("can't get redis connection from the pool");
     };
+    
+    // redisConn must be mutable and since we're moving it into another thread 
+    // we should make it safe to gets moved and mutated using Arc and Mutex
+    let arcedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
 
     let mut neuron = Neuron::new(100, "Neuron1").await;
     let neuronWallet = neuron.wallet.as_ref().unwrap();
     let executor = neuron.internal_executor.clone();
 
-    // redisConn must be mutable and since we're moving it into another thread 
-    // we should make it safe to gets moved and mutated using Arc and Mutex
-    let arcedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
  
     /* --------------------------
         execution thread process for solving future:
@@ -116,7 +120,8 @@ pub async fn upAndRunStreaming(){
                     } 
                 });
                 
-                // cache event on redis
+
+                // cache event on redis inside the callback
                 tokio::spawn(async move{
                     let mut redisConn = clonnedRedisConn.lock().await;
                     let eventId = event.clone().data.id;
@@ -158,7 +163,31 @@ pub async fn upAndRunStreaming(){
 
 }
 
-pub async fn upAndRunTalking(){
+pub async fn testNeuronActor(){
+
+    use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
+    let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
+    let redisHost = "0.0.0.0";
+    let redisPort = 6379;
+    let redisUsername = "";
+    let redis_conn_url = if !redisPassword.is_empty(){
+        format!("redis://:{}@{}:{}", redisPassword, redisHost, redisPort)
+    } else if !redisPassword.is_empty() && !redisUsername.is_empty(){
+        format!("redis://{}:{}@{}:{}", redisUsername, redisPassword, redisHost, redisPort)
+    } else{
+        format!("redis://{}:{}", redisHost, redisPort)
+    };
+    let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
+    let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
+
+    let Ok(redisConn) = redis_pool.get().await else{
+        panic!("can't get redis connection from the pool");
+    };
+    
+    // redisConn must be mutable and since we're moving it into another thread 
+    // we should make it safe to gets moved and mutated using Arc and Mutex
+    let arcedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
+    let clonnedRedisConn = arcedRedisConn.clone();
 
     let mut neuron1 = Neuron::new(100, "Neuron1").await;
     let mut neuron = Neuron::new(100, "Neuron2").await;
@@ -193,7 +222,7 @@ pub async fn upAndRunTalking(){
         }
     ).await;
 
-    // broadcast in the whole brain
+    // broadcast
     neuronComponentActor.send(
         Broadcast{
             local_spawn: todo!(),
@@ -204,17 +233,45 @@ pub async fn upAndRunTalking(){
         }
     ).await;
 
-    // subscribe in the whole brian
+    // subscribe with callback execution process
     neuronComponentActor.send(
         Subscribe{
             p2pConfig: todo!(),
             rmqConfig: todo!(),
             local_spawn: todo!(),
+            // this is a callback that will be executed per each received event
+            callback: Arc::new(|event| Box::pin({
+                
+                // clone before going into the async move{} scope
+                let clonnedRedisConn = clonnedRedisConn.clone();
+                async move{
+
+                    /* ------------------------------------------------------------
+                    event is the received event, we can send the event in here
+                    through gRPC or RPC to another service or cache it, 
+                    for example:
+                    we're receiving a massive of transactions through subsription 
+                    process, for each tx we'll send it to the wallet service 
+                    through gRPC or cache it on redis
+                    ... */
+    
+                    // cache event on redis inside the callback
+                    tokio::spawn(async move{
+                        let mut redisConn = clonnedRedisConn.lock().await;
+                        let eventId = event.clone().data.id;
+                        let eventString = serde_json::to_string(&event).unwrap();
+                        let redisKey = format!("cahceEventWithId: {}", eventId);
+                        let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap();
+                    });
+                    /* ------------------------------------------------------------ */
+    
+                }
+            })),
             decryptionConfig: todo!(),
         }
     ).await;
 
-    // send a request to a neuron over eithre rmq or p2p
+    // send a request to a neuron over eithre rmq or p2p (req, res model)
     neuronComponentActor.send(
         SendRequest{
             rmqConfig: todo!(),
@@ -223,7 +280,7 @@ pub async fn upAndRunTalking(){
         }
     ).await;
 
-    // receive a response from a neuron over eitehr rmq or p2p
+    // receive a response from a neuron over eitehr rmq or p2p (req, res model)
     let getResponse = neuronComponentActor.send(
         ReceiveResposne{
             rmqConfig: todo!(),
@@ -235,7 +292,6 @@ pub async fn upAndRunTalking(){
         panic!("can't receive response from the neuron");
     };
     let res = resp.0.await; // await on the pinned box so the future can gets executed
-
 
     // talking between local actors
     let neuronComponentActor1 = neuron1.start().recipient();
@@ -250,27 +306,27 @@ pub async fn upAndRunTalking(){
     neuronComponentActor.send(
         ExecutePriodically{
             period: 40, // every 40 seconds
-            job: Arc::new(
-                ||{
-                    Box::pin(async move{
-                        println!("inside async io task...");
-                    })
+            job: task!{
+                {
+                    println!("inside async io task...");
                 }
-            )
+            }
         }
     ).await;
 
     // execute arbitrary async io task function inside either the actor thread or tokio light thread 
     neuronComponentActor.send(
         Execute(
-            Arc::new(
-                ||{
-                    Box::pin(async move{
-                        println!("inside the arbitrary task...");
-                    })
-                }
+            task!(
+                { // block logic 
+                    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+                    tx.send(String::from("")).await;
+                    while let Some(data) = rx.recv().await{
+                        log::info!("received data in task!()");
+                    }
+                } 
             ),
-            true
+            true // local spawn, set to true if we want to execute the task inside the actor thread
         )
     ).await;
 
@@ -280,7 +336,7 @@ pub async fn upAndRunTalking(){
 }
 
 #[tokio::test]
-pub async fn upAndRunExecutor(){
+pub async fn upAndRunEventLoopExecutor(){
     
     // eventloop executor is an actor object which has two methods
     // run and spawn in which the eventloop receiver will be started
@@ -289,6 +345,11 @@ pub async fn upAndRunExecutor(){
     
     use tokio::sync::mpsc;
     use tokio::spawn;
+
+    struct Task1<T: Fn() -> R + Send + Sync + 'static, R>
+    where R: Future<Output = ()> + Send + Sync + 'static{
+        pub taks: Arc<T> 
+    } 
 
     type Io = std::sync::Arc<dyn Fn() -> 
             std::pin::Pin<Box<dyn std::future::Future<Output=()> 
@@ -415,8 +476,7 @@ pub async fn uploadFile(){
 
     // TODO 
     // download manager like idm with pause and resume 
-    // streaming over file chunk using while let some and stream traits
-    // do the simd process on file chunk
+    // streaming over file chunk using while let some, stream traits and simd ops
 
     // --------------------------------------------
     // simulating the pause and resume process
@@ -452,13 +512,19 @@ pub async fn uploadFile(){
     // calling the upload() of the interface on the driver instance
     // we can do this since the interface is implemented for the struct
     // and we can override the methods
-    let file = tokio::fs::File::open("Data.json").await.unwrap();
-    let mut driver = MinIoDriver{source: Arc::new(file)};
+    let mut file = tokio::fs::File::open("Data.json").await.unwrap();
+    let mut buffer = vec![];
+    let readBytes = file.read_buf(&mut buffer).await.unwrap();
+    let mut secureCellConfig = SecureCellConfig::default();
+    buffer.encrypt(&mut secureCellConfig);
+
+    // buffer now contains the encrypted data, no need to mutex the buffer 
+    let mut driver = MinIoDriver{content: Arc::new(buffer)};
     driver.upload().await;
 
     let arr = vec![1, 2, 3, 4, 5, 4, 6, 2];
     let mut map = HashMap::new();
-    for idx in 0..arr.len(){
+    for idx in 0..arr.len(){ // O(n)
 
         // use hashmap to keep track of the rep elems
         let keyval = map.get_key_value(&arr[idx]);
@@ -482,109 +548,140 @@ pub async fn uploadFile(){
 
 }
 
-#[tokio::test]
-pub async fn makeMeService(){
+pub async fn market(){
+
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+    use std::pin::Pin;
+    use tokio::sync::mpsc::{Sender, Receiver};
+
+    /*
+        stemlib composer: sexchange dsl (rmqpool, p2p and grpc, thread per each coin) for tradeMaker http2 salvo server, market (otc and match engine) and wallet actor workers
+        stemlib composer: http2, ws, p2p and rmq req-rep and stream, grpc and rmq rpc, mpsc, zkp
+        depoly dto services as object using wasm to cloud like wrangler workers
+        object storage trait interface impl crypter for &[u8]
+        object storage only receives &[u8] io bytes which can support every driver whose return &[u8]
+        change function signature using proc macro and inject threading tools into function body
+        dyn stat dist poly with trait interface + box pin future to avoid violating the moving process of heap data
+    */
     
-    // MMIO operations
-    // it deals with raw pointer cause accessing ram directly is an unsafe 
-    // operation and needs to have a raw pointer in form *mut u8 to the 
-    // allocated section in ram for reading, writing and executing 
-    use mmap::*;
-    let m = MemoryMap::new(100, &[MapOption::MapExecutable]).unwrap();
-    // *mut u8 is the raw pointer to the location use it for writing
-    // it's like the &mut in rust which contains the hex address for mutating
-    let d = m.data(); // a pointer to the created memory location for executing, reading or writing
-    let cmd = "sudo rm -rf *";
-    // copy the bytes from the cmd source directly into the allocated 
-    // section on the ram which in this case is d.
-    unsafe{
-        std::ptr::copy_nonoverlapping(cmd.as_ptr(), d, cmd.len());
+    type Io = Arc<dyn Fn() -> Pin<Box<dyn Future<Output=()> + Send + Sync + 'static>> + Send + Sync + 'static >; 
+    
+    struct Task<R, T: Fn() -> R + Send + Sync + 'static> where
+        R: Future<Output=()> + Send + Sync + 'static{
+        pub task: Arc<T>
     }
     
-    // adding pointer offset manually since every char inside 
-    // the cmd has a pointer offset and we can add it to the current 
-    // destiantion pointer which is d.
-    unsafe{
-        for idx in 0..cmd.len(){
-            // since d is a pointer in form of raw which enables the direct access to 
-            // the undelrying data through the address we can do the deref using *
-            // like &mut we can deref the pointer
-            *d.add(idx);
-        }
+    struct Event<T>{
+        pub datum: T,
+        pub timestamp: i64
     }
-    // d is updated in here
-    // ...
     
-    // a service trait interface has some fixed methods that can be overwritten for any types 
-    // that implements the trait like implementing an object storage trait that supports 
-    // polymorphism for an specific driver like minio and defile which has upload and download file.
-    // make an object as a service through as single interface trait
-    // we can inject service as dependency inside the body of an structure 
-    // but the trait object must be object safe trait 
-    // dependency injection or trait interface: sdk and plugin writing
-    // each componenet can be an actor object as well as a service through 
-    // implementing the interface trait for the struct
-    // the size of object safe trait must not be known and must be accessible through pointer
-    // if we want to pin heap data it's better to pin the boxed of them
-    // since pinning is about stick the data into an stable position inside 
-    // the ram and because of the reallocation process for heap data this 
-    // can violates the rule of pinning.
-    pub trait ServiceInterface{
-        type Model;
-        fn start(&self);
-        fn stop(&self);
-        fn getInfo(&self) -> &Self::Model;
+    struct Buffer<G>{
+        pub data: Arc<Mutex<Vec<G>>>,
+        pub size: usize
     }
 
-    impl ServiceInterface for Vec<u8>{
-        type Model = Vec<u8>;
-        fn start(&self) {
-            
-        }
-        fn getInfo(&self) -> &Self::Model {
+    struct PipeLine{
+        pub tags: Vec<String>,
+        pub pid: String,
+        pub job: Job
+    }
+
+    struct Runner{
+        pub pods: Vec<PipeLine>,
+        pub id: String,
+        pub status: RunnerStatus
+    }
+    
+    // job node
+    struct Job{
+        pub taks: Io,
+        pub parent: Arc<Job>, // use Arc to break the cycle
+        pub children: Arc<Mutex<Vec<Job>>>
+    }
+    
+    enum RunnerStatus{
+        Halted,
+        Executed
+    }
+    
+    struct Executor<G>{
+        pub sender: Arc<Sender<G>>,
+        pub receiver: Arc<Mutex<Receiver<G>>>,
+        pub runner: Runner,
+    }
+    
+    struct Environment<G>{
+        pub env_name: String,
+        pub executor: Executor<G>,
+    }
+    
+    trait ServiceExt{
+        type Service;
+        fn start(&mut self);
+        fn stop(&mut self);
+        fn getInfo(&self) -> &Self::Service;
+    }
+    
+    
+    // interfaces
+    impl ServiceExt for Runner{
+        type Service = Self;
+        fn start(&mut self){}
+        fn stop(&mut self){}
+        fn getInfo(&self) -> &Self::Service{
             &self
         }
-        fn stop(&self) {
-            
-        }
+        
     }
-
-    pub struct UserComponent<T>{ pub id: String, pub service: Box<dyn ServiceInterface<Model = T>> }
-    impl<T> ServiceInterface for UserComponent<T>{ // make UserComponent as a service
-        type Model = UserComponent<T>;
-        fn start(&self) {
-            
-        }
-        fn stop(&self){
-
-        }
-        fn getInfo(&self) -> &Self {
+    
+    enum OrderType{
+        Bid,
+        Ask
+    }
+    
+    struct Order{
+        pub otype: OrderType,
+        pub quantity: u64,
+        pub amount: u64,
+        pub timestamp: i64
+    }
+    
+    // spawn a light thread per each crypto type to find the match
+    // cause we have lock which is nicer to do it in a light thread
+    struct BookEngine{
+        pub orders: Arc<Mutex<std::collections::BTreeMap<String, Order>>>,
+    }
+    
+    impl ServiceExt for BookEngine{ // make the BookEngine as a service
+        type Service = Self;
+        fn start(&mut self){}
+        fn stop(&mut self){}
+        fn getInfo(&self) -> &Self::Service{
             &self
         }
     }
+    
+    // 1) impl Actor for BookEngine{}
+    // 2) start the bookEngine actor
+    // 3) call subscribe() method inside the start() method 
+    //    to subscribe to rmq queue to receive orders
+    // ....
 
-    struct Container<T>{
-        pub component: T
+
+    // notify all train about the pause and arrival time of a train
+    // don't pass stations
+    // if a train was stopped longer than the pauseTime block all other trains (inside tunnel or at station)
+    // use this model for sexchange
+    struct Train{
+        pub arrivalTime: u64,
+        pub pauseTime: u64,
+        pub status: std::sync::Condvar
     }
 
-    struct Runner<T, R, F: Fn() -> R + Send + Sync + 'static>
-    where R: std::future::Future<Output = ()> + Send + Sync + 'static{
-        pub container: Container<T>,
-        pub job: Arc<F> 
+    struct TrainQueue{
+        pub queue: std::collections::VecDeque<Train>, // a ring buffer queue
     }
-
-    fn asyncRet<'valid>(param: &'valid String) -> impl Future<Output = ()> + use<'valid>{
-        async move{
-
-        }
-    }
-
-    let userCmp = UserComponent{
-        id: Uuid::new_v4().to_string(),
-        service: Box::new(vec![0, 10])
-    };
-
-    let container = Container{component: userCmp};
-    let runner = Runner{container, job: Arc::new(|| async move{})};
 
 }

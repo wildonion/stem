@@ -10,7 +10,7 @@
 
 use crate::*;
 use crate::messages::*;
-use crate::schemas::*;
+use crate::dto::*;
 use crate::impls::*;
 
 
@@ -102,7 +102,8 @@ impl ActixMessageHandler<Subscribe> for Neuron{
                 rmqConfig,
                 p2pConfig,
                 local_spawn,
-                decryptionConfig
+                decryptionConfig,
+                callback
 
             } = msg; // the unpacking pattern is always matched so if let ... is useless
         
@@ -118,6 +119,7 @@ impl ActixMessageHandler<Subscribe> for Neuron{
                     this.rmqConsume(
                         &tag, 
                         &queue, 
+                        callback,
                         &routing_key, 
                         &exchange_name,
                         decryptionConfig
@@ -137,6 +139,7 @@ impl ActixMessageHandler<Subscribe> for Neuron{
                     this.rmqConsume(
                         &tag, 
                         &queue, 
+                        callback,
                         &routing_key, 
                         &exchange_name,
                         decryptionConfig

@@ -1,7 +1,7 @@
 
 
 use std::sync::atomic::AtomicU8;
-use crate::schemas::*;
+use crate::dto::*;
 use crate::impls::*;
 use crate::messages::*;
 use wallexerr::misc::Wallet;

@@ -7,7 +7,7 @@
 */
 
 use crate::*;
-use crate::schemas::*;
+use crate::dto::*;
 use std::pin::Pin;
 use std::future::Future;
 
@@ -91,6 +91,7 @@ pub struct Subscribe{ // we'll create a channel then start consuming by binding 
     pub p2pConfig: Option<P2pConsumeConfig>,
     pub rmqConfig: Option<RmqConsumeConfig>,
     pub local_spawn: bool, // either spawn in actor context or tokio threadpool
+    pub callback: IoEvent,
     pub decryptionConfig: Option<CryptoConfig>
 }
 
@@ -107,6 +108,11 @@ pub struct Execute(pub Io, pub bool);
 
 // an io type is an arced closure which returns a pinned boxed 
 // version of an async object or future trait
-type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
+pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
+    + Send + Sync + 'static>> 
+    + Send + Sync + 'static>;
+
+// io event
+pub type IoEvent = Arc<dyn Fn(Event) -> Pin<Box<dyn std::future::Future<Output = ()> 
     + Send + Sync + 'static>> 
     + Send + Sync + 'static>;

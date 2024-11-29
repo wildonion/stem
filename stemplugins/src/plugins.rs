@@ -257,6 +257,18 @@ pub fn go(args: TokenStream, input: TokenStream) -> TokenStream{
 
 }
 
+// a macro to broadcast the function return type as the event 
+// using stemlib neuron actor worker
+#[proc_macro_attribute]
+pub fn event(args: TokenStream, input: TokenStream) -> TokenStream{
+
+    // extract the function codes from input 
+    // get the return type 
+    // broadcast the type to the network
+    
+    todo!()
+}
+
 /* -------------------------------
     args are the inputs in proc macro like: #[gokio(arg1, arg2)] which arg1 and arg2 are 
     TokenStream presented to gokio proc macro, note that in every steps, after extending 

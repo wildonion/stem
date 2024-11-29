@@ -3,11 +3,16 @@
 /*  ========================================================================================
     
     What is a Neuron?
-        a neuron is an actor component object or a process or a light thread, the building 
+        a neuron is an actor component object or a process of a light thread, the building 
         block of everything it's an smart object on its own which can communicate locally and 
         remotely with other neurons through RMQ, P2P or MPSC JobQ channel, every neuron contains 
         a metadata field which carries info about the actual object and informations that are 
         being passed through the synapses protocols. 
+        stemlib however is a composer worker contains Neuron structure which in general is an 
+        IO handler that builds an interactive actor based environment and SDK for the app to 
+        talk with the outside worlds as well as execute asynchronous IO tasks in different 
+        scopes of the app, it allows the app to be either a publisher/server or a subscriber/client 
+        service upon RPC, P2P and TCP protocols.
 
     brokering is all about queueing, sending and receiving messages way more faster, 
     safer and reliable than a simple eventloop or a tcp based channel. 
@@ -93,7 +98,7 @@
 
 
 use crate::messages::*;
-use crate::schemas::*;
+use crate::dto::*;
 use crate::impls::*;
 
 
@@ -177,7 +182,7 @@ pub mod actor;
 pub mod tx;
 pub mod interfaces;
 pub mod dsl;
-pub mod schemas; 
+pub mod dto; 
 pub mod messages;
 pub mod impls;
 pub mod handlers;

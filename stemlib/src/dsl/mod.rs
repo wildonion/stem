@@ -30,6 +30,17 @@ use crate::*;
 
 
 #[macro_export]
+macro_rules! task {
+    ($logic:block) => {
+        {
+            Arc::new(
+                || Box::pin(async move $logic) // $logic is a code block: {}
+            )
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! post {
     /* 
         post!(

@@ -1,12 +1,11 @@
 
 ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
-DO: publish stemlib to crate cicd from main branch
 TODOs:
-        0 -> makeMeService(), uploadFile() methods and neuron message handlers, dsl/mod.rs macros, stemplugins and self.on() method
-        1 -> p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
+        0 -> market(), uploadFile() methods
+        1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
-        2 -> game mmq and exchnage order book match engine engine with neuron actor framework 
+        2 -> game mmq and exchnage order book match engine with neuron actor framework 
              cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex:
                 OTC:
                         build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
@@ -24,10 +23,12 @@ TODOs:
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
                 live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise  
                 wrangler, salvo, p2p and raft docs for stockBot, vr/ar, game, iot and sexchange dsl engine with raft over neuron actor:
-                workflow pipelining using github runner, job, task and executor
-                rmq rpc streaming + p2p tcp, quic, ws, wrtc swarm: stream req-res gossipsub, kad + salvo http2, grpc
-                client <---salvo http2/ws--> server <---neuron(rmq-rcp/grpc/p2p/send)---> microservices(wallet, market)
-                DSL design:
+                streaming with rmq and p2p gossipsub kad + req-rep with rmq rpc and p2p req-res + main server with salvo http2 and ws
+                wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes; if it's up already execute the codes + notif signal and interval exec with timeout
+                custom error handler and log the error using logger neuron broadcaster
+                cicd, docker compose: nginx(hostNetwork), redis, adminer, rmq, pg, app: http2, ws, stemlib worker (rmq, p2p, rpc, grpc), talk with local dns
+                a while let some streaming loop which receives io tasks and jobs from the receiver of the mpsc queue channel 
+                DSL design [actor workers: walletService, marketService, txPoolService, salvo http2/ws/swagger servers: sexchanegServer]:
                         marke!{
                                 otc, // exchange type || meob
                                 // use neuron wallet tx structure
@@ -38,15 +39,15 @@ TODOs:
                                 3 -> receive tx using neuron actor inside the market service
                                 4 -> inside the trade function:
                                                 do the trade process (light thread + locking + channels + double spending issue):
-                                                1 - tx.commit
-                                                2 - tx.executeAtomically
+                                                1 - tx.commit - will charge the user account
+                                                2 - tx.executeAtomically - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
                                         sotre tx inside db
                                 send tx to txConfirmedQueue queue receive tx using neuron actor, inside the walle service
                                 add tx to wallet
                         }
         3 -> other features inside the stemlib
                 SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
-                SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns server, packet sniffer
+                SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns/cdn server, packet sniffer
                 ▶ onion protocol with tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer
                 ▶ gateway and vpn at the tcp layer using packet forwarding tokio io copy / send packet through proxy in code level using salvo
                 ▶ cpu task scheduling, weighted round robin dns, vector clock
@@ -87,12 +88,31 @@ TODOs:
                         ▶ our VPS must detect the amount of CPU and RAM that every servers needs to get, without running the app
                         ▶ our VPS must detect the number of instances of every servers needs to be run and the load balancing algorithm 
                         bpf based proxy, firewall, vpns, packet sniffer and load balancer
-        4 -> AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution 
+        4 -> stemplugins AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution  
         5 -> neuron crypter based operations:
                 contract and wallet over zk
                 encrypt the neuron object instance using aes256 encryption 
                 noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
                 #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network
+        6 -> publish stemlib to crate cicd from main branch
+Concepts:
+        dynamic dispatch use cases: 
+                - used for coding polymorphism to support multiple types within a single type
+                - the implementor of the trait would be specified at runtime
+                - since traits are dynamically sized on the heap so the trait must be object safe trait
+                - methods of the trait on the instance will be called dynamically through vtable pointers 
+                - used with Pin<Arc<dyn Trait>> and Pin<Box<dyn Trait>> for self-ref types like future traits
+                - used with Box or Arc for dynamic memory allocation for the pinned location (since Rust moves types inside the ram)
+                - used with Arc<dyn Trait> and Box<dyn Trait> for regular trait interfaces
+                - accessing multiple types through a single interface to register them as a service
+                - dependency injection, sdk writing like object storage and otp, testing, proxy design pattern
+                - example:
+                        protobuf codes holds interfaces and contracts between server and clients
+                        grpc has protobuf data codec the proto should be compiled into Rust codes and services
+                        into trait interfaces then we could implement services for structs inside the Rust codes 
+                        which is the design pattern proxy and dependency injection that enables to call service 
+                        methods on struct instance allows us calling object methods directly through http2
+https://shivangsnewsletter.com/p/why-doesnt-cloudflare-use-containers
 https://www.youtube.com/watch?v=rht1vO2MBIg
 https://medium.com/@harshiljani2002/building-stock-market-engine-from-scratch-in-rust-ii-0c7b5d8a60b6
 https://github.com/MikeECunningham/rust-trader-public/tree/main 

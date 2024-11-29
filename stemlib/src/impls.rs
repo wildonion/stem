@@ -21,7 +21,7 @@ use uuid::timestamp::context;
 use wallexerr::misc::Wallet;
 use crate::*;
 use crate::messages::*;
-use crate::schemas::*;
+use crate::dto::*;
 use crate::interfaces::*;
 
 
@@ -303,7 +303,7 @@ impl Neuron{
     }
 
     pub async fn rmqConsume(&self,
-        consumer_tag: &str, queue: &str, 
+        consumer_tag: &str, queue: &str, callback: IoEvent,
         binding_key: &str, exchange: &str,
         decryptionConfig: Option<CryptoConfig>
     ){
@@ -401,6 +401,7 @@ impl Neuron{
                                             
                                             let consumedBuffer = delv.data.clone(); 
                                             let clonedIntExSender = intex_sender.clone();
+                                            let clonedCallback = callback.clone();
                                             
                                             // handle the message in the background light thread asyncly and concurrently
                                             // by spawning a light thread for the async task
@@ -420,7 +421,10 @@ impl Neuron{
                                                         // so we could receive it inside the callback or other scopes like 
                                                         // handling rmq messages over websocket, we'll use the receiver 
                                                         // inside the websocket server.
-                                                        clonedIntExSender.send(event).await;
+                                                        clonedIntExSender.send(event.clone()).await;
+
+                                                        // execute the callback in here
+                                                        tokio::spawn(clonedCallback(event));
 
                                                     },
                                                     Err(e) => {
@@ -666,6 +670,9 @@ impl Neuron{
 impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S> Runner<J, S>{
     pub async fn execute(&mut self){
         let job = &self.job;
+
+        // execute the job in a light thread
+        // ...
     }
 }
 
@@ -764,6 +771,7 @@ impl NeuronBehaviour{
                 gossipsubConfig,
         ).unwrap();
 
+        // all the behaviours need to build the synapse network protocol
         Self{
             kademlia: kad,
             gossipsub,
@@ -829,6 +837,20 @@ impl ObjectStorage for SeaFileDriver{
     }
 }
 
+impl ObjectStorage for DigiSpaces{
+    
+    type Driver = Self;
+    async fn download(&mut self){
+        
+    }
+    async fn upload(&mut self){
+        
+    }
+    async fn getFile(&mut self, fId: String) {
+        
+    }
+}
+
 // make C3 as an isolated actor worker (message passing, interval execution in light thread) 
 impl Actor for C3{
     type Context = Context<Self>;
@@ -863,25 +885,15 @@ impl OnionStream for Neuron{
         // in order to use * or deref mark on last_event the Copy trait must be implemented 
         // for the type since the Copy is not implemented for heap data types thus we should 
         // use clone() method on them to return the owned type.
-        let owned_las_event = last_event.clone();
+        let owned_last_event = last_event.clone();
 
         match eventType{
-            "crash" => {
-
-                drop(self.clone());
-                self.clone()
-            },
-            "shutdown" => {
-                
-                drop(self.clone());
-                self.clone()
-            },
             "send" => {
-                
+
                 match streamer{
-                    "local" => {
+                    "local" => { // use internal executor channel and eventloop receiver
                         // sending in the background
-                        let first_token_last_event = owned_las_event.clone();
+                        let first_token_last_event = owned_last_event.clone();
                         
                         // spawn an event for the executor, this would send the event into the channel
                         // in the background lightweight thread
@@ -890,7 +902,7 @@ impl OnionStream for Neuron{
                                 Ok(this) => {
                                     tokio::spawn(
                                         callback(
-                                            owned_las_event.to_owned(), 
+                                            owned_last_event.to_owned(), 
                                             None
                                         )
                                     );
@@ -898,7 +910,7 @@ impl OnionStream for Neuron{
                                 Err(e) => {
                                     tokio::spawn(
                                         callback(
-                                            owned_las_event.to_owned(), 
+                                            owned_last_event.to_owned(), 
                                             Some(StreamError::Sender(e.source().unwrap().to_string()))
                                         )
                                     );
@@ -915,13 +927,12 @@ impl OnionStream for Neuron{
                     _ => {
                         log::error!("unknown streamer!");
                         self.clone()
-                    }
+                    },
                 }
             },
             "receive" => {
-                
                 match streamer{
-                    "local" => {
+                    "local" => { // use internal executor channel and eventloop receiver
                         // running the eventloop to receive event streams from the channel 
                         // this would be done in the background lightweight thread, we've passed
                         // the callback to execute it in there
@@ -954,9 +965,11 @@ impl OnionStream for Neuron{
 impl Crypter for String{
     fn decrypt(&mut self, secure_cell_config: &mut SecureCellConfig){
 
-        // encrypt convert the raw string into hex encrypted thus
+        // encrypt() method converts the raw string into hex encrypted thus
         // calling decrypt method on the hex string returns the 
-        // raw string
+        // raw string, we should decode the hex into the encrypted bytes
+        // then feed the decryptor to decrypt the bytes and return the
+        // raw bytes then convert the raw bytes into the string.
         secure_cell_config.data = hex::decode(&self).unwrap();
         match Wallet::secure_cell_decrypt(secure_cell_config){ // passing the redis secure_cell_config instance
             Ok(data) => {
@@ -982,12 +995,14 @@ impl Crypter for String{
         match Wallet::secure_cell_encrypt(secure_cell_config){
             Ok(encrypted) => {
                 
+                // convert the encrypted bytes into the hex
                 let stringified_data = hex::encode(&encrypted);
                 
                 // update the self or the string with the hex encrypted data
                 *self = stringified_data;
 
                 // update the data field with the encrypted content bytes
+                // the method won't update the data field in its logic
                 secure_cell_config.data = encrypted; 
 
             },
@@ -1002,6 +1017,60 @@ impl Crypter for String{
 
 }
 
+/* -------------------------------------------------------
+    impl Crypter for &[u8]{} issues:
+    since all the function types and params will be dropped as soon as the 
+    function gets executed thus we can't take a reference to any of those type
+    and update the self with an slice!
+    
+    *self = encrypted.clone().as_slice();
+    
+    encrypted.clone() creates a temporary cloned value.
+    as_slice() creates another temporary reference to that clone.
+    once this line ends, the temporary value is dropped, leaving *self pointing to invalid memory.
+
+    NOTE: don't use slice as musch as you can use Vec<u8>
+
+*/
+impl Crypter for Vec<u8>{
+    fn decrypt(&mut self, secure_cell_config: &mut SecureCellConfig) {
+        // self refers to the hex bytes of the encrypted content
+        secure_cell_config.data = hex::decode(&self).unwrap();
+        match Wallet::secure_cell_decrypt(secure_cell_config){ // passing the redis secure_cell_config instance
+            Ok(data) => {
+
+                // update the self
+                *self = data.clone();
+
+                secure_cell_config.data = data;
+            },
+            Err(e) => {
+
+                // don't update data field in secure_cell_config instance
+                // the encrypted data remains the same as before.
+            }
+        };
+    }
+    fn encrypt(&mut self, secure_cell_config: &mut SecureCellConfig) {
+        
+        secure_cell_config.data = self.clone().to_vec(); // self is the &[u8] content
+        match Wallet::secure_cell_encrypt(secure_cell_config){ // passing the redis secure_cell_config instance
+            Ok(encrypted) => {
+                
+                // we've got the encrypted data which can be used to write into the file
+                *self = encrypted.clone();
+                
+                secure_cell_config.data = encrypted; // data is the encrypted content utf8 bytes
+            },
+            Err(e) => {
+
+                // don't update data field in secure_cell_config instance
+                // the encrypted data remains the same as before.
+            }
+        };
+        
+    }
+}
 
 impl ShaHasher for String{
     fn hash(&mut self) {
@@ -1011,7 +1080,6 @@ impl ShaHasher for String{
 }
 
 impl ServiceExt for AppService{
-    type Model = AppService;
     fn start(&mut self) {
         
     }

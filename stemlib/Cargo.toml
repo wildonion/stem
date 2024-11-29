@@ -40,7 +40,7 @@ wallexerr = "0.3.2"
 sha2 = "0.10"
 is_type = "0.2.1"
 indexmap = "2.4"
-
+mmap = "0.1.1"
 
 [lib]
 # libraries don't have entry points, you can't run them,they're used for functionality sharing like binding a .wasm into js codes
