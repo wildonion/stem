@@ -39,7 +39,9 @@ pub trait ServiceExt1{
 pub trait ObjectStorage{ // the trait supports polymorphism over the fId
 
     type Driver;
-    async fn upload(&mut self);
-    async fn download(&mut self);
-    async fn getFile(&mut self, fId: String);
+    async fn save(&mut self);
+    async fn getFile(&mut self, fId: String) -> &[u8];
+    // comapare the current checksum against the passed in file 
+    // this is useful to detect steghided pictures and files
+    fn checksum(&mut self, file: &mut [u8]) -> bool; 
 }

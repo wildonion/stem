@@ -229,33 +229,33 @@ pub fn handler(args: TokenStream, input: TokenStream) -> TokenStream{
 
 }
 
-#[proc_macro_attribute]
-pub fn go(args: TokenStream, input: TokenStream) -> TokenStream{
+// #[proc_macro_attribute]
+// pub fn go(args: TokenStream, input: TokenStream) -> TokenStream{
 
-    // get the function
-    // let async_task = parse_macro_input!(input as ItemFn);
+//     // get the function
+//     // let async_task = parse_macro_input!(input as ItemFn);
 
-    let async_task = syn::parse::<syn::ItemFn>(input.clone()).unwrap(); // get the function name
+//     let async_task = syn::parse::<syn::ItemFn>(input.clone()).unwrap(); // get the function name
     
-    // function signature: function name, args, visibility
-    let async_task_name = &async_task.sig.ident;
+//     // function signature: function name, args, visibility
+//     let async_task_name = &async_task.sig.ident;
 
 
-    let output = quote!{
-        // execute the async method using tokio main proc macro
-        #[tokio::main]
-        pub async fn #async_task_name() {
-            #async_task
-        }
+//     let output = quote!{
+//         // execute the async method using tokio main proc macro
+//         #[tokio::main]
+//         pub async fn #async_task_name() {
+//             #async_task
+//         }
 
-        tokio::spawn(async move{
-            #async_task
-        });
-    };
+//         tokio::spawn(async move{
+//             #async_task
+//         });
+//     };
 
-    output.into()
+//     output.into()
 
-}
+// }
 
 // a macro to broadcast the function return type as the event 
 // using stemlib neuron actor worker

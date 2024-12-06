@@ -5141,7 +5141,46 @@ pub async fn neuron_actor_cruft(){
 
     // --------------------------------------------
     // --------------------------------------------
-    
+
+    // instead of using channels we could join or await on the thread to get the result
+    struct Workers{
+        pub threads: Vec<std::thread::JoinHandle<()>>,
+        pub lightThreads: Vec<tokio::task::JoinHandle<()>>
+    }
+
+    let workers = Workers{
+        threads: {
+            (0..10)
+                .into_iter()
+                .map(|_| std::thread::spawn(||{}))
+                .collect()
+        },
+        lightThreads: {
+            (0..10)
+                .into_iter()
+                .map(|_| tokio::spawn(async move{}))
+                .collect()
+        }
+    };
+
+    for thread in workers.threads{
+        thread.join(); // wait for the thread to finish the job 
+    }
+
+    for thread in workers.lightThreads{
+        thread.await;
+    }
+
+    async fn getTaskInThisWay<R, T>(func: T) where 
+        T: Fn() -> R + Send + Sync + 'static,
+        R: Future<Output = ()> + Send + Sync + 'static
+        {
+            let arcedTask = Arc::new(func);
+            // call it but let tokio itself await on it 
+            // inside its thread
+            tokio::spawn(arcedTask()); 
+        }
+
 }
 
 pub async fn makeMeService(){
@@ -5350,5 +5389,52 @@ pub async fn makeMeService(){
         let getFut = fut.data;
         getFut().await;
     }
+
+
+    pub trait Me{
+        fn execute(&self);
+    }
+
+    struct This;
+    struct That;
+
+    impl Me for This{
+        fn execute(&self) {
+            
+        }
+    }
+
+    impl Me for That{
+        fn execute(&self) {
+            
+        }
+    }
+
+    fn whichOne(param: impl Me){
+        param.execute();
+    }
+
+    whichOne(This{});
+    whichOne(That{});
+
+
+    enum Function{
+        Add(fn(i32) -> i32),
+        Multiply(fn(&str) -> String)
+    }
+
+    // we can use closure for fn, Fn, FnOnce, FnMut
+    let function1 = Function::Add(|x| x);
+    let function2 = Function::Multiply(|name| name.to_string());
+
+
+    fn whichDep(param: Box<dyn Me>){}
+
+    let param: Box<dyn Me> = if true{
+        Box::new(This{})
+    } else{
+        Box::new(That{})
+    };
+    whichDep(param);
 
 }

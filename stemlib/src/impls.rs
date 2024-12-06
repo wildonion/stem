@@ -457,6 +457,7 @@ impl Neuron{
 
     //==================================================================================
     /* -------------------------------------------------------------
+                    to store on heap use arc box or &
         since futures are object safe traits hence they have all traits 
         features we can pass them to the functions in an static or dynamic 
         dispatch way using Arc or Box or impl Future or even as the return 
@@ -812,42 +813,63 @@ impl Actor for Neuron{
 impl ObjectStorage for MinIoDriver{
 
     type Driver = Self;
-    async fn download(&mut self) {
+    async fn save(&mut self) {
         
     }
-    async fn upload(&mut self) {
-        
+    async fn getFile(&mut self, fId: String) -> &[u8] {
+        let file = &[0];
+        file
     }
-    async fn getFile(&mut self, fId: String) {
-        
+
+    fn checksum(&mut self, file: &mut [u8]) -> bool {
+        true
     }
 }
 
 impl ObjectStorage for SeaFileDriver{
 
     type Driver = Self;
-    async fn download(&mut self) {
+    async fn save(&mut self) {
         
     }
-    async fn upload(&mut self) {
-        
+    async fn getFile(&mut self, fId: String) -> &[u8] {
+        let file = &[0];
+        file
     }
-    async fn getFile(&mut self, fId: String) {
-        
+
+    fn checksum(&mut self, file: &mut [u8]) -> bool {
+        true
     }
 }
 
 impl ObjectStorage for DigiSpaces{
     
     type Driver = Self;
-    async fn download(&mut self){
+    async fn save(&mut self){
         
     }
-    async fn upload(&mut self){
+    async fn getFile(&mut self, fId: String) -> &[u8]{
+        let file = &[0];
+        file
+    }
+    
+    fn checksum(&mut self, file: &mut [u8]) -> bool {
+        true
+    }
+}
+
+impl ObjectStorage for LocalFileDriver{
+    
+    type Driver = Self;
+    async fn getFile(&mut self, fId: String) -> &[u8] {
+        let file = &[0];
+        file
+    }
+    async fn save(&mut self) {
         
     }
-    async fn getFile(&mut self, fId: String) {
-        
+    fn checksum(&mut self, file: &mut [u8]) -> bool {
+        true
     }
 }
 

@@ -314,7 +314,7 @@ pub struct Neuron{
     pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,  /* -- all neuron atomic transactions -- */
     pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,         /* -- an internal lighthread worker -- */
     pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
-    pub internal_none_async_threadpool: std::sync::Arc<Option<NoneAsyncThreadPool>>, /* -- internal none async threadpool -- */
+    pub internal_none_async_threadpool: std::sync::Arc<Option<RunnerActor>>, /* -- internal none async threadpool -- */
     pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
     pub dependency: std::sync::Arc<dyn ServiceExt>,                                  /* -- inject any type that impls the ServiceExt trait as a dependency -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
@@ -377,4 +377,9 @@ pub struct SeaFileDriver{
 #[derive(Clone, Debug)]
 pub struct DigiSpaces{
     pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
+}
+
+#[derive(Clone, Debug)]
+pub struct LocalFileDriver{
+    pub content: Arc<Vec<u8>>
 }

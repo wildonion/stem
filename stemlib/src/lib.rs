@@ -162,7 +162,7 @@ use std::error::Error;
 use std::future::Future;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Output;
-use actor::workerthreadpool::sync::NoneAsyncThreadPool;
+use actor::workerthreadpool::sync::RunnerActor;
 use interfaces::ServiceExt;
 use task::Task;
 use task::TaskStatus;

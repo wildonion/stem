@@ -2,10 +2,19 @@
 ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
 TODOs:
-        0 -> market(), uploadFile() methods
+        0 -> neuron ed25519 wallet to sign each message and verify in its handlers, market(), upAndRunEventLoopExecutor(), uploadFile() methods:
+                stockBot, sexchange with gemini service (attach stemlib to the app) in market() method:
+                        stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 
+                        salvoHttp2(stemlibGrpc) / ws, short http2 polling JobId <----stemlib.grpc.rmq.p2p---> gemini grpc pubsub worker(stemlibGrpcP2pRmq)
+                        impl Service for Dto{}: object storage, otp, migrator, default trait method impl
+                        walletWorker, GeminiWorker, txPoolWorker, marketMatchEngineWorker 
+                        Talk to match engine using gRPC and RMQ from the main http2 server: make an order -> server -stemlib.rmq-> matchEngine order pool 
+                        services must talk with each other  based on their wallet and data signing  
+                        stemlib, lunatic, wrangler wasm actors 
+                        Actor: Vec<joinHandle>, interval executor, eventloop receiver, message passing for executing arbitrary tasks inside a thread of the actor, actor address 
         1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
-        2 -> game mmq and exchnage order book match engine with neuron actor framework 
+        2 -> serverless stemlib exchange and game mmq (match making and match engine order book) with wrangler, tauri, bevy to deploy functions and objects:
              cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex:
                 OTC:
                         build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
@@ -15,16 +24,19 @@ TODOs:
                         receive order from queue
                         find the match with that order based on amount, quantity, side and the base/qoute
                         build atomic tx and execute the tx inside a lock and a light thread
+                ssh based keypair with ed25519 wallet: use a high entropy seed with mnemonic for the rng to generate the keypair then convert sig and keypair into hex/base64/base58
+                neuron instance sign messages with its ed25519 wallet prvkey like the one in ssh then verify in its handlers with pubkey
                 talking with the engine through rmq (rpc and streaming) p2p req-res
-                WalletServiceActorWorker (updatePrice/txCrawler) 
+                WalletServiceActorWorker (updatePrice/txCrawler/DepositActorWorker) 
+                DepositActorWorker checks the latest deposits to send the increase balance command to the WalletServiceActorWorker through rmq 
                 Dex AMM liquidity pool, escrow and orders contracts.
                 create bridge between chains
                 Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
                 live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise  
-                wrangler, salvo, p2p and raft docs for stockBot, vr/ar, game, iot and sexchange dsl engine with raft over neuron actor:
+                wrangler, salvo, p2p and raft docs for stockBot, vr/ar, game, iot and sexchange dsl engine with raft over neuron actor
                 streaming with rmq and p2p gossipsub kad + req-rep with rmq rpc and p2p req-res + main server with salvo http2 and ws
-                wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes; if it's up already execute the codes + notif signal and interval exec with timeout
+                wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes (use it to test if a given TCP host/port are available); if it's up already execute the codes also handle notif signal and interval exec with timeout
                 custom error handler and log the error using logger neuron broadcaster
                 cicd, docker compose: nginx(hostNetwork), redis, adminer, rmq, pg, app: http2, ws, stemlib worker (rmq, p2p, rpc, grpc), talk with local dns
                 a while let some streaming loop which receives io tasks and jobs from the receiver of the mpsc queue channel 
@@ -46,9 +58,10 @@ TODOs:
                                 add tx to wallet
                         }
         3 -> other features inside the stemlib
-                SYNAPSE protocol features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
-                SYNAPSE protocol features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns/cdn server, packet sniffer
-                ▶ onion protocol with tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer
+                SYNAPSE protocol network behavior features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
+                SYNAPSE protocol network behavior features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns/cdn server, packet sniffer
+                ▶ onion protocol with noise, tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer (streaming over video using grpc, p2p, tcp using while let some)
+                ▶ onion protocol with raft and state machine as its consensus algorithm
                 ▶ gateway and vpn at the tcp layer using packet forwarding tokio io copy / send packet through proxy in code level using salvo
                 ▶ cpu task scheduling, weighted round robin dns, vector clock
                 ▶ iptables and ssh tunneling
@@ -92,8 +105,9 @@ TODOs:
         5 -> neuron crypter based operations:
                 contract and wallet over zk
                 encrypt the neuron object instance using aes256 encryption 
+                #[inject(ed25519WalletSecure)]
                 noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
-                #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network
+                #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network using mmio
         6 -> publish stemlib to crate cicd from main branch
 Concepts:
         dynamic dispatch use cases: 

@@ -3,11 +3,13 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use crate::*;
 use actix_web::web::to;
 use clap::error;
 use deadpool_redis::redis::AsyncCommands;
 use interfaces::{Crypter, ObjectStorage};
+use salvo::Router;
 use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
 use stemlib::dto::{Neuron, TransmissionMethod, *};
@@ -252,26 +254,30 @@ pub async fn upAndRunEventLoopExecutor(){
             let this = self.clone();
             let arcedCallback = std::sync::Arc::new(cb);
             // receiving inside a light thread
-            spawn(async move{
-                let clonedArcedCallback = arcedCallback.clone();
-                let getRx = this.clone().receiver;
-                let mut rx = getRx.lock().await;
-                while let Some(task) = rx.recv().await{
-                    println!("received task from eventloop, executing in a thread of the eventloop");
-                    // executing the callback inside a light thread
-                    spawn(
-                        clonedArcedCallback(task) // when we run the callback closure trait it returns future object as its return type 
-                    );
+            go!{
+                {
+                    let clonedArcedCallback = arcedCallback.clone();
+                    let getRx = this.clone().receiver;
+                    let mut rx = getRx.lock().await;
+                    while let Some(task) = rx.recv().await{
+                        println!("received task from eventloop, executing in a thread of the eventloop");
+                        // executing the callback inside a light thread
+                        spawn(
+                            clonedArcedCallback(task) // when we run the callback closure trait it returns future object as its return type 
+                        );
+                    }
                 }
-            });   
+            };
         }
         
         async fn spawn(&self, task: Task) {
             let this = self.clone();
             let sender = this.sender;
-            tokio::spawn(async move{
-                sender.send(task).await;
-            });
+            go!{
+                {
+                    sender.send(task).await;
+                }
+            };
         }
     }
 
@@ -301,13 +307,11 @@ pub async fn upAndRunEventLoopExecutor(){
 
     impl Task{
         pub fn new() -> Self{
-            Self { job: std::sync::Arc::new(
-                ||{
-                    Box::pin(async move{
-                        println!("executing an intensive io...");
-                    })
+            Self { job: task!{
+                {
+                    println!("executing an intensive io...");
                 }
-            ) }
+            } }
         }
     }
 
@@ -334,7 +338,12 @@ pub async fn upAndRunEventLoopExecutor(){
             self.run(|task| async move{ 
                 println!("inside the callback, executing received task");
                 let job = task.job;
-                spawn(job());
+                go!(job);
+                go!(
+                    || Box::pin(async move{
+                        println!("executing an io task inside light thread");
+                    })
+                );
             }).await;
         } 
     }
@@ -342,13 +351,13 @@ pub async fn upAndRunEventLoopExecutor(){
     let mut eventLoopService = OnionActor::new();
     eventLoopService.spawner(Task::new()).await;
     eventLoopService.runner().await;
-    
-    
+
+
 
 }
 
 #[tokio::test]
-pub async fn uploadFile(){
+pub async fn saveFile(){
 
     // TODO 
     // download manager like idm with pause and resume 
@@ -374,7 +383,7 @@ pub async fn uploadFile(){
         *lock = String::from("resume");
         sig.notify_one();
     });
-
+    
     let (sig, stat) = &*sigstat; // deref the Arc smart pointer then borrow it to prevent moving
     let mut getStat = stat.lock().unwrap();
     while *getStat != String::from("resume"){
@@ -385,7 +394,7 @@ pub async fn uploadFile(){
 
     // --------------------------------------------
 
-    // calling the upload() of the interface on the driver instance
+    // calling the save() of the interface on the driver instance
     // we can do this since the interface is implemented for the struct
     // and we can override the methods
     let mut file = tokio::fs::File::open("Data.json").await.unwrap();
@@ -395,8 +404,9 @@ pub async fn uploadFile(){
     buffer.encrypt(&mut secureCellConfig);
 
     // buffer now contains the encrypted data, no need to mutex the buffer 
+    // if we want to modify the buffer we should use the Mutex
     let mut driver = MinIoDriver{content: Arc::new(buffer)};
-    driver.upload().await;
+    driver.save().await;
 
     let arr = vec![1, 2, 3, 4, 5, 4, 6, 2];
     let mut map = HashMap::new();
@@ -539,6 +549,57 @@ pub async fn market(){
         }
     }
     
+    #[derive(Clone)]
+    struct AppContext{
+        pub containers: Vec<Container>
+    }
+    impl AppContext{
+        pub fn new() -> Self{
+            Self { containers: vec![] }
+        }
+        pub fn pushContainer(&mut self, container: Container) -> Self{
+            let Self{containers} = self;
+            containers.push(container);
+            Self{containers: containers.to_vec()}
+        }
+    }
+    #[derive(Clone)]
+    struct UserDto;
+    trait Service{
+        // build router tree for the current dto
+        fn buildRouters(&mut self) -> Router;
+    }
+    impl Service for UserDto{
+        fn buildRouters(&mut self) -> Router{
+            let router = Router::new();
+            router
+        }
+    }
+    #[derive(Clone)]
+    struct Container{
+        // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
+        // Arc makes the whole service field cloneable cause the container must be cloneable 
+        // to return updated context when pushing new container into its vector 
+        service: Arc<dyn Service>, 
+        id: String,
+        // a service must have host and port
+        host: String,
+        port: u16
+    }
+    let user = UserDto;
+    let container = Container{
+        service: Arc::new(user), 
+        id: Uuid::new_v4().to_string(),
+        host: String::from("0.0.0.0"),
+        port: 2875
+    }; // create a container for this service
+    let ctx = AppContext::new().pushContainer(container);
+
+    // we can write tests for any model as container service that impls the Service trait
+    // later we'll inject each container into the app context server to register them
+    // concepts: dep injection, dynamic dispatching using vtable
+    // ...
+    
     // 1) impl Actor for BookEngine{}
     // 2) start the bookEngine actor
     // 3) call subscribe() method inside the start() method 
@@ -559,5 +620,5 @@ pub async fn market(){
     struct TrainQueue{
         pub queue: std::collections::VecDeque<Train>, // a ring buffer queue
     }
-
+    
 }

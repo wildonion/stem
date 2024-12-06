@@ -33,11 +33,42 @@ use crate::*;
 macro_rules! task {
     ($logic:block) => {
         {
-            Arc::new(
-                || Box::pin(async move $logic) // $logic is a code block: {}
-            )
+            // the return type must be async since we can't directly return 
+            // async future object we should pin its box into the ram then 
+            // wrap it around a closure
+            Arc::new(|| Box::pin(async move $logic))
         }
     };
+}
+
+#[macro_export]
+macro_rules! go {
+    ($logic:block) => {
+        {
+            /*
+                DON'T USE task!{} MACRO TO SPAWN CAUSE:
+                arc won't allo to move out of the wrapped type it only allows to get multiple
+                ownership of that safely.
+                The Arce issue: Arc allows multiple ownership, but the closure inside it is FnOnce, 
+                meaning it can only be invoked once (after which it's moved). You cannot move the 
+                closure out of the Arc directly because it's inside a reference-counted pointer, and 
+                Rust enforces that you only borrow from it, not take ownership.
+                when you clone the Arc, it only creates a new reference to the same data. 
+                the () part is then trying to move and call the closure, but since the closure 
+                is wrapped in Arc, it cannot be moved directly. 
+                solution: since Arc won't allow us to move the ownership of the wrapped value
+                we must ensure that we do not try to move the closure out of the Arc directly 
+            */
+            tokio::spawn(async move $logic);
+        }
+    };
+    ($task:expr) => {
+        {
+            tokio::spawn(async move{
+                $task().await;
+            })
+        }
+    }
 }
 
 #[macro_export]

@@ -49,13 +49,6 @@ pub struct HeyThere{
     pub message: String
 }
 
-#[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
-#[rtype(result = "()")]
-pub struct StartGateWay{
-    pub host: String,
-    pub port: u16,
-}
-
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Broadcast{

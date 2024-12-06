@@ -285,18 +285,6 @@ impl ActixMessageHandler<BanCry> for Neuron{
     }
 }
 
-impl ActixMessageHandler<StartGateWay> for Neuron{
-    
-    type Result = ();
-    fn handle(&mut self, msg: StartGateWay, ctx: &mut Self::Context) -> Self::Result {
-
-        // forward the received packets to destination
-        let StartGateWay { host, port } = msg.clone();
-
-    }
-
-}
-
 // this handler used to send a message to a local actor 
 impl ActixMessageHandler<TalkTo> for Neuron{
     type Result = ();
