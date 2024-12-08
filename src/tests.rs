@@ -215,7 +215,8 @@ pub async fn testNeuronActor(){
 
 #[tokio::test]
 pub async fn upAndRunEventLoopExecutor(){
-    
+
+    // ================= the executor
     // eventloop executor is an actor object which has two methods
     // run and spawn in which the eventloop receiver will be started
     // receiving io tasks and execute them in a tokio threads and for 
@@ -351,8 +352,6 @@ pub async fn upAndRunEventLoopExecutor(){
     let mut eventLoopService = OnionActor::new();
     eventLoopService.spawner(Task::new()).await;
     eventLoopService.runner().await;
-
-
 
 }
 
@@ -548,16 +547,17 @@ pub async fn market(){
             &self
         }
     }
-    
+
+    // ============== the app context
     #[derive(Clone)]
     struct AppContext{
-        pub containers: Vec<Container>
+        pub containers: Vec<Addr<Container>>
     }
     impl AppContext{
         pub fn new() -> Self{
             Self { containers: vec![] }
         }
-        pub fn pushContainer(&mut self, container: Container) -> Self{
+        pub fn pushContainer(&mut self, container: Addr<Container>) -> Self{
             let Self{containers} = self;
             containers.push(container);
             Self{containers: containers.to_vec()}
@@ -569,12 +569,25 @@ pub async fn market(){
         // build router tree for the current dto
         fn buildRouters(&mut self) -> Router;
     }
+    // ============== implementations
     impl Service for UserDto{
         fn buildRouters(&mut self) -> Router{
             let router = Router::new();
+            // possibly post and get routers
+            // ...
             router
         }
     }
+    impl Service for MinIoDriver{
+        fn buildRouters(&mut self) -> Router {
+            let router = Router::new();
+            // possibly post and get routers
+            // ...
+            router      
+        }
+    }
+
+    // ============== the container actors
     #[derive(Clone)]
     struct Container{
         // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
@@ -593,7 +606,106 @@ pub async fn market(){
         host: String::from("0.0.0.0"),
         port: 2875
     }; // create a container for this service
-    let ctx = AppContext::new().pushContainer(container);
+
+    let uploadDriverContainer = Container{
+        service: Arc::new(MinIoDriver{content: Arc::new(vec![])}),
+        id: Uuid::new_v4().to_string(),
+        host: String::from("0.0.0.0"),
+        port: 8375
+    };
+
+    impl Actor for Container{
+        type Context = Context<Self>;
+        fn started(&mut self, ctx: &mut Self::Context) {
+            println!("the container {} started", self.id);
+        }
+    }
+    let ctx = AppContext::new()
+        .pushContainer(container.start())
+        .pushContainer(uploadDriverContainer.start());
+
+    // ============== the runner
+    struct Worker{
+        pub thread: tokio::task::JoinHandle<()>,
+        pub id: String
+    }
+
+    impl Worker{
+        pub fn new(id: String, receiver: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Message>>>) -> Self{
+            
+            let clonedId = id.clone();
+            let thread = tokio::spawn(async move{
+                let mut getReceiver = receiver.lock().await;
+                while let Some(msg) = getReceiver.recv().await{
+                    log::info!("worker {} received task", clonedId);
+                    match msg{
+                        Message::Task(job) => {
+                            job().await;
+                        },
+                        Message::Terminate => {
+                            println!("terminating worker");
+                            break;
+                        }
+                    }
+                }
+            });
+
+            Self { thread, id, }
+        }
+    }
+
+    enum Message{
+        Task(Io),
+        Terminate
+    }
+
+    struct RunnerActorThreadPoolEventLoop{
+        pub workers: Vec<Worker>,
+        pub sender: tokio::sync::mpsc::Sender<Message>,
+        pub eventLoop: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Message>>>,
+    }
+
+    // terminating all workers when the instance is going to be dropped
+    impl Drop for RunnerActorThreadPoolEventLoop{
+        fn drop(&mut self) {
+            println!("sending terminate message");
+            for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
+                self.sender.send(Message::Terminate);
+                worker.thread.abort();
+            }
+            println!("shutting down all workers");
+            for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
+                worker.thread.abort();
+            }
+        }    
+    } 
+
+    impl RunnerActorThreadPoolEventLoop{
+        pub fn new(size: usize) -> Self{
+
+            let (tx, rx) = tokio::sync::mpsc::channel::<Message>(100);
+            let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
+
+            let workers = 
+            (0..size)
+                .into_iter()
+                .map(|idx| {
+                    Worker::new(Uuid::new_v4().to_string(), eventLoop.clone())
+                })
+                .collect::<Vec<Worker>>();
+
+            
+            Self{ workers, sender: tx,  eventLoop}
+        }
+        pub async fn spawn(&self, msg: Message){
+            let sender = self.sender.clone();
+            sender.send(msg).await;
+        }
+    }
+
+
+    // deploy ctx as serverless object using BFP
+    // ...
 
     // we can write tests for any model as container service that impls the Service trait
     // later we'll inject each container into the app context server to register them
