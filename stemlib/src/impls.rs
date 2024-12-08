@@ -580,7 +580,7 @@ impl Neuron{
     // causes the second process to be awaited until the 
     // lock gets freed.
     pub async fn execute<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S>
-        (&mut self, mut runner: Runner<J, S>) where S: Send + Sync + 'static{
+        (&mut self) where S: Send + Sync + 'static{
 
         if self.internal_worker.is_none(){
             return;
@@ -599,7 +599,7 @@ impl Neuron{
         // update the worker thread with a new runner 
         (*worker).thread = std::sync::Arc::new(
             tokio::spawn(async move{
-                runner.execute().await;
+               // ...
             })
         );
     }
@@ -666,16 +666,6 @@ impl Neuron{
 
 }
 
-
-
-impl<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S> Runner<J, S>{
-    pub async fn execute(&mut self){
-        let job = &self.job;
-
-        // execute the job in a light thread
-        // ...
-    }
-}
 
 impl Event{
 
@@ -862,7 +852,7 @@ impl ObjectStorage for LocalFileDriver{
     
     type Driver = Self;
     async fn getFile(&mut self, fId: String) -> &[u8] {
-        let file = &[0];
+        let file = &[0]; // object file or bytes
         file
     }
     async fn save(&mut self) {

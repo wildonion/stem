@@ -252,13 +252,6 @@ R: std::future::Future<Output=()> + Send + Sync + 'static{
     pub job: Arc<F>
 }
 
-// a runner runs a job in its context thread
-pub struct Runner<J: Clone, S>
-where J: std::future::Future<Output = ()> + Send + Sync + 'static{
-    pub id: String,
-    pub job: Job<J, S>
-}
-
 // an event contains the offset in the cluster, execution status and the data
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Event{
@@ -290,7 +283,6 @@ pub enum StreamError{
 
 #[derive(Clone, Debug)]
 pub enum NeuronError{
-    Runner(String),
     Job(String),
     Buffer(String),
 }

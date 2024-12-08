@@ -2,20 +2,11 @@
 ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
 TODOs:
-        0 -> neuron ed25519 wallet to sign each message and verify in its handlers, market(), upAndRunEventLoopExecutor(), uploadFile() methods:
-                stockBot, sexchange with gemini service (attach stemlib to the app) in market() method:
-                        stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 
-                        salvoHttp2(stemlibGrpc) / ws, short http2 polling JobId <----stemlib.grpc.rmq.p2p---> gemini grpc pubsub worker(stemlibGrpcP2pRmq)
-                        impl Service for Dto{}: object storage, otp, migrator, default trait method impl
-                        walletWorker, GeminiWorker, txPoolWorker, marketMatchEngineWorker 
-                        Talk to match engine using gRPC and RMQ from the main http2 server: make an order -> server -stemlib.rmq-> matchEngine order pool 
-                        services must talk with each other  based on their wallet and data signing  
-                        stemlib, lunatic, wrangler wasm actors 
-                        Actor: Vec<joinHandle>, interval executor, eventloop receiver, message passing for executing arbitrary tasks inside a thread of the actor, actor address 
+        0 -> neuron ed25519 wallet to sign each message and verify in its handlers, sexchangeRunner(), uploadFile() methods + apiTrackingTimeHash
         1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
         2 -> serverless stemlib exchange and game mmq (match making and match engine order book) with wrangler, tauri, bevy to deploy functions and objects:
-             cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex:
+             cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
                 OTC:
                         build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
                         update tokens with locking in light thread db atomically inside the app 
@@ -43,20 +34,27 @@ TODOs:
                 DSL design [actor workers: walletService, marketService, txPoolService, salvo http2/ws/swagger servers: sexchanegServer]:
                         marke!{
                                 otc, // exchange type || meob
-                                // use neuron wallet tx structure
-                                // impl interface trait for a service like objstorage to run it as an external microservice
-                                // dyn stat dist, poly and dep injection
-                                1 -> create tx
-                                2 -> send tx to txRawQueue queue through rmq
-                                3 -> receive tx using neuron actor inside the market service
-                                4 -> inside the trade function:
+                                1 -> create tx order inside the main server
+                                2 -> send tx to txRawQueue queue through rmq using neuron stemlib actor
+                                3 -> receive tx using neuron actor inside the market service (start bookengine actor, call subscribe() method inside the start() method, receive tx orders)
+                                4 -> inside the trade function of the bookengine:
                                                 do the trade process (light thread + locking + channels + double spending issue):
-                                                1 - tx.commit - will charge the user account
-                                                2 - tx.executeAtomically - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
-                                        sotre tx inside db
-                                send tx to txConfirmedQueue queue receive tx using neuron actor, inside the walle service
-                                add tx to wallet
+                                                1 - tx.commit() - will charge the user account
+                                                2 - tx.executeAtomically() - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
+                                                3 - tx.record()
+                                5 -> send tx to txConfirmedQueue queue 
+                                6 -> receive tx using neuron actor, inside the walle service
+                                7 -> add tx to wallet
                         }
+                stockBot, sexchange with gemini service (attach stemlib to the app) in market() method:
+                        stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 
+                        salvoHttp2(stemlibGrpc) / ws, short http2 polling JobId <----stemlib.grpc.rmq.p2p---> gemini grpc pubsub worker(stemlibGrpcP2pRmq)
+                        impl Service for Dto{}: object storage, otp, migrator, default trait method impl
+                        walletWorker, GeminiWorker, txPoolWorker, marketMatchEngineWorker 
+                        Talk to match engine using gRPC and RMQ from the main http2 server: make an order -> server -stemlib.rmq-> matchEngine order pool 
+                        services must talk with each other  based on their wallet and data signing  
+                        stemlib, lunatic, wrangler wasm actors, dyn stat dist, poly and dep injection
+                        Actor: Vec<joinHandle>, interval executor, eventloop receiver, message passing for executing arbitrary tasks inside a thread of the actor, actor address 
         3 -> other features inside the stemlib
                 SYNAPSE protocol network behavior features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
                 SYNAPSE protocol network behavior features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns/cdn server, packet sniffer

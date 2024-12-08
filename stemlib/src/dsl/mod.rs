@@ -48,7 +48,8 @@ macro_rules! go {
             /*
                 DON'T USE task!{} MACRO TO SPAWN CAUSE:
                 arc won't allo to move out of the wrapped type it only allows to get multiple
-                ownership of that safely.
+                ownership of that safely cause the type wrapped by the arc must not be able to 
+                be moved in order to be thread safe for sharing.
                 The Arce issue: Arc allows multiple ownership, but the closure inside it is FnOnce, 
                 meaning it can only be invoked once (after which it's moved). You cannot move the 
                 closure out of the Arc directly because it's inside a reference-counted pointer, and 

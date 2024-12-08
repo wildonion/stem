@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use crate::*;
 use actix_web::web::to;
+use actix_web::Handler;
 use clap::error;
 use deadpool_redis::redis::AsyncCommands;
 use interfaces::{Crypter, ObjectStorage};
@@ -433,23 +434,13 @@ pub async fn saveFile(){
 
 }
 
-pub async fn market(){
+pub async fn sexchangeRunner(){
 
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use std::pin::Pin;
     use tokio::sync::mpsc::{Sender, Receiver};
 
-    /*
-        stemlib composer: sexchange dsl (rmqpool, p2p and grpc, thread per each coin) for tradeMaker http2 salvo server, market (otc and match engine) and wallet actor workers
-        stemlib composer: http2, ws, p2p and rmq req-rep and stream, grpc and rmq rpc, mpsc, zkp
-        depoly dto services as object using wasm to cloud like wrangler workers
-        object storage trait interface impl crypter for &[u8]
-        object storage only receives &[u8] io bytes which can support every driver whose return &[u8]
-        change function signature using proc macro and inject threading tools into function body
-        dyn stat dist poly with trait interface + box pin future to avoid violating the moving process of heap data
-    */
-    
     type Io = Arc<dyn Fn() -> Pin<Box<dyn Future<Output=()> + Send + Sync + 'static>> + Send + Sync + 'static >; 
     
     struct Task<R, T: Fn() -> R + Send + Sync + 'static> where
@@ -467,26 +458,24 @@ pub async fn market(){
         pub size: usize
     }
 
+    #[derive(Clone)]
     struct PipeLine{
         pub tags: Vec<String>,
         pub pid: String,
         pub job: Job
     }
-
-    struct Runner{
-        pub pods: Vec<PipeLine>,
-        pub id: String,
-        pub status: RunnerStatus
-    }
     
     // job node
+    #[derive(Clone)]
     struct Job{
         pub taks: Io,
         pub parent: Arc<Job>, // use Arc to break the cycle
         pub children: Arc<Mutex<Vec<Job>>>
     }
     
+    #[derive(Clone)]
     enum RunnerStatus{
+        Started,
         Halted,
         Executed
     }
@@ -494,31 +483,12 @@ pub async fn market(){
     struct Executor<G>{
         pub sender: Arc<Sender<G>>,
         pub receiver: Arc<Mutex<Receiver<G>>>,
-        pub runner: Runner,
+        pub runner: RunnerActorThreadPoolEventLoop,
     }
     
     struct Environment<G>{
         pub env_name: String,
         pub executor: Executor<G>,
-    }
-    
-    trait ServiceExt{
-        type Service;
-        fn start(&mut self);
-        fn stop(&mut self);
-        fn getInfo(&self) -> &Self::Service;
-    }
-    
-    
-    // interfaces
-    impl ServiceExt for Runner{
-        type Service = Self;
-        fn start(&mut self){}
-        fn stop(&mut self){}
-        fn getInfo(&self) -> &Self::Service{
-            &self
-        }
-        
     }
     
     enum OrderType{
@@ -538,29 +508,22 @@ pub async fn market(){
     struct BookEngine{
         pub orders: Arc<Mutex<std::collections::BTreeMap<String, Order>>>,
     }
-    
-    impl ServiceExt for BookEngine{ // make the BookEngine as a service
-        type Service = Self;
-        fn start(&mut self){}
-        fn stop(&mut self){}
-        fn getInfo(&self) -> &Self::Service{
-            &self
-        }
-    }
+
 
     // ============== the app context
     #[derive(Clone)]
     struct AppContext{
-        pub containers: Vec<Addr<Container>>
+        pub containers: Vec<Addr<Container>>,
+        pub runner: RunnerActorThreadPoolEventLoop,
     }
     impl AppContext{
         pub fn new() -> Self{
-            Self { containers: vec![] }
+            Self { containers: vec![], runner: RunnerActorThreadPoolEventLoop::new(10) }
         }
         pub fn pushContainer(&mut self, container: Addr<Container>) -> Self{
-            let Self{containers} = self;
+            let Self{containers, runner} = self;
             containers.push(container);
-            Self{containers: containers.to_vec()}
+            Self{containers: containers.to_vec(), runner: runner.clone() }
         }
     }
     #[derive(Clone)]
@@ -600,7 +563,7 @@ pub async fn market(){
         port: u16
     }
     let user = UserDto;
-    let container = Container{
+    let userContainer = Container{
         service: Arc::new(user), 
         id: Uuid::new_v4().to_string(),
         host: String::from("0.0.0.0"),
@@ -614,19 +577,73 @@ pub async fn market(){
         port: 8375
     };
 
+    // actor setup
     impl Actor for Container{
         type Context = Context<Self>;
         fn started(&mut self, ctx: &mut Self::Context) {
             println!("the container {} started", self.id);
         }
     }
-    let ctx = AppContext::new()
-        .pushContainer(container.start())
-        .pushContainer(uploadDriverContainer.start());
+    #[derive(Message, Clone, Debug)]
+    #[rtype(result = "()")]
+    pub struct TalkTo{
+        pub msg: MsgType,
+        pub container: Recipient<WakeUp> // to talk to the container we should send a WakeUp message
+    }
+    #[derive(Message, Clone, Debug)]
+    #[rtype(result = "()")]
+    struct WakeUp{
+        pub msg: MsgType
+    }
+    #[derive(Clone, Debug)]
+    enum MsgType{
+        Serve,
+        Stop
+    }
+    impl actix::Handler<TalkTo> for Container{ // use this to send the wake up message to a container
+        type Result = ();
+        fn handle(&mut self, msg: TalkTo, ctx: &mut Self::Context) -> Self::Result {
+            let TalkTo { msg, container } = msg.clone();
+            tokio::spawn(async move{
+                container.send(WakeUp { msg }).await;
+            });
+        }
+    }
+    impl actix::Handler<WakeUp> for Container{ // use this to wake up a container
+        type Result = ();
+        fn handle(&mut self, msg: WakeUp, ctx: &mut Self::Context) -> Self::Result {
+            let WakeUp { msg } = msg.clone();
+            match msg{
+                MsgType::Serve => {
+                    let host = self.host.clone();
+                    let port = self.port.clone();
+                },
+                MsgType::Stop => {
+                    ctx.stop();
+                },
+                _ => {
+                    log::error!("not supported command for the container");
+                }
+            }
 
-    // ============== the runner
+        }
+    }
+    let userContainerActor = userContainer.start();
+    let uploadDriverContainerActor = uploadDriverContainer.start();
+    userContainerActor.send(
+        TalkTo{
+            msg: MsgType::Serve, 
+            container: uploadDriverContainerActor.clone().recipient()
+        }
+    ).await;
+    let ctx = AppContext::new()
+        .pushContainer(userContainerActor)
+        .pushContainer(uploadDriverContainerActor);
+
+    // ============== the runner actor threadpool
+    #[derive(Clone)]
     struct Worker{
-        pub thread: tokio::task::JoinHandle<()>,
+        pub thread: Arc<tokio::task::JoinHandle<()>>,
         pub id: String
     }
 
@@ -650,7 +667,7 @@ pub async fn market(){
                 }
             });
 
-            Self { thread, id, }
+            Self { thread: Arc::new(thread), id, }
         }
     }
 
@@ -659,10 +676,14 @@ pub async fn market(){
         Terminate
     }
 
+    #[derive(Clone)]
     struct RunnerActorThreadPoolEventLoop{
         pub workers: Vec<Worker>,
         pub sender: tokio::sync::mpsc::Sender<Message>,
         pub eventLoop: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Message>>>,
+        pub pods: Vec<PipeLine>,
+        pub id: String,
+        pub status: RunnerStatus
     }
 
     // terminating all workers when the instance is going to be dropped
@@ -670,12 +691,15 @@ pub async fn market(){
         fn drop(&mut self) {
             println!("sending terminate message");
             for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
-                self.sender.send(Message::Terminate);
-                worker.thread.abort();
+                let clonedSender = self.sender.clone();
+                // send the terminate message in the background thread
+                tokio::spawn(async move{
+                    clonedSender.send(Message::Terminate).await;
+                });
             }
             println!("shutting down all workers");
             for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
-                worker.thread.abort();
+                worker.thread.abort(); // abort the future object
             }
         }    
     } 
@@ -695,7 +719,8 @@ pub async fn market(){
                 .collect::<Vec<Worker>>();
 
             
-            Self{ workers, sender: tx,  eventLoop}
+            Self{ workers, sender: tx,  eventLoop, pods: vec![], 
+                id: Uuid::new_v4().to_string(), status: RunnerStatus::Started }
         }
         pub async fn spawn(&self, msg: Message){
             let sender = self.sender.clone();
@@ -704,20 +729,9 @@ pub async fn market(){
     }
 
 
+    // implement #[event] on top of the RunnerActorThreadPoolEventLoop
     // deploy ctx as serverless object using BFP
     // ...
-
-    // we can write tests for any model as container service that impls the Service trait
-    // later we'll inject each container into the app context server to register them
-    // concepts: dep injection, dynamic dispatching using vtable
-    // ...
-    
-    // 1) impl Actor for BookEngine{}
-    // 2) start the bookEngine actor
-    // 3) call subscribe() method inside the start() method 
-    //    to subscribe to rmq queue to receive orders
-    // ....
-
 
     // notify all train about the pause and arrival time of a train
     // don't pass stations
