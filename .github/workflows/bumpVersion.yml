@@ -76,6 +76,6 @@ jobs:
         run: npx semantic-release --ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub access token for authentication
-  publish-package:
-    name: Publish Package to Crate
-    runs-on: ubuntu-latest
+  # publish-package:
+  #   name: Publish Package to Crate
+  #   runs-on: ubuntu-latest
