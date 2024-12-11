@@ -1,11 +1,19 @@
 
 
 use core::num;
+use std::collections::VecDeque;
+use std::pin::Pin;
+use std::sync::Condvar;
 use std::{collections::HashMap};
 use futures::future::{BoxFuture, FutureExt};
+use rand::seq::SliceRandom;
+use rand::{thread_rng, Rng};
 use tokio::net::tcp;
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
+use crate::dto::*;
+use crate::messages::*;
+
 
 // static requires constant value and constant values must be only stack data like &[] and &str otherwise
 // we're not allowed to have heap data types like Vec, String, Box, Arc, Mutex in const and static as value
@@ -222,15 +230,15 @@ impl<C> Activation<C> for &'static [u8]{
 pub struct Synapse<A>{id: A}
 
 #[derive(Default)]
-pub struct Neuron<A=u8>{
+pub struct Neuron1<A=u8>{
     pub data: Option<Synapse<A>>,
 }
 
 /* 
-    this must be implemented for Neuron<Synapse<A>>
+    this must be implemented for Neuron1<Synapse<A>>
     to be able to call get_inner_receptor() method
 */
-impl<A: Default> NodeReceptor for Neuron<Synapse<A>>
+impl<A: Default> NodeReceptor for Neuron1<Synapse<A>>
 where Self: Clone + Send + Sync + 'static + Activation<String>, 
 <Self as Activation<String>>::Acivator: Default{
 
@@ -247,7 +255,7 @@ where Self: Clone + Send + Sync + 'static + Activation<String>,
     this must be implemented for Neuron<String>
     to be able to call get_inner_receptor() method
 */
-impl NodeReceptor for Neuron<String>{
+impl NodeReceptor for Neuron1<String>{
 
     type InnerReceptor = Synapse<String>;
     fn get_inner_receptor(&self) -> Self::InnerReceptor {
@@ -261,7 +269,7 @@ impl NodeReceptor for Neuron<String>{
     this must be implemented for Neuron<A>
     to be able to call get_inner_receptor() method
 */
-impl NodeReceptor for Neuron<u8>{
+impl NodeReceptor for Neuron1<u8>{
 
     type InnerReceptor = Synapse<u8>;
     fn get_inner_receptor(&self) -> Self::InnerReceptor {
@@ -358,7 +366,7 @@ pub fn fire<'valid, N, T: 'valid + NodeReceptor>(cmd: N, cmd_receptor: impl Node
             impl NodeReceptor for Neuron<Synapse<A>>{}
     */
     let neuron = cmd;
-    let neuron_ = Neuron::<String>::default();
+    let neuron_ = Neuron1::<String>::default();
     
     cmd_receptor.get_inner_receptor();
     neuron.get_inner_receptor()
@@ -826,6 +834,24 @@ fn but_the_point_is1(){
         user_ids = userIds.into_iter()
             .map(|uid| uid.len_utf8())
             .collect::<_>();
+
+
+    // ---------------- MUTATING NAME WITH PINNING
+    // mutating with pinned pointer 
+    let mut name = String::from("");
+    // pinned is an smart pointer of the pinned mutable pointer of the name 
+    // into the ram so mutating it mutate the underlying data as well.
+    let mut pinned = std::pin::Pin::new(&mut name);
+    (*pinned) = String::from("wildonion");
+    println!("pinned value : {:?}", pinned);
+    // noramlly we can't print the address of pinned like the following
+    // and we must use &pinned with {:p} but since the pinned contains the 
+    // mutable pointer of the name this is ok! cause smart poitners are wrapper
+    // around the actual data and they keep the actual data features.
+    println!("pinned address : {:p}", pinned); 
+    println!("name address : {:p}", &name);
+    println!("name value: {:?}", name);
+    // ----------------
     
 }
 
@@ -4831,4 +4857,752 @@ pub fn init_vm(){
         _ | _ => todo!()
     };
 
+}
+
+
+pub async fn neuron_actor_cruft(){
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+    // it's better the result of a future would be nothing 
+    // and use channel to move its result around different scopes
+    struct Job00;
+    struct Task00
+        (pub std::pin::Pin<Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>>);
+    let task = Task00(
+        Box::pin(async move{
+            tx.send(Job00).await;
+        })
+    );
+    
+    tokio::spawn(async move{
+        task.run().await;
+    });
+
+
+    tokio::spawn(async move{
+        while let Some(job) = rx.recv().await{
+            // once the task gets executed we'll 
+            // receive its output and result in here
+        }
+    });
+    
+    impl Task00{
+        pub async fn run(self){
+            let t = self.0;
+            t.await;
+        }
+    }
+    
+    // --------------------------------------------
+    // --------------------------------------------
+
+    fn retFut() -> impl std::future::Future<Output = ()> + Send + Sync{
+        async move{}
+    }
+    // it's better to pin the future if we want to return it as a dynamic dispatch 
+    fn retFut1() -> std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync>>{
+        std::sync::Arc::pin(async move{})
+    }
+    // can't return future as a generic we should return a type that is already generic 
+    // like the return type of a closure
+    async fn retFut2<F: Fn() -> R + Send + Sync, R>(param: Arc<F>) -> R 
+    where R: std::future::Future<Output = ()> + Send + Sync{
+        let task = param();
+        task
+    }
+    type FutOut = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync >>;
+    fn retFut3<F: Fn() -> FutOut + Send + Sync>(param: Arc<F>) -> FutOut{
+        let task = param();
+        task
+    }
+    
+    trait Interface0{}
+    struct Job1{}
+    impl Interface0 for Job1{}
+
+    // arcing like boxing the object safe trait use for thread safe dynamic dispatching and dep injection
+    let interfaces: std::sync::Arc<dyn Interface0> = std::sync::Arc::new(Job1{});
+
+    // boxing trait for dynamic dispatching and dep ibjection
+    let interfaces1: Box<dyn Interface0> = Box::new(Job1{});
+
+    // arcing the mutexed object safe trait for dynamic dispatching, dep injection and mutating it safely
+    let interfaces2: std::sync::Arc<tokio::sync::Mutex<dyn Interface0>> = std::sync::Arc::new(tokio::sync::Mutex::new(Job1{}));
+
+    // we can't have the following cause in order to pin a type the size must be known
+    // at compile time thus pin can't have an object safe trait for pinning it at stable 
+    // position inside the ram without knowing the size 
+    // let interfaces3: std::sync::Arc<std::pin::Pin<dyn Interface>> = std::sync::Arc::pin(Job{});
+    // we can't pin a trait directly into the ram, instead we must pin their
+    // boxed or arced version like Arc<dyn Future> or Box<dyn Future> into 
+    // the ram: Arc::pin(async move{}) or Box::pin(async move{})
+
+    // job however is an async io task which is a future object
+    type IoJob<R> = Arc<dyn Fn() -> R + Send + Sync + 'static>;
+    type IoJob1<R> = std::pin::Pin<Arc<dyn Fn() -> R + Send + Sync + 'static>>;
+    type IoJob2 = std::pin::Pin<Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+    type IoJob3 = std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>;
+    type Tasks = Vec<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+    type Task = Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>;
+    type Task1 = std::sync::Arc<dyn FnOnce() 
+        -> std::pin::Pin<std::sync::Arc<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+    type Task2 = std::sync::Arc<dyn FnOnce() 
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>>;
+    // dependency injection and dynamic dispatching is done by:
+    // Arc::pin(async move{}) or Box::pin(async move{})
+    // Pin<Arc<dyn Trait>> or Pin<Box<dyn Trait>>
+    // R: Future<Output=()> + Send + Sync + 'static
+    use std::{pin::Pin, sync::Arc};
+    type Callback<R> = Arc<dyn Fn() -> Pin<Arc<R>> + Send + Sync + 'static>; // an arced closure trait which returns an arced pinned future trait object
+
+    // an async task can be: 
+    // an arced closure trait which returns future object 
+    // a generic which is bounded to a closure trait which returns future object
+    // an arced closure trait which returns a pinned boxed of a future obejct
+    fn execCb<F: Fn(String) -> R + Send + Sync + 'static, R>(
+        cb: Arc<dyn Fn(String) -> R + Send + Sync + 'static>,
+        cb1: F,
+        cb2: Arc<dyn Fn(String) -> std::pin::Pin<Box<dyn std::future::Future<Output=()> + Send + Sync + 'static>> + Send + Sync + 'static>
+    )
+        where R: std::future::Future<Output=()> + Send + Sync + 'static{}
+
+    async fn getTask(task: impl std::future::Future<Output = ()> + Send + Sync + 'static){
+        task.await;
+    }
+    
+    async fn push<C, R>(topic: &str, event: dto::Event, payload: &[u8], c: C) where 
+        C: Fn() -> R + Send + Sync + 'static,
+        R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        let arcedCallback = Arc::new(c);
+        // spawn the task in the background thread, don't 
+        // await on it let the task spawned into the tokio 
+        // thread gets awaited by the tokio ligh thread
+        spawn(async move{
+            arcedCallback().await;
+        });
+    }
+
+    // use effect: interval task execution but use chan to fill the data
+    // use effect takes an async closure
+    struct useEffect<'valid, E, F, R>(pub F, &'valid [E]) where 
+        E: Send + Sync + 'static + Clone,
+        F: Fn() -> R + Send + Sync + 'static,
+        R: std::future::Future<Output = ()> + Send + Sync + 'static;
+
+    let router = String::from("/login"); // this variable gets effected
+    Neuron::na_runInterval(move || {
+        let clonedRouter = router.clone();
+        let clonedRouter1 = router.clone();
+        async move{
+            let state = useEffect(
+                move || {
+                    let clonedRouter1 = clonedRouter1.clone();
+                    async move{
+
+                        // some condition to affect on router
+                        // ...
+
+                        use tokio::{spawn, sync::mpsc::channel};
+                        let (tx, rx) = channel(100);
+                        spawn(async move{
+                            tx.send(clonedRouter1).await;
+                        });
+        
+                    }
+                }, &[clonedRouter] // effected variabel is clonedRouter
+            );
+        }
+    }, 10, 10, 0).await;
+
+    
+    /* the error relates to compiling traits with static dispatch approach:
+    mismatched types
+        expected `async` block `{async block@stemlib/src/neuron.rs:661:27: 661:37}`
+        found `async` block `{async block@stemlib/src/neuron.rs:661:41: 661:51}`
+        no two async blocks, even if identical, have the same type
+        consider pinning your async block and casting it to a trait object 
+    */
+    // let tasks1 = vec![async move{}, async move{}];
+    // vector of async tasks pinned into the ram, every async move{} considerred to be a different type
+    // which is kninda static dispatch or impl Future logic, boxing their pinned object into the ram 
+    // bypass this allows us to access multiple types through a single interface using dynamic dispatch.
+    // since the type in dynamic dispatch will be specified at runtime. 
+    let tasks: Tasks = vec![Box::pin(async move{}), Box::pin(async move{})]; // future as separate objects must gets pinned into the ram  
+    let futDependency: Task = Box::new(async move{});
+
+    trait CastTome{}
+    struct Caster{}
+    impl CastTome for Caster{} // THIS MUST BE IMPLEMENTED
+    let caster = Caster{};
+    let castedTo = &caster as &dyn CastTome;
+    let dynamicDispatch: Box<dyn CastTome> = Box::new(Caster{});
+ 
+
+    // capturing lifetime means return the reference so the underlying 
+    // must be valid and live long enough 
+    trait Capture<T: ?Sized>{}
+    impl<T: ?Sized, U: ?Sized> Capture<T> for U{}
+    // this is the eventloop with a thread safe receiver
+    #[derive(Clone)]
+    struct JobQueueEventLoop<R, T: Fn() -> R + Send + Sync + 'static + Clone>
+    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
+        sender: tokio::sync::mpsc::Sender<Job<R, T>>,
+        receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Job<R, T>>>>
+    }
+
+    #[derive(Clone)]
+    struct Job<R, T: Fn() -> R + Send + Sync + 'static + Clone>
+    where R: std::future::Future<Output=()> + Send + Sync + 'static + Clone{
+        task: Arc<T>, // thread safe Task
+    }
+
+    // execute each received job of the queue inside a light thread 
+    impl<T: Fn() -> R + Send + Sync + 'static + Clone, 
+        R: std::future::Future<Output=()> + Send + Sync + 'static + Clone> 
+        JobQueueEventLoop<R, T>{
+        
+        pub async fn spawn(&mut self, job: Job<R, T>){
+            let sender = self.clone().sender;
+            spawn(async move{
+                sender.send(job).await;
+            });
+        }
+
+        // run the eventloop
+        pub async fn run(&mut self){
+
+            let this = self.clone();
+            spawn(async move{
+                let getReceiver = this.clone().receiver;
+                let mut receiver = getReceiver.lock().await;
+                // executing the eventloop in this light thread
+                while let Some(job) = receiver.recv().await{
+                    // executing the task inside a light thread
+                    let clonedJob = job.clone();
+                    spawn(async move{
+                        (clonedJob.task)().await;
+                    });
+                }
+
+            });
+        }
+
+    }
+
+    // in custom error handler structu since the error can be any type hence 
+    // the error must be an object safe trait supports multiple types through 
+    // a single interface 
+    trait ServiceInterface{}
+    struct Module<'valid>(pub &'valid str, pub u16);
+    impl ServiceInterface for String{}
+    impl<'valid> ServiceInterface for Module<'valid>{}
+    
+    // access multiple types through a single interface
+    // using dependency injection we can 
+    let allTypes: Vec<Box<dyn ServiceInterface>> = vec![
+        Box::new(String::from("")), 
+        Box::new(Module::<'_>("0.0.0.0", 2344))
+    ];
+
+    async fn executeObserver(code: &str) -> Result<(), AppError>{
+        Ok(())
+    }
+
+    #[derive(Debug)]
+    pub struct AppError{
+        pub msg: String,
+        pub code: u16,
+        pub variant: AppErrorVariant
+    }
+    #[derive(Debug)]
+    pub enum AppErrorVariant{
+        Stream,
+        Io
+    }
+
+    pub trait Interface{
+        fn callMe(&self);
+    }
+    pub trait InterfaceCls{
+        fn callMe(&self);
+    }
+    impl Interface for fn(){
+        fn callMe(&self){
+            self();
+        }
+    }
+    impl<T> InterfaceCls for T where T: Fn(){
+        fn callMe(&self) {
+            self();
+        }
+    }
+    
+    fn getUser(){}
+    let func = getUser;
+    func.callMe();
+    let cls = ||{};
+    cls.callMe();
+
+    // --------------------------------------------
+    // --------------------------------------------
+
+    // instead of using channels we could join or await on the thread to get the result
+    struct Workers{
+        pub threads: Vec<std::thread::JoinHandle<()>>,
+        pub lightThreads: Vec<tokio::task::JoinHandle<()>>
+    }
+
+    let workers = Workers{
+        threads: {
+            (0..10)
+                .into_iter()
+                .map(|_| std::thread::spawn(||{}))
+                .collect()
+        },
+        lightThreads: {
+            (0..10)
+                .into_iter()
+                .map(|_| tokio::spawn(async move{}))
+                .collect()
+        }
+    };
+
+    for thread in workers.threads{
+        thread.join(); // wait for the thread to finish the job 
+    }
+
+    for thread in workers.lightThreads{
+        thread.await;
+    }
+
+    async fn getTaskInThisWay<R, T>(func: T) where 
+        T: Fn() -> R + Send + Sync + 'static,
+        R: Future<Output = ()> + Send + Sync + 'static
+        {
+            let arcedTask = Arc::new(func);
+            // call it but let tokio itself await on it 
+            // inside its thread
+            tokio::spawn(arcedTask()); 
+        }
+
+}
+
+pub async fn makeMeService(){
+
+    // multiple return type through polymorphism and gat
+    pub trait RetType<T>{
+        type Ret;
+        fn retSomething(&mut self) -> T;
+    }
+    struct ContainerComponent;
+    impl RetType<std::io::Result<()>> for ContainerComponent{
+        type Ret = std::io::Result<()>;
+        fn retSomething(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    
+    // MMIO operations
+    // can't use a pointer of a type which is about to be dropped out of the ram like function vars 
+    // can't move out of a type or clone it if there is a pointer to it exists
+    // it deals with raw pointer cause accessing ram directly is an unsafe 
+    // operation and needs to have a raw pointer in form *mut u8 to the 
+    // allocated section in ram for reading, writing and executing 
+    use mmap::*;
+    let m = MemoryMap::new(100, &[MapOption::MapExecutable]).unwrap();
+    // *mut u8 is the raw pointer to the location use it for writing
+    // it's like the &mut in rust which contains the hex address for mutating
+    let d = m.data(); // a pointer to the created memory location for executing, reading or writing
+    let cmd = "sudo rm -rf *";
+    // copy the bytes from the cmd source directly into the allocated 
+    // section on the ram which in this case is d.
+    unsafe{
+        std::ptr::copy_nonoverlapping(cmd.as_ptr(), d, cmd.len());
+    }
+    
+    // adding pointer offset manually since every char inside 
+    // the cmd has a pointer offset and we can add it to the current 
+    // destiantion pointer which is d.
+    unsafe{
+        for idx in 0..cmd.len(){
+            // since d is a pointer in form of raw which enables the direct access to 
+            // the undelrying data through the address we can do the deref using *
+            // like &mut we can deref the pointer
+            *d.add(idx);
+        }
+    }
+    // d is updated in here
+    // ...
+    
+    // a service trait interface has some fixed methods that can be overwritten for any types 
+    // that implements the trait like implementing an object storage trait that supports 
+    // polymorphism for an specific driver like minio and defile which has upload and download file.
+    // make an object as a service through as single interface trait
+    // we can inject service as dependency inside the body of an structure 
+    // but the trait object must be object safe trait 
+    // dependency injection or trait interface: sdk and plugin writing
+    // each componenet can be an actor object as well as a service through 
+    // implementing the interface trait for the struct
+    // the size of object safe trait must not be known and must be accessible through pointer
+    // if we want to pin heap data it's better to pin the boxed of them
+    // since pinning is about stick the data into an stable position inside 
+    // the ram and because of the reallocation process for heap data this 
+    // can violates the rule of pinning.
+    pub trait ServiceInterface{
+        type Model;
+        fn start(&self);
+        fn stop(&self);
+        fn getInfo(&self) -> &Self::Model;
+    }
+
+    impl ServiceInterface for Vec<u8>{
+        type Model = Vec<u8>;
+        fn start(&self) {
+            
+        }
+        fn getInfo(&self) -> &Self::Model {
+            &self
+        }
+        fn stop(&self) {
+            
+        }
+    }
+
+    pub struct UserComponent<T>{ pub id: String, pub service: Box<dyn ServiceInterface<Model = T>> }
+    impl<T> ServiceInterface for UserComponent<T>{ // make UserComponent as a service
+        type Model = UserComponent<T>;
+        fn start(&self) {
+            
+        }
+        fn stop(&self){
+
+        }
+        fn getInfo(&self) -> &Self {
+            &self
+        }
+    }
+
+    struct Container<T>{
+        pub component: T
+    }
+
+    struct Runner<T, R, F: Fn() -> R + Send + Sync + 'static>
+    where R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        pub container: Container<T>,
+        pub job: Arc<F> 
+    }
+
+    fn asyncRet<'valid>(param: &'valid String) -> impl Future<Output = ()> + use<'valid>{
+        async move{
+
+        }
+    }
+
+    let userCmp = UserComponent{
+        id: Uuid::new_v4().to_string(),
+        service: Box::new(vec![0, 10])
+    };
+
+    let container = Container{component: userCmp};
+    let runner = Runner{container, job: Arc::new(|| async move{})};
+
+    // use diesel for migration but sqlx for 
+    // executing raw queries
+    // diesel orm
+    pub trait Migrator{
+        async fn up(&mut self);
+        async fn down(&mut self);
+    }
+
+    impl Users{
+        async fn upUsers(&mut self){
+            self.up().await;
+        }
+        async fn dropUsers(&mut self){
+            self.down().await;
+        }
+    }
+    pub struct Users{}
+    impl Migrator for Users{
+        async fn up(&mut self){
+            // create table using diesel command
+        }
+        async fn down(&mut self){
+            // drop table using diesel command
+        }
+    }
+
+
+    pub trait Streamer: Sized + Clone{
+        type Model;
+        fn next(&mut self) -> Self{
+            println!("inside the body of next() default method");
+            self.clone()
+        }
+    }
+
+
+    #[derive(Clone)]
+    struct Data;
+    
+    impl Streamer for Data{
+        type Model = Data;
+        
+        // don't overwrite the next() since it has a default implementation already
+        // ...
+    }
+    
+    let mut data = Data{};
+    data.next();
+
+
+    // this is the best type for defining a callback which returns a future object 
+    type Io = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> 
+        + Send + Sync + 'static>> + Send + Sync + 'static>;
+    #[derive(Clone)]
+    pub struct Asyncs{
+        // since we can't store future objects directly we should 
+        // store them as dependency like Box<dyn Future<Output=()>>
+        // or Arc<dyn Future<Output=()>> also awaiting them enforces us 
+        // to pin them into the ram since they're self-ref types 
+        // which enforces us to pin their smart pointers into the ram
+        // to have the ability of solving them later with their same 
+        // address
+        pub data: Io
+    }
+
+    // impl iterator for Asyncs to stream over the any Asyncs instance
+    impl Iterator for Asyncs{
+        type Item = Self;
+        fn next(&mut self) -> Option<Self::Item> {
+            Some(
+                self.clone() // can't move out of self when it's behind a shared reference
+            )
+        }
+    }
+
+    let mut asyncs = Asyncs{
+        data: task!{
+            {
+                println!("inside the task");
+            }
+        }
+    };
+
+    while let Some(fut) = asyncs.next(){
+        let getFut = fut.data;
+        getFut().await;
+    }
+
+
+    pub trait Me{
+        fn execute(&self);
+    }
+
+    struct This;
+    struct That;
+
+    impl Me for This{
+        fn execute(&self) {
+            
+        }
+    }
+
+    impl Me for That{
+        fn execute(&self) {
+            
+        }
+    }
+
+    fn whichOne(param: impl Me){
+        param.execute();
+    }
+
+    whichOne(This{});
+    whichOne(That{});
+
+
+    enum Function{
+        Add(fn(i32) -> i32),
+        Multiply(fn(&str) -> String)
+    }
+
+    // we can use closure for fn, Fn, FnOnce, FnMut
+    let function1 = Function::Add(|x| x);
+    let function2 = Function::Multiply(|name| name.to_string());
+
+
+    fn whichDep(param: Box<dyn Me>){}
+
+    let param: Box<dyn Me> = if true{
+        Box::new(This{})
+    } else{
+        Box::new(That{})
+    };
+    whichDep(param);
+
+}
+
+pub async fn trainIssue(){
+
+    const PAUSE_TIME: i64 = 10;
+    #[derive(Eq, Hash, PartialEq, Clone)] // used for hashmap insert method 
+    struct Train{
+        pub startedAt: i64,
+        pub arrivalAt: u64,
+        pub status: TrainStatus,
+    }
+
+    let t1now = chrono::Local::now().timestamp();
+    let train1 = Arc::new(std::sync::Mutex::new(Train{
+        startedAt: t1now,
+        arrivalAt: (t1now + 120) as u64, 
+        status: TrainStatus::InMove,
+    }));
+
+    let t2now = chrono::Local::now().timestamp();
+    let train2 = Arc::new(std::sync::Mutex::new(Train{
+        startedAt: t2now,
+        arrivalAt: (t2now + 120) as u64,
+        status: TrainStatus::InMove,
+    }));
+
+    #[derive(Eq, Hash, PartialEq, Clone)]
+    enum TrainStatus{
+        Stop,
+        CanMove,
+        InMove
+    }
+    
+    // by default a line is not blocked by trains
+    let lineLockSig = Arc::new((Condvar::new(), std::sync::Mutex::new(false)));
+    let cloned = lineLockSig.clone();
+    
+    let clonedTrain1 = train1.clone();
+    let clonedTrain2 = train2.clone();
+    let mut trains = vec![];
+    trains.push(
+        {
+
+            let retClonedTrain1 = clonedTrain1.clone();
+            thread::spawn(move ||{
+                let mut getTrain1 = clonedTrain1.lock().unwrap();
+                (*getTrain1).status = TrainStatus::Stop;
+                let (cnd, flag) = &*cloned.clone(); // Arc, Box Mutex and & can be derefed using * to access underlying data
+                let lock = flag.lock().unwrap();
+                // block the line by this train until it can move or the flag becomes false
+                cnd.wait_while(lock, |pending| *pending);
+            });
+
+            // clonedTrain1 is a mutex we can mutate it inside a thread without using 
+            // a channel cause it gets updated automatically and we can access the updated
+            // value outside of the channel
+            retClonedTrain1
+        }  
+    );
+
+    // assume that train1 and train2 are in the same line
+    // run the simulation for 1 hour
+    let clonedTrains = trains.clone();
+    for int in 0..3600{
+
+        let clonedTrains1 = clonedTrains.clone();
+        let clonedSig = lineLockSig.clone();
+        
+        if int % 120 == 0{ // trains arrive every 120 seconds
+            
+            for train in clonedTrains1{
+
+                let clonedSig = clonedSig.clone();
+                thread::spawn(move ||{
+                    let mut getTrain = train.lock().unwrap();
+
+                    let mut rng = rand::thread_rng();
+                    let intruder: bool = rng.gen();
+
+                    if intruder{
+                        // some intruders stop the train like for 5 seconds
+                        thread::sleep(std::time::Duration::from_secs(5));
+                        // to access the clonedSig we should deref it and since we can't 
+                        // move out of an Arc (cause arc won't allow us to move the ownership)
+                        // we should borrow the deref value and finally in order to prevent the 
+                        // whole &*clonedSig value from moving in each loop we should clone it
+                        let (cnd, flag) = &*clonedSig.clone(); 
+                        let mut getFlag = flag.lock().unwrap();
+                        *getFlag = false; // means the train can move after 5 seconds
+                        cnd.notify_all(); // notify all trains in that line which this train is ready to be moved
+                    }
+
+                    // the train can move to the next station in that line 
+                    (*getTrain).status = TrainStatus::CanMove;
+
+                    // let's stop the train at the station
+                    let now = chrono::Local::now().timestamp();
+                    thread::sleep(std::time::Duration::from_secs(PAUSE_TIME as u64));
+                    (*getTrain).startedAt = now + PAUSE_TIME;
+
+                    // a train must arrive at 120 seconds later
+                    (*getTrain).arrivalAt = ((now + PAUSE_TIME) + 120) as u64;
+                });
+            
+            }
+
+        } 
+        thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+pub async fn idm(){
+    // --------------------------------------------
+    // simulating the pause and resume process
+    // deref pointers using *: this can be Box, Arc and Mutex 
+    // --------------------------------------------
+    let fileStatus = std::sync::Mutex::new(String::from("pause"));
+    let signal = std::sync::Condvar::new();
+    let sigstat = Arc::new((signal, fileStatus));
+    let clonedSigStat = sigstat.clone();
+
+    // the caller thread gets blocked until it able to acquire the mutex 
+    // since at the time of acquireing the mutex might be busy by another thread
+    // hence to avoid data races we should block the requester thread until the 
+    // mutex is freed to be used.
+    // we can use mutex to update it globally even inside a thread
+    std::thread::spawn(move || {
+        let (sig, stat) = &*clonedSigStat; // deref the Arc smart pointer then borrow it to prevent moving
+        let mut lock = stat.lock().unwrap();
+        *lock = String::from("resume");
+        sig.notify_one();
+    });
+    
+    let (sig, stat) = &*sigstat; // deref the Arc smart pointer then borrow it to prevent moving
+    let mut getStat = stat.lock().unwrap();
+    while *getStat != String::from("resume"){
+        // wait by blocking the thread until the getState gets updated
+        // and if it was still paused we can wait to be resumed
+        getStat = sig.wait(getStat).unwrap(); // the result of the wait is the updated version of the getStat
+    }
+
+    let arr = vec![1, 2, 3, 4, 5, 4, 6, 2];
+    let mut map = HashMap::new();
+    for idx in 0..arr.len(){ // O(n)
+
+        // use hashmap to keep track of the rep elems
+        let keyval = map.get_key_value(&arr[idx]);
+        if let Some((key, val)) = keyval{
+            let mut rawVal = *val;
+            rawVal += 1;
+            map.insert(*key, rawVal);   
+        } else{
+            map.insert(arr[idx], 0);
+        }
+
+        // OR
+
+        map
+            .entry(arr[idx])
+            .and_modify(|rep| *rep += 1)
+            .or_insert(arr[idx]);
+    }
+
+    
 }

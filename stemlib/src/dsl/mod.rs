@@ -1,82 +1,28 @@
 
+
 // -----------------------------------
 /* Neuron Actor DSL using Macros
 
-    TODOs: dsl.rs, select!{}, publishToRmq() and consumeFromRmq() methods, 
-    TODOs: stem.spec, express framework, publish stemlib to crate
-    tools: 
-        GPT tryout section in stem.spec, 
-        desktop books for neuroscience and information theory
-    features:
-        use a codec to encoder/decoder a neuron object 
-        local talking with jobq chan eventloop receiver of mailbox of actor message sending logic
-        encrypted through crypter crate for remote talking through p2p and rpc rmq req-rep queue:
-            p2p docs https://docs.ipfs.tech/concepts/libp2p/ , https://docs.libp2p.io/
-            p2p based like adnl file sharing, vpn like tor, ton and v2ray, firewall, gateway, loadbalancer, ingress listener like ngrok, proxy and dns over neuron actor
-            p2p based like adnl onchain broker stock engine (find peers which are behind nat over wan)
-    main concepts:
-        dyn dispatch and dep injection with Arc::new(TypeImplsTrait{}) Box::new(TypeImplsTrait{}) Arc::pin(async move{}), Box::pin(async move{})
-        stat dyn dispatch, dep injecton and binding to trait, Box::pin(async move{}), Arc::pin(async move{}), Arc<Fn() -> R> where R: Future
-        Err(CstmError::new()) || ? on object of type CstmError who impls Error, From, Display traits || Err(Box::new(CstmError::new()))
-        use Box::pin(async move{}) or Arc::pin(async move{})  to return async future object in none async context that you can't await on future objects
-        make everything cloneable and break the cycle of self ref types using Arc and store on the heap using Box 
-        mutex, channel, spawn, select, trait closure for poly, dep inj, dyn and stat dispatch,
-        future objects in form of dyn dispatch with Box::pin(async move{}) or a job in closure return type with Arc::new(||async move{})
-        raft,dag,mdp,adjmat,merkletree,shard,replica,p2p::wrtc,udp,quic,tcp,ws,noise,gossipsub,kdht,swarm,lightthread
-        atomic,chan,arc,mutex,select,spawn,eventloop,CronScheduler,send,sync,static, static lazy arc mutex app ctx + send + sync
-        thread_local, actor id or address, std::alloc, jemalloc, GlobalAlloc, bumpalo and r3bl_rs_utils arena as a global allocator
-        zero copy, null pointer optimiser, unique storage key, dsl and feature based for stem
-        atomic transaction: ALL OR NONE with atomic syncing using static lazy Arc Mutex & Channels 
-        default type param, default const in struct, let ONION = const{}, Arc<Mutex< to mutate arced value vs Rc<RefCell< to mutate Rced value
-        interfaces and traits for poly, stat dyn dispatch, access types through a single interface, Any trait, dep injection
-        if you don't care about the result of the io task don't await on the spawn otherwise use static lazy arc mutex or chans and let the task gets executed in the background thread
-        spawn(async move{handleMsg().await}) in the background light thread (none blocking) without awaiting: thread per each task
-        Box::pin(async move{}), Arc::pin(async move{}) and Arc<Fn() -> R> where R: Future + Send + Sync
-        eventloop with spawn(async move{loop{select!{}}}) and spawn(async move{while let Some(job) = rx.recv().await{}}) inside the actor.rs of the stem 
-        CronScheduler(time, ctx, redis pubsub exp key), select!{} awaiting, arc, mutex, timeout, Box::pin(async{}), Arc::pin(async move{}), condvar, jobq chan send recv
+    what about features?????
 
-        proc ones can only be used on top of functions and impl blocks to extend 
-        the function body and add some vars into it at compile time:
-            use proc macro with attrs to handle automatic task spawning and jobq chan creations
-            use decl macro to build dsl
+    ---------------- MACRO PATTERNS -----------------
 
-        struct ProcessStruct;
+    rust types can be fallen into one the following categories
 
-        // also handle multiple passing params to function using macros with omitting the useless ones
-        // do this:    
-        #[processExt]
-        impl ProcessStruct{
-            async fn start(&self){}
-            async fn stop(&self){}
-        }
-        // instead of:
-        impl processExt for ProcessStruct{} 
-
-
-        // when a function is annotated with distribute 
-        // means it can distribute itself among networks
-        #[distribute]
-        pub async fn injectShellcodeLogic(){
-        }
-
-         ---------------- MACRO PATTERNS -----------------
-
-        rust types can be fallen into one the following categories
-
-        item      ➔ an Item | an item, like a function, struct, module, etc.
-        block     ➔ a BlockExpression | a block (i.e. a block of statements and/or an expression, surrounded by braces)
-        stmt      ➔ a Statement without the trailing semicolon (except for item statements that require semicolons)
-        pat_param ➔ a PatternNoTopAlt
-        pat       ➔ at least any PatternNoTopAlt, and possibly more depending on edition
-        expr      ➔ an Expression
-        ty        ➔ a Type
-        ident     ➔ an IDENTIFIER_OR_KEYWORD or RAW_IDENTIFIER
-        path      ➔ a TypePath style path | a path (e.g. foo, ::std::mem::replace, transmute::<_, int>, …)
-        tt        ➔ a TokenTree (a single token or tokens in matching delimiters (), [], or {})
-        meta      ➔ an Attr, the contents of an attribute | a meta item; the things that go inside #[...] and #![...] attributes
-        lifetime  ➔ a LIFETIME_TOKEN
-        vis       ➔ a possibly empty Visibility qualifier
-        literal   ➔ matches -?LiteralExpression
+    item      ➔ an Item | an item, like a function, struct, module, etc.
+    block     ➔ a BlockExpression | a block (i.e. a block of statements and/or an expression, surrounded by braces)
+    stmt      ➔ a Statement without the trailing semicolon (except for item statements that require semicolons)
+    pat_param ➔ a PatternNoTopAlt
+    pat       ➔ at least any PatternNoTopAlt, and possibly more depending on edition
+    expr      ➔ an Expression
+    ty        ➔ a Type
+    ident     ➔ an IDENTIFIER_OR_KEYWORD or RAW_IDENTIFIER
+    path      ➔ a TypePath style path | a path (e.g. foo, ::std::mem::replace, transmute::<_, int>, …)
+    tt        ➔ a TokenTree (a single token or tokens in matching delimiters (), [], or {})
+    meta      ➔ an Attr, the contents of an attribute | a meta item; the things that go inside #[...] and #![...] attributes
+    lifetime  ➔ a LIFETIME_TOKEN
+    vis       ➔ a possibly empty Visibility qualifier
+    literal   ➔ matches -?LiteralExpression
 */
 
 
@@ -84,8 +30,61 @@ use crate::*;
 
 
 #[macro_export]
+macro_rules! task {
+    ($logic:block) => {
+        {
+            // the return type must be async since we can't directly return 
+            // async future object we should pin its box into the ram then 
+            // wrap it around a closure
+            Arc::new(|| Box::pin(async move $logic))
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! go {
+    ($logic:block) => {
+        {
+            /*
+                DON'T USE task!{} MACRO TO SPAWN CAUSE:
+                arc won't allo to move out of the wrapped type it only allows to get multiple
+                ownership of that safely cause the type wrapped by the arc must not be able to 
+                be moved in order to be thread safe for sharing.
+                The Arce issue: Arc allows multiple ownership, but the closure inside it is FnOnce, 
+                meaning it can only be invoked once (after which it's moved). You cannot move the 
+                closure out of the Arc directly because it's inside a reference-counted pointer, and 
+                Rust enforces that you only borrow from it, not take ownership.
+                when you clone the Arc, it only creates a new reference to the same data. 
+                the () part is then trying to move and call the closure, but since the closure 
+                is wrapped in Arc, it cannot be moved directly. 
+                solution: since Arc won't allow us to move the ownership of the wrapped value
+                we must ensure that we do not try to move the closure out of the Arc directly 
+            */
+            tokio::spawn(async move $logic);
+        }
+    };
+    ($task:expr) => {
+        {
+            tokio::spawn(async move{
+                $task().await;
+            })
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! post {
     /* 
+        post!(
+            "/user",
+            (ensureAdminAccess, api),
+            (req, res, next, depot) => async move { // if you don't have a variable just define it as ident which is a name for that
+                // Handler logic
+                res.render("hello");
+                println!("Handling salvo::request for /user");
+            }
+        );
+
         due to the static dispatch behaviour
         the `mismatched types
             expected fn item `fn() -> impl std::future::Future<Output = ()> {ensureAdminAccess}`
@@ -136,39 +135,6 @@ macro_rules! post {
             ){
                 $handler
             }
-
-        }
-    };
-}
-
-// a neuron is an actor, an isolated state talks locally and remotely through 
-// eventloop jobq channel and rpc rmq + p2p
-#[macro_export]
-macro_rules! neuron {
-    () => {
-        {
-            
-        }
-    };
-}
-
-// stream is tool helps to start streaming over a neuron actor 
-// either locally or remotely  
-#[macro_export]
-macro_rules! stream {
-    () => {
-        {
-
-        }
-    };
-}
-
-// layer contains one or more neurons inside itself, multiple 
-// layers form an onion brain
-#[macro_export]
-macro_rules! layer {
-    () => {
-        {
 
         }
     };

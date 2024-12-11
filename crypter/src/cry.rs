@@ -467,6 +467,8 @@ pub mod zkp{
 
     pub use super::*;
 
+    pub struct Circom;
+    pub struct Noir;
     pub struct ZkpError;
     pub struct Verifier;
     pub struct Prover;

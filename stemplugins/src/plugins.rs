@@ -192,32 +192,81 @@ pub fn passport(args: TokenStream, input: TokenStream) -> TokenStream {
 
 }
  
+
 #[proc_macro_attribute]
-pub fn go(args: TokenStream, input: TokenStream) -> TokenStream{
+pub fn handler(args: TokenStream, input: TokenStream) -> TokenStream{
 
-    // get the function
-    // let async_task = parse_macro_input!(input as ItemFn);
+    pub trait Handler{}
+    // get function name 
+    // build struct from function name 
+    // impl Handler trait for the struct
 
-    let async_task = syn::parse::<syn::ItemFn>(input.clone()).unwrap(); // get the function name
+    // proc macro attrs can only be used on top of functions and impl blocks to extend 
+    // the function body and add some vars into it at compile time:
+    //     use proc macro with attrs to handle automatic task spawning and jobq chan creations
+    //     use decl macro to build dsl
+
+    // struct ProcessStruct;
+
+    // // also handle multiple passing params to function using macros with omitting the useless ones
+    // // do this:    
+    // #[processExt]
+    // impl ProcessStruct{
+    //     async fn start(&self){}
+    //     async fn stop(&self){}
+    // }
+    // // instead of:
+    // impl processExt for ProcessStruct{} 
+
+
+    // // when a function is annotated with distribute 
+    // // means it can distribute itself among networks
+    // #[distribute]
+    // pub async fn injectShellcodeLogic(){
+    // }
+
+    todo!()
+
+}
+
+// #[proc_macro_attribute]
+// pub fn go(args: TokenStream, input: TokenStream) -> TokenStream{
+
+//     // get the function
+//     // let async_task = parse_macro_input!(input as ItemFn);
+
+//     let async_task = syn::parse::<syn::ItemFn>(input.clone()).unwrap(); // get the function name
     
-    // function signature: function name, args, visibility
-    let async_task_name = &async_task.sig.ident;
+//     // function signature: function name, args, visibility
+//     let async_task_name = &async_task.sig.ident;
 
 
-    let output = quote!{
-        // execute the async method using tokio main proc macro
-        #[tokio::main]
-        pub async fn #async_task_name() {
-            #async_task
-        }
+//     let output = quote!{
+//         // execute the async method using tokio main proc macro
+//         #[tokio::main]
+//         pub async fn #async_task_name() {
+//             #async_task
+//         }
 
-        tokio::spawn(async move{
-            #async_task
-        });
-    };
+//         tokio::spawn(async move{
+//             #async_task
+//         });
+//     };
 
-    output.into()
+//     output.into()
 
+// }
+
+// a macro to broadcast the function return type as the event 
+// using stemlib neuron actor worker
+#[proc_macro_attribute]
+pub fn event(args: TokenStream, input: TokenStream) -> TokenStream{
+
+    // extract the function codes from input 
+    // get the return type 
+    // broadcast the type to the network
+    
+    todo!()
 }
 
 /* -------------------------------

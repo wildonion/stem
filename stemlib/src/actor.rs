@@ -81,7 +81,7 @@
     }
 
     let mut tokio_async_worker = AsyncWorker::new();
-    let mut native_sync_worker = NoneAsyncThreadPool::spawn(n_workers);
+    let mut native_sync_worker = RunnerActor::spawn(n_workers);
     let mut rayon_sync_worker  = RayonSyncWorker::new();
     let (sender, receiver) = std_mpsc::channel::<u8>();
     let cloned_sender = sender.clone();
@@ -136,7 +136,7 @@ struct ActerMessage{
 #[derive(Clone)]
 struct Acter{
     // std::sync::Mutex is not Send so we can't move it into tokio spawn
-    // we must use tokio Mutex
+    // we must use tokio Mutex, mailbox is a thread safe receiver
     pub mailbox: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<ActerMessage>>>,
     pub communicator: tokio::sync::mpsc::Sender<ActerMessage>,
 }
@@ -227,7 +227,6 @@ pub mod workerthreadpool{
             sender: mpsc::UnboundedSender<Result<(), E>>, // sender async side with no byte limitation
             receiver: mpsc::UnboundedReceiver<Result<(), E>>, // receiver async side with no byte limitation
         }
-
 
         impl<E: Send + 'static> AsyncWorker<E>{ // E can be shared between threads
 
@@ -328,7 +327,6 @@ pub mod workerthreadpool{
             receiver: mpsc::UnboundedReceiver<Job>, // receiver async side with no byte limitation
         }
 
-
         impl RayonSyncWorker{
 
             pub fn new() -> Self{
@@ -398,7 +396,7 @@ pub mod workerthreadpool{
             thread: Option<thread::JoinHandle<()>>, //// thread is of type JoinHandld struct which return nothing or ()
         }
 
-        pub struct NoneAsyncThreadPool {
+        pub struct RunnerActor {
             workers: Vec<Worker>,
             sender: std_mpsc::Sender<Message>, // all sends will be asynchronous and they never block
         }
@@ -408,9 +406,9 @@ pub mod workerthreadpool{
             Terminate,
         }
 
-        impl NoneAsyncThreadPool{
+        impl RunnerActor{
             
-            pub fn spawn(size: usize) -> NoneAsyncThreadPool {
+            pub fn spawn(size: usize) -> RunnerActor {
                 assert!(size > 0);
                 let (sender, receiver) = std_mpsc::channel();
                 let receiver = Arc::new(Mutex::new(receiver)); // reading and writing from an IO must be mutable thus the receiver must be inside a Mutex cause data inside Arc can't be borrows as mutable since the receiver read operation is a mutable process
@@ -418,7 +416,7 @@ pub mod workerthreadpool{
                 for _ in 0..size { // since the receiver is not bounded to trait Clone we must clone it using Arc in each iteration cause we want to share it between multiple threads to get what the sender has sent 
                     workers.push(Worker::new(Uuid::new_v4(), Arc::clone(&receiver)));
                 }
-                NoneAsyncThreadPool{workers, sender}
+                RunnerActor{workers, sender}
             }
 
             pub fn execute<F>(&self, f: F) where F: FnOnce() + Send + 'static { // calling this method means send the incoming task from the process through the mpsc sender to down side of the channel in order to block a free thread using the receiver on locking the mutex
@@ -427,8 +425,8 @@ pub mod workerthreadpool{
             }
         }
 
-        impl Drop for NoneAsyncThreadPool{ // shutting down all threads on ctrl + c by dropping all of them
-            fn drop(&mut self) { // destructor for NoneAsyncThreadPool struct 
+        impl Drop for RunnerActor{ // shutting down all threads on ctrl + c by dropping all of them
+            fn drop(&mut self) { // destructor for RunnerActor struct 
                 info!("Sending terminate message to all workers.");
                 for _ in &self.workers {
                     self.sender.send(Message::Terminate).unwrap();
@@ -1236,5 +1234,146 @@ pub async fn jobQChannelFromScratch(){
     // be solved in the background like tokio spawn threads. 
     thread1.join().unwrap();
 
+
+}
+
+pub async fn upAndRunEventLoopExecutor(){
+
+    // ================= the executor
+    // eventloop executor is an actor object which has two methods
+    // run and spawn in which the eventloop receiver will be started
+    // receiving io tasks and execute them in a tokio threads and for 
+    // the spawn method the io task will be sent to the channel.
+    
+    use tokio::sync::mpsc;
+    use tokio::spawn;
+
+    struct Task1<T: Fn() -> R + Send + Sync + 'static, R>
+    where R: Future<Output = ()> + Send + Sync + 'static{
+        pub taks: Arc<T> 
+    } 
+
+    type Io = std::sync::Arc<dyn Fn() -> 
+            std::pin::Pin<Box<dyn std::future::Future<Output=()> 
+            + Send + Sync + 'static>> 
+            + Send + Sync + 'static>;
+            
+    // eventloop
+    #[derive(Clone)]
+    struct OnionActor{
+        pub sender: tokio::sync::mpsc::Sender<Task>, 
+        pub receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Task>>>,
+    }
+
+    // the OnionActor structure has two spawn and run logics to send and
+    // receive io jobs from the channel so we could execute them inside 
+    // the background light thread using tokio runtime and scheduler
+    trait EventLoopExt{
+        async fn spawn(&self, task: Task);
+        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static;
+    }
+
+    impl EventLoopExt for OnionActor{
+        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static{
+            let this = self.clone();
+            let arcedCallback = std::sync::Arc::new(cb);
+            // receiving inside a light thread
+            go!{
+                {
+                    let clonedArcedCallback = arcedCallback.clone();
+                    let getRx = this.clone().receiver;
+                    let mut rx = getRx.lock().await;
+                    while let Some(task) = rx.recv().await{
+                        println!("received task from eventloop, executing in a thread of the eventloop");
+                        // executing the callback inside a light thread
+                        spawn(
+                            clonedArcedCallback(task) // when we run the callback closure trait it returns future object as its return type 
+                        );
+                    }
+                }
+            };
+        }
+        
+        async fn spawn(&self, task: Task) {
+            let this = self.clone();
+            let sender = this.sender;
+            go!{
+                {
+                    sender.send(task).await;
+                }
+            };
+        }
+    }
+
+    impl OnionActor{
+        pub fn new() -> Self{
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);            
+            Self{
+                sender: tx,
+                receiver: std::sync::Arc::new(
+                    tokio::sync::Mutex::new(
+                        rx
+                    )
+                ),
+            }
+        }
+    }
+    
+    // task struct with not generic; it needs to pin the future object
+    // no need to have output for the future, we'll be using channels
+    // Arc<F>, F: Fn() -> R + Send + Sync + 'static where R: Future<Output=()> + Send + Sync + 'static
+    // use Box<dyn or Arc<dyn for dynamic dispatch and R: Trait for static dispatch
+    // in dynamic dispatch the instance of the type whose impls the trait must be wrapped into the Arc or Box
+    #[derive(Clone)]
+    struct Task{
+        pub job: Io 
+    }
+
+    impl Task{
+        pub fn new() -> Self{
+            Self { job: task!{
+                {
+                    println!("executing an intensive io...");
+                }
+            } }
+        }
+    }
+
+    pub trait OnionService{
+        type Service; 
+        async fn runner(&mut self);
+        async fn stop(&self);
+        async fn spawner(&self, task: Task);
+    }
+
+    impl OnionService for OnionActor{
+        type Service = Self;
+        async fn spawner(&self, task: Task) {
+            self.spawn(task).await; // spawn io task into the eventloop thread
+        }
+        async fn stop(&self) {
+            
+        }
+        async fn runner(&mut self){
+            // run() method takes a callback with the received task as its param
+            // inside the method we'll start receiving from the channel then pass
+            // the received task to the callback, inside the callback however the
+            // task is being exeucted inside another light thread 
+            self.run(|task| async move{ 
+                println!("inside the callback, executing received task");
+                let job = task.job;
+                go!(job);
+                go!(
+                    || Box::pin(async move{
+                        println!("executing an io task inside light thread");
+                    })
+                );
+            }).await;
+        } 
+    }
+    
+    let mut eventLoopService = OnionActor::new();
+    eventLoopService.spawner(Task::new()).await;
+    eventLoopService.runner().await;
 
 }

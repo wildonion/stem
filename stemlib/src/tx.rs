@@ -1,8 +1,9 @@
 
 
 use std::sync::atomic::AtomicU8;
-use neuron::ActionType;
-use neuron::PublishNotifToRmq;
+use crate::dto::*;
+use crate::impls::*;
+use crate::messages::*;
 use wallexerr::misc::Wallet;
 use crate::*;
 use actix::prelude::*;
@@ -60,7 +61,7 @@ struct Execute{
 #[rtype(result = "()")]
 struct Send2Pool{
     pub tx: Transaction,
-    pub tx_producer: Addr<NeuronActor>, // use this actor to send produce message to it
+    pub tx_producer: Addr<Neuron>, // use this actor to send produce message to it
     pub spawn_local: bool
 }
 
@@ -85,6 +86,7 @@ pub static WALLET: Lazy<std::sync::Arc<tokio::sync::Mutex<wallexerr::misc::Walle
     create tx object with unique id -> publish to rmq 
     receive tx in txpool -> commit tx -> execute tx -> update records -> record in treasury
     all or none to avoid double spending which is sending same amount for two destinations but charge only once 
+    also assign a unique global id to each tx to avoid double spending issue
 
     once a tx object is made publish it to the rmq exchange so consumer 
     can consume it for committing and executing all tx objects finally 
@@ -169,17 +171,17 @@ impl Transaction{
         
     }
 
-    pub fn on_error<E, R>(e: E) where E: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    pub fn on_error<E, R>(e: E) where E: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, 
     { // error is of type a closure trait
         let arced_e = Arc::new(e);
     }
 
-    pub fn on_success<S, R>(s: S) where S: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    pub fn on_success<S, R>(s: S) where S: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, 
     { // success is of type a closure trait
         let arced_s = Arc::new(s);
     }
 
-    pub fn on_reject<J, R>(r: J) where J: FnMut() -> Arc<dyn std::future::Future<Output = ()>> + Send + Sync + 'static, 
+    pub fn on_reject<J, R>(r: J) where J: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static>>, 
     { // reject is of type a closure trait
         let arced_r = Arc::new(r);
     }
@@ -352,7 +354,7 @@ impl ActixMessageHandler<Send2Pool> for StatelessTransactionPool{
         }
 
         let prod_event = 
-            PublishNotifToRmq{
+            Broadcast{
                 local_spawn: true,
                 notif_data: EventData{ 
                     id: Uuid::new_v4().to_string(), 
@@ -363,26 +365,21 @@ impl ActixMessageHandler<Send2Pool> for StatelessTransactionPool{
                     fired_at: chrono::Local::now().timestamp(), 
                     is_seen: false 
                 },
-                exchange_name: format!("{}.notif:TxPool", APP_NAME),
-                exchange_type: String::from("fanout"),
-                routing_key: String::from(""),
+                p2pConfig: None,
+                rmqConfig: Some(RmqPublishConfig{
+                    exchange_name: format!("{}.notif:TxPool", APP_NAME),
+                    exchange_type: String::from("fanout"),
+                    routing_key: String::from(""),
+                }),
                 encryptionConfig: None, // don't encrypt the data 
             };
 
         // background worker thread using tokio
         let cloned_producer = producer.clone();
-        let cloned_prod_event = prod_event.clone();
         tokio::spawn(async move{
-            cloned_producer.send(cloned_prod_event).await;
+            cloned_producer.send(prod_event).await;
         });
 
-        if spawn_local{
-            // spawn in local thread of the actor itself
-            async move{
-                producer.send(prod_event).await;
-            }.into_actor(self) // convert the future into the actor so we can call the spawn method to execute the future in actor thread
-            .spawn(ctx);
-        }
 
     }
 
