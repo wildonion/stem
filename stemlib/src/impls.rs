@@ -17,6 +17,7 @@ use deadpool_lapin::lapin::{
 use futures::StreamExt;
 use log4rs::append;
 use rayon::string;
+use tokio::io::AsyncWriteExt;
 use uuid::timestamp::context;
 use wallexerr::misc::Wallet;
 use crate::*;
@@ -802,7 +803,6 @@ impl Actor for Neuron{
 
 impl ObjectStorage for MinIoDriver{
 
-    type Driver = Self;
     async fn save(&mut self) {
         
     }
@@ -818,7 +818,6 @@ impl ObjectStorage for MinIoDriver{
 
 impl ObjectStorage for SeaFileDriver{
 
-    type Driver = Self;
     async fn save(&mut self) {
         
     }
@@ -834,7 +833,6 @@ impl ObjectStorage for SeaFileDriver{
 
 impl ObjectStorage for DigiSpaces{
     
-    type Driver = Self;
     async fn save(&mut self){
         
     }
@@ -850,13 +848,14 @@ impl ObjectStorage for DigiSpaces{
 
 impl ObjectStorage for LocalFileDriver{
     
-    type Driver = Self;
     async fn getFile(&mut self, fId: String) -> &[u8] {
         let file = &[0]; // object file or bytes
         file
     }
     async fn save(&mut self) {
-        
+        let content = &self.content;
+        let mut file = tokio::fs::File::open(&self.path).await.unwrap();
+        file.write_all(content).await;
     }
     fn checksum(&mut self, file: &mut [u8]) -> bool {
         true
@@ -1085,7 +1084,7 @@ impl Crypter for Vec<u8>{
 }
 
 impl ShaHasher for String{
-    fn hash(&mut self) {
+    fn hashMe(&mut self) {
         let hashed = Wallet::generate_sha256_from(&self);
         *self = hex::encode(hashed);
     }

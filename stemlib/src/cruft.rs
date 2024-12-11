@@ -1,9 +1,13 @@
 
 
 use core::num;
+use std::collections::VecDeque;
 use std::pin::Pin;
+use std::sync::Condvar;
 use std::{collections::HashMap};
 use futures::future::{BoxFuture, FutureExt};
+use rand::seq::SliceRandom;
+use rand::{thread_rng, Rng};
 use tokio::net::tcp;
 use serde::{Serialize, Deserialize};
 use once_cell::sync::Lazy;
@@ -5437,4 +5441,168 @@ pub async fn makeMeService(){
     };
     whichDep(param);
 
+}
+
+pub async fn trainIssue(){
+
+    const PAUSE_TIME: i64 = 10;
+    #[derive(Eq, Hash, PartialEq, Clone)] // used for hashmap insert method 
+    struct Train{
+        pub startedAt: i64,
+        pub arrivalAt: u64,
+        pub status: TrainStatus,
+    }
+
+    let t1now = chrono::Local::now().timestamp();
+    let train1 = Arc::new(std::sync::Mutex::new(Train{
+        startedAt: t1now,
+        arrivalAt: (t1now + 120) as u64, 
+        status: TrainStatus::InMove,
+    }));
+
+    let t2now = chrono::Local::now().timestamp();
+    let train2 = Arc::new(std::sync::Mutex::new(Train{
+        startedAt: t2now,
+        arrivalAt: (t2now + 120) as u64,
+        status: TrainStatus::InMove,
+    }));
+
+    #[derive(Eq, Hash, PartialEq, Clone)]
+    enum TrainStatus{
+        Stop,
+        CanMove,
+        InMove
+    }
+    
+    // by default a line is not blocked by trains
+    let lineLockSig = Arc::new((Condvar::new(), std::sync::Mutex::new(false)));
+    let cloned = lineLockSig.clone();
+    
+    let clonedTrain1 = train1.clone();
+    let clonedTrain2 = train2.clone();
+    let mut trains = vec![];
+    trains.push(
+        {
+
+            let retClonedTrain1 = clonedTrain1.clone();
+            thread::spawn(move ||{
+                let mut getTrain1 = clonedTrain1.lock().unwrap();
+                (*getTrain1).status = TrainStatus::Stop;
+                let (cnd, flag) = &*cloned.clone(); // Arc, Box Mutex and & can be derefed using * to access underlying data
+                let lock = flag.lock().unwrap();
+                // block the line by this train until it can move or the flag becomes false
+                cnd.wait_while(lock, |pending| *pending);
+            });
+
+            // clonedTrain1 is a mutex we can mutate it inside a thread without using 
+            // a channel cause it gets updated automatically and we can access the updated
+            // value outside of the channel
+            retClonedTrain1
+        }  
+    );
+
+    // assume that train1 and train2 are in the same line
+    // run the simulation for 1 hour
+    let clonedTrains = trains.clone();
+    for int in 0..3600{
+
+        let clonedTrains1 = clonedTrains.clone();
+        let clonedSig = lineLockSig.clone();
+        
+        if int % 120 == 0{ // trains arrive every 120 seconds
+            
+            for train in clonedTrains1{
+
+                let clonedSig = clonedSig.clone();
+                thread::spawn(move ||{
+                    let mut getTrain = train.lock().unwrap();
+
+                    let mut rng = rand::thread_rng();
+                    let intruder: bool = rng.gen();
+
+                    if intruder{
+                        // some intruders stop the train like for 5 seconds
+                        thread::sleep(std::time::Duration::from_secs(5));
+                        // to access the clonedSig we should deref it and since we can't 
+                        // move out of an Arc (cause arc won't allow us to move the ownership)
+                        // we should borrow the deref value and finally in order to prevent the 
+                        // whole &*clonedSig value from moving in each loop we should clone it
+                        let (cnd, flag) = &*clonedSig.clone(); 
+                        let mut getFlag = flag.lock().unwrap();
+                        *getFlag = false; // means the train can move after 5 seconds
+                        cnd.notify_all(); // notify all trains in that line which this train is ready to be moved
+                    }
+
+                    // the train can move to the next station in that line 
+                    (*getTrain).status = TrainStatus::CanMove;
+
+                    // let's stop the train at the station
+                    let now = chrono::Local::now().timestamp();
+                    thread::sleep(std::time::Duration::from_secs(PAUSE_TIME as u64));
+                    (*getTrain).startedAt = now + PAUSE_TIME;
+
+                    // a train must arrive at 120 seconds later
+                    (*getTrain).arrivalAt = ((now + PAUSE_TIME) + 120) as u64;
+                });
+            
+            }
+
+        } 
+        thread::sleep(std::time::Duration::from_secs(1));
+    }
+}
+
+pub async fn idm(){
+    // --------------------------------------------
+    // simulating the pause and resume process
+    // deref pointers using *: this can be Box, Arc and Mutex 
+    // --------------------------------------------
+    let fileStatus = std::sync::Mutex::new(String::from("pause"));
+    let signal = std::sync::Condvar::new();
+    let sigstat = Arc::new((signal, fileStatus));
+    let clonedSigStat = sigstat.clone();
+
+    // the caller thread gets blocked until it able to acquire the mutex 
+    // since at the time of acquireing the mutex might be busy by another thread
+    // hence to avoid data races we should block the requester thread until the 
+    // mutex is freed to be used.
+    // we can use mutex to update it globally even inside a thread
+    std::thread::spawn(move || {
+        let (sig, stat) = &*clonedSigStat; // deref the Arc smart pointer then borrow it to prevent moving
+        let mut lock = stat.lock().unwrap();
+        *lock = String::from("resume");
+        sig.notify_one();
+    });
+    
+    let (sig, stat) = &*sigstat; // deref the Arc smart pointer then borrow it to prevent moving
+    let mut getStat = stat.lock().unwrap();
+    while *getStat != String::from("resume"){
+        // wait by blocking the thread until the getState gets updated
+        // and if it was still paused we can wait to be resumed
+        getStat = sig.wait(getStat).unwrap(); // the result of the wait is the updated version of the getStat
+    }
+
+    let arr = vec![1, 2, 3, 4, 5, 4, 6, 2];
+    let mut map = HashMap::new();
+    for idx in 0..arr.len(){ // O(n)
+
+        // use hashmap to keep track of the rep elems
+        let keyval = map.get_key_value(&arr[idx]);
+        if let Some((key, val)) = keyval{
+            let mut rawVal = *val;
+            rawVal += 1;
+            map.insert(*key, rawVal);   
+        } else{
+            map.insert(arr[idx], 0);
+        }
+
+        // OR
+
+        map
+            .entry(arr[idx])
+            .and_modify(|rep| *rep += 1)
+            .or_insert(arr[idx]);
+    }
+
+    
 }

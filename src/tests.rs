@@ -1,9 +1,9 @@
 
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::future::Future;
-use std::sync::Arc;
-use std::thread::JoinHandle;
+use std::sync::{Arc, Condvar};
+use std::thread::{self, JoinHandle};
 use crate::*;
 use actix_web::web::to;
 use actix_web::Handler;
@@ -214,245 +214,38 @@ pub async fn testNeuronActor(){
 
 }
 
-#[tokio::test]
-pub async fn upAndRunEventLoopExecutor(){
+pub async fn onionEnv(){
 
-    // ================= the executor
-    // eventloop executor is an actor object which has two methods
-    // run and spawn in which the eventloop receiver will be started
-    // receiving io tasks and execute them in a tokio threads and for 
-    // the spawn method the io task will be sent to the channel.
-    
-    use tokio::sync::mpsc;
-    use tokio::spawn;
-
-    struct Task1<T: Fn() -> R + Send + Sync + 'static, R>
-    where R: Future<Output = ()> + Send + Sync + 'static{
-        pub taks: Arc<T> 
-    } 
-
-    type Io = std::sync::Arc<dyn Fn() -> 
-            std::pin::Pin<Box<dyn std::future::Future<Output=()> 
-            + Send + Sync + 'static>> 
-            + Send + Sync + 'static>;
-            
-    // eventloop
-    #[derive(Clone)]
-    struct OnionActor{
-        pub sender: tokio::sync::mpsc::Sender<Task>, 
-        pub receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Task>>>,
-    }
-
-    // the OnionActor structure has two spawn and run logics to send and
-    // receive io jobs from the channel so we could execute them inside 
-    // the background light thread using tokio runtime and scheduler
-    trait EventLoopExt{
-        async fn spawn(&self, task: Task);
-        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static;
-    }
-
-    impl EventLoopExt for OnionActor{
-        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static{
-            let this = self.clone();
-            let arcedCallback = std::sync::Arc::new(cb);
-            // receiving inside a light thread
-            go!{
-                {
-                    let clonedArcedCallback = arcedCallback.clone();
-                    let getRx = this.clone().receiver;
-                    let mut rx = getRx.lock().await;
-                    while let Some(task) = rx.recv().await{
-                        println!("received task from eventloop, executing in a thread of the eventloop");
-                        // executing the callback inside a light thread
-                        spawn(
-                            clonedArcedCallback(task) // when we run the callback closure trait it returns future object as its return type 
-                        );
-                    }
-                }
-            };
-        }
-        
-        async fn spawn(&self, task: Task) {
-            let this = self.clone();
-            let sender = this.sender;
-            go!{
-                {
-                    sender.send(task).await;
-                }
-            };
-        }
-    }
-
-    impl OnionActor{
-        pub fn new() -> Self{
-            let (tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);            
-            Self{
-                sender: tx,
-                receiver: std::sync::Arc::new(
-                    tokio::sync::Mutex::new(
-                        rx
-                    )
-                ),
-            }
-        }
-    }
-    
-    // task struct with not generic; it needs to pin the future object
-    // no need to have output for the future, we'll be using channels
-    // Arc<F>, F: Fn() -> R + Send + Sync + 'static where R: Future<Output=()> + Send + Sync + 'static
-    // use Box<dyn or Arc<dyn for dynamic dispatch and R: Trait for static dispatch
-    // in dynamic dispatch the instance of the type whose impls the trait must be wrapped into the Arc or Box
-    #[derive(Clone)]
-    struct Task{
-        pub job: Io 
-    }
-
-    impl Task{
-        pub fn new() -> Self{
-            Self { job: task!{
-                {
-                    println!("executing an intensive io...");
-                }
-            } }
-        }
-    }
-
-    pub trait OnionService{
-        type Service; 
-        async fn runner(&mut self);
-        async fn stop(&self);
-        async fn spawner(&self, task: Task);
-    }
-
-    impl OnionService for OnionActor{
-        type Service = Self;
-        async fn spawner(&self, task: Task) {
-            self.spawn(task).await; // spawn io task into the eventloop thread
-        }
-        async fn stop(&self) {
-            
-        }
-        async fn runner(&mut self){
-            // run() method takes a callback with the received task as its param
-            // inside the method we'll start receiving from the channel then pass
-            // the received task to the callback, inside the callback however the
-            // task is being exeucted inside another light thread 
-            self.run(|task| async move{ 
-                println!("inside the callback, executing received task");
-                let job = task.job;
-                go!(job);
-                go!(
-                    || Box::pin(async move{
-                        println!("executing an io task inside light thread");
-                    })
-                );
-            }).await;
-        } 
-    }
-    
-    let mut eventLoopService = OnionActor::new();
-    eventLoopService.spawner(Task::new()).await;
-    eventLoopService.runner().await;
-
-}
-
-#[tokio::test]
-pub async fn saveFile(){
-
-    // TODO 
-    // download manager like idm with pause and resume 
-    // streaming over file chunk using while let some, stream traits and simd ops
-
-    // --------------------------------------------
-    // simulating the pause and resume process
-    // deref pointers using *: this can be Box, Arc and Mutex 
-    // --------------------------------------------
-    let fileStatus = std::sync::Mutex::new(String::from("pause"));
-    let signal = std::sync::Condvar::new();
-    let sigstat = Arc::new((signal, fileStatus));
-    let clonedSigStat = sigstat.clone();
-
-    // the caller thread gets blocked until it able to acquire the mutex 
-    // since at the time of acquireing the mutex might be busy by another thread
-    // hence to avoid data races we should block the requester thread until the 
-    // mutex is freed to be used.
-    // we can use mutex to update it globally even inside a thread
-    std::thread::spawn(move || {
-        let (sig, stat) = &*clonedSigStat; // deref the Arc smart pointer then borrow it to prevent moving
-        let mut lock = stat.lock().unwrap();
-        *lock = String::from("resume");
-        sig.notify_one();
-    });
-    
-    let (sig, stat) = &*sigstat; // deref the Arc smart pointer then borrow it to prevent moving
-    let mut getStat = stat.lock().unwrap();
-    while *getStat != String::from("resume"){
-        // wait by blocking the thread until the getState gets updated
-        // and if it was still paused we can wait to be resumed
-        getStat = sig.wait(getStat).unwrap(); // the result of the wait is the updated version of the getStat
-    }
-
-    // --------------------------------------------
-
-    // calling the save() of the interface on the driver instance
-    // we can do this since the interface is implemented for the struct
-    // and we can override the methods
-    let mut file = tokio::fs::File::open("Data.json").await.unwrap();
-    let mut buffer = vec![];
-    let readBytes = file.read_buf(&mut buffer).await.unwrap();
-    let mut secureCellConfig = SecureCellConfig::default();
-    buffer.encrypt(&mut secureCellConfig);
-
-    // buffer now contains the encrypted data, no need to mutex the buffer 
-    // if we want to modify the buffer we should use the Mutex
-    let mut driver = MinIoDriver{content: Arc::new(buffer)};
-    driver.save().await;
-
-    let arr = vec![1, 2, 3, 4, 5, 4, 6, 2];
-    let mut map = HashMap::new();
-    for idx in 0..arr.len(){ // O(n)
-
-        // use hashmap to keep track of the rep elems
-        let keyval = map.get_key_value(&arr[idx]);
-        if let Some((key, val)) = keyval{
-            let mut rawVal = *val;
-            rawVal += 1;
-            map.insert(*key, rawVal);   
-        } else{
-            map.insert(arr[idx], 0);
-        }
-
-        // OR
-
-        map
-            .entry(arr[idx])
-            .and_modify(|rep| *rep += 1)
-            .or_insert(arr[idx]);
-    }
-
-
-
-}
-
-pub async fn sexchangeRunner(){
+    // trait based service container (proxy design pattern)
 
     use std::sync::Arc;
     use tokio::sync::Mutex;
     use std::pin::Pin;
     use tokio::sync::mpsc::{Sender, Receiver};
 
-    type Io = Arc<dyn Fn() -> Pin<Box<dyn Future<Output=()> + Send + Sync + 'static>> + Send + Sync + 'static >; 
+    // ======== io jobs and tasks
+    pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
+        + Send + Sync + 'static>> 
+        + Send + Sync + 'static>;
+
+    // io event
+    pub type IoEvent = Arc<dyn Fn(Event<String>) -> Pin<Box<dyn std::future::Future<Output = ()> 
+        + Send + Sync + 'static>> 
+        + Send + Sync + 'static>;
     
     struct Task<R, T: Fn() -> R + Send + Sync + 'static> where
         R: Future<Output=()> + Send + Sync + 'static{
-        pub task: Arc<T>
+        pub task: Arc<T>,
+        pub io: Io,
     }
     
+    #[derive(Clone)]
     struct Event<T>{
         pub datum: T,
         pub timestamp: i64
     }
     
+    #[derive(Clone)]
     struct Buffer<G>{
         pub data: Arc<Mutex<Vec<G>>>,
         pub size: usize
@@ -480,50 +273,38 @@ pub async fn sexchangeRunner(){
         Executed
     }
     
-    struct Executor<G>{
-        pub sender: Arc<Sender<G>>,
-        pub receiver: Arc<Mutex<Receiver<G>>>,
+    #[derive(Clone)]
+    struct Executor{
         pub runner: RunnerActorThreadPoolEventLoop,
     }
-    
-    struct Environment<G>{
-        pub env_name: String,
-        pub executor: Executor<G>,
-    }
-    
-    enum OrderType{
-        Bid,
-        Ask
-    }
-    
-    struct Order{
-        pub otype: OrderType,
-        pub quantity: u64,
-        pub amount: u64,
-        pub timestamp: i64
-    }
-    
-    // spawn a light thread per each crypto type to find the match
-    // cause we have lock which is nicer to do it in a light thread
-    struct BookEngine{
-        pub orders: Arc<Mutex<std::collections::BTreeMap<String, Order>>>,
-    }
 
+    impl Environment{
+        pub fn new(envName: String) -> Self{
+            Self { env_name: envName, 
+            executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10) } }
+        }
+    }
+    
+    #[derive(Clone)]
+    struct Environment{
+        pub env_name: String,
+        pub executor: Executor,
+    }
 
     // ============== the app context
     #[derive(Clone)]
     struct AppContext{
         pub containers: Vec<Addr<Container>>,
-        pub runner: RunnerActorThreadPoolEventLoop,
+        pub env: Environment
     }
     impl AppContext{
         pub fn new() -> Self{
-            Self { containers: vec![], runner: RunnerActorThreadPoolEventLoop::new(10) }
+            Self { containers: vec![], env: Environment::new(String::from("onionEvn013")) }
         }
         pub fn pushContainer(&mut self, container: Addr<Container>) -> Self{
-            let Self{containers, runner} = self;
+            let Self{containers, env} = self;
             containers.push(container);
-            Self{containers: containers.to_vec(), runner: runner.clone() }
+            Self{containers: containers.to_vec(), env: env.clone() }
         }
     }
     #[derive(Clone)]
@@ -549,6 +330,14 @@ pub async fn sexchangeRunner(){
             router      
         }
     }
+    impl Service for LocalFileDriver{
+        fn buildRouters(&mut self) -> Router {
+            let router = Router::new();
+            // possibly post and get routers
+            // ...
+            router      
+        }
+    }
 
     // ============== the container actors
     #[derive(Clone)]
@@ -556,7 +345,7 @@ pub async fn sexchangeRunner(){
         // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
         // Arc makes the whole service field cloneable cause the container must be cloneable 
         // to return updated context when pushing new container into its vector 
-        service: Arc<dyn Service>, 
+        service: Arc<dyn Service>, // dependency injection
         id: String,
         // a service must have host and port
         host: String,
@@ -571,11 +360,30 @@ pub async fn sexchangeRunner(){
     }; // create a container for this service
 
     let uploadDriverContainer = Container{
-        service: Arc::new(MinIoDriver{content: Arc::new(vec![])}),
+        service: Arc::new(LocalFileDriver{
+            content: {
+                // calling the save() of the interface on the driver instance
+                // we can do this since the interface is implemented for the struct
+                // and we can override the methods
+                let mut file = tokio::fs::File::open("Data.json").await.unwrap();
+                let mut buffer = vec![];
+                let readBytes = file.read_buf(&mut buffer).await.unwrap();
+                let mut secureCellConfig = SecureCellConfig::default();
+                buffer.encrypt(&mut secureCellConfig);
+                Arc::new(buffer)
+            }, 
+            path: String::from("here.txt")
+        }),
         id: Uuid::new_v4().to_string(),
         host: String::from("0.0.0.0"),
         port: 8375
     };
+
+    // buffer now contains the encrypted data, no need to mutex the buffer 
+    // cause we don't want to modify the buffer, calling save() method requires 
+    // the type to implement the ObjectStorage trait
+    // let mut fileDriver = uploadDriverContainer.service;
+    // fileDriver.save().await;
 
     // actor setup
     impl Actor for Container{
@@ -604,9 +412,11 @@ pub async fn sexchangeRunner(){
         type Result = ();
         fn handle(&mut self, msg: TalkTo, ctx: &mut Self::Context) -> Self::Result {
             let TalkTo { msg, container } = msg.clone();
-            tokio::spawn(async move{
-                container.send(WakeUp { msg }).await;
-            });
+            go!{
+                {
+                    container.send(WakeUp { msg }).await;
+                }
+            }
         }
     }
     impl actix::Handler<WakeUp> for Container{ // use this to wake up a container
@@ -662,16 +472,35 @@ pub async fn sexchangeRunner(){
                         Message::Terminate => {
                             println!("terminating worker");
                             break;
-                        }
+                        },
+                        Message::EventBuffer(buffer) => {
+                            let getData = buffer.data;
+                            let mut dataVector = getData.lock().await;
+                            while !dataVector.is_empty(){
+                                let getEvent = dataVector.pop();
+                                if getEvent.is_some(){
+                                    let event = getEvent.unwrap();
+                                    let job = event.datum;
+                                    go!{
+                                        {
+                                            job().await;
+                                        }
+                                    }
+                                }
+                            }
+
+                        },
                     }
                 }
             });
 
+            // returning the built thread which has a receiver receiving constantly
             Self { thread: Arc::new(thread), id, }
         }
     }
 
     enum Message{
+        EventBuffer(Buffer<Event<Io>>),
         Task(Io),
         Terminate
     }
@@ -679,6 +508,7 @@ pub async fn sexchangeRunner(){
     #[derive(Clone)]
     struct RunnerActorThreadPoolEventLoop{
         pub workers: Vec<Worker>,
+        pub buffer: Buffer<Event<Io>>,
         pub sender: tokio::sync::mpsc::Sender<Message>,
         pub eventLoop: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Message>>>,
         pub pods: Vec<PipeLine>,
@@ -709,42 +539,27 @@ pub async fn sexchangeRunner(){
 
             let (tx, rx) = tokio::sync::mpsc::channel::<Message>(100);
             let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
-
-            let workers = 
-            (0..size)
+            
+            Self{ buffer: Buffer { data: Arc::new(Mutex::new(vec![])), size: 100 }, workers: {
+                (0..size)
                 .into_iter()
                 .map(|idx| {
                     Worker::new(Uuid::new_v4().to_string(), eventLoop.clone())
                 })
-                .collect::<Vec<Worker>>();
-
-            
-            Self{ workers, sender: tx,  eventLoop, pods: vec![], 
+                .collect::<Vec<Worker>>()
+            }, sender: tx,  eventLoop, pods: vec![], 
                 id: Uuid::new_v4().to_string(), status: RunnerStatus::Started }
         }
         pub async fn spawn(&self, msg: Message){
             let sender = self.sender.clone();
             sender.send(msg).await;
         }
+        pub async fn push(&mut self, job: Io){
+            let buffer = self.buffer.clone(); // clone to prevent the self from moving
+            let mut getData = buffer.data.lock().await;
+            (*getData).push(Event { datum: job, timestamp: chrono::Local::now().timestamp() });
+        }
+
     }
 
-
-    // implement #[event] on top of the RunnerActorThreadPoolEventLoop
-    // deploy ctx as serverless object using BFP
-    // ...
-
-    // notify all train about the pause and arrival time of a train
-    // don't pass stations
-    // if a train was stopped longer than the pauseTime block all other trains (inside tunnel or at station)
-    // use this model for sexchange
-    struct Train{
-        pub arrivalTime: u64,
-        pub pauseTime: u64,
-        pub status: std::sync::Condvar
-    }
-
-    struct TrainQueue{
-        pub queue: std::collections::VecDeque<Train>, // a ring buffer queue
-    }
-    
 }

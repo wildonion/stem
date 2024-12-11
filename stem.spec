@@ -2,7 +2,6 @@
 ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
 TODOs:
-        0 -> neuron ed25519 wallet to sign each message and verify in its handlers, sexchangeRunner(), uploadFile() methods + apiTrackingTimeHash
         1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
         2 -> serverless stemlib exchange and game mmq (match making and match engine order book) with wrangler, tauri, bevy to deploy functions and objects:
@@ -15,6 +14,13 @@ TODOs:
                         receive order from queue
                         find the match with that order based on amount, quantity, side and the base/qoute
                         build atomic tx and execute the tx inside a lock and a light thread
+                neuron crypter based operations:
+                        neuron ed25519 wallet to sign each message and verify in its handlers
+                        contract and wallet over zk
+                        encrypt the neuron object instance using aes256 encryption 
+                        #[inject(ed25519WalletSecure)]
+                        noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
+                        #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network using mmio
                 ssh based keypair with ed25519 wallet: use a high entropy seed with mnemonic for the rng to generate the keypair then convert sig and keypair into hex/base64/base58
                 neuron instance sign messages with its ed25519 wallet prvkey like the one in ssh then verify in its handlers with pubkey
                 talking with the engine through rmq (rpc and streaming) p2p req-res
@@ -46,7 +52,7 @@ TODOs:
                                 6 -> receive tx using neuron actor, inside the walle service
                                 7 -> add tx to wallet
                         }
-                stockBot, sexchange with gemini service (attach stemlib to the app) in market() method:
+                stockBotAgents for broker, sexchange with gemini service (attach stemlib to the app) in market() method:
                         stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 
                         salvoHttp2(stemlibGrpc) / ws, short http2 polling JobId <----stemlib.grpc.rmq.p2p---> gemini grpc pubsub worker(stemlibGrpcP2pRmq)
                         impl Service for Dto{}: object storage, otp, migrator, default trait method impl
@@ -98,15 +104,7 @@ TODOs:
                         ▶ OS and a security management app(malware detection) using RL
                         ▶ our VPS must detect the amount of CPU and RAM that every servers needs to get, without running the app
                         ▶ our VPS must detect the number of instances of every servers needs to be run and the load balancing algorithm 
-                        bpf based proxy, firewall, vpns, packet sniffer and load balancer
-        4 -> stemplugins AppEvents enum with #[event] proc macro to broadcast events with neuron actor during execution  
-        5 -> neuron crypter based operations:
-                contract and wallet over zk
-                encrypt the neuron object instance using aes256 encryption 
-                #[inject(ed25519WalletSecure)]
-                noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
-                #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network using mmio
-        6 -> publish stemlib to crate cicd from main branch
+                        bpf based proxy, firewall, vpns, packet sniffer and load balancer 
 Concepts:
         dynamic dispatch use cases: 
                 - used for coding polymorphism to support multiple types within a single type

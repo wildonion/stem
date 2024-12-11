@@ -10,7 +10,7 @@ use crate::*;
 
 
 pub trait ShaHasher{
-    fn hash(&mut self);
+    fn hashMe(&mut self);
 }
 
 pub trait Crypter{
@@ -38,9 +38,8 @@ pub trait ServiceExt1{
 
 pub trait ObjectStorage{ // the trait supports polymorphism over the fId
 
-    type Driver;
     async fn save(&mut self);
-    async fn getFile(&mut self, fId: String) -> &[u8];
+    async fn getFile(&mut self, fId: String) -> &[u8]; // fId can be file Id or event the filePath on server
     // comapare the current checksum against the passed in file 
     // this is useful to detect steghided pictures and files
     fn checksum(&mut self, file: &mut [u8]) -> bool; 

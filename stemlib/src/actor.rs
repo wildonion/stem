@@ -1236,3 +1236,144 @@ pub async fn jobQChannelFromScratch(){
 
 
 }
+
+pub async fn upAndRunEventLoopExecutor(){
+
+    // ================= the executor
+    // eventloop executor is an actor object which has two methods
+    // run and spawn in which the eventloop receiver will be started
+    // receiving io tasks and execute them in a tokio threads and for 
+    // the spawn method the io task will be sent to the channel.
+    
+    use tokio::sync::mpsc;
+    use tokio::spawn;
+
+    struct Task1<T: Fn() -> R + Send + Sync + 'static, R>
+    where R: Future<Output = ()> + Send + Sync + 'static{
+        pub taks: Arc<T> 
+    } 
+
+    type Io = std::sync::Arc<dyn Fn() -> 
+            std::pin::Pin<Box<dyn std::future::Future<Output=()> 
+            + Send + Sync + 'static>> 
+            + Send + Sync + 'static>;
+            
+    // eventloop
+    #[derive(Clone)]
+    struct OnionActor{
+        pub sender: tokio::sync::mpsc::Sender<Task>, 
+        pub receiver: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Task>>>,
+    }
+
+    // the OnionActor structure has two spawn and run logics to send and
+    // receive io jobs from the channel so we could execute them inside 
+    // the background light thread using tokio runtime and scheduler
+    trait EventLoopExt{
+        async fn spawn(&self, task: Task);
+        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static;
+    }
+
+    impl EventLoopExt for OnionActor{
+        async fn run<R, F: Fn(Task) -> R + Send + Sync + 'static>(&mut self, cb: F) where R: std::future::Future<Output=()> + Send + Sync + 'static{
+            let this = self.clone();
+            let arcedCallback = std::sync::Arc::new(cb);
+            // receiving inside a light thread
+            go!{
+                {
+                    let clonedArcedCallback = arcedCallback.clone();
+                    let getRx = this.clone().receiver;
+                    let mut rx = getRx.lock().await;
+                    while let Some(task) = rx.recv().await{
+                        println!("received task from eventloop, executing in a thread of the eventloop");
+                        // executing the callback inside a light thread
+                        spawn(
+                            clonedArcedCallback(task) // when we run the callback closure trait it returns future object as its return type 
+                        );
+                    }
+                }
+            };
+        }
+        
+        async fn spawn(&self, task: Task) {
+            let this = self.clone();
+            let sender = this.sender;
+            go!{
+                {
+                    sender.send(task).await;
+                }
+            };
+        }
+    }
+
+    impl OnionActor{
+        pub fn new() -> Self{
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<Task>(100);            
+            Self{
+                sender: tx,
+                receiver: std::sync::Arc::new(
+                    tokio::sync::Mutex::new(
+                        rx
+                    )
+                ),
+            }
+        }
+    }
+    
+    // task struct with not generic; it needs to pin the future object
+    // no need to have output for the future, we'll be using channels
+    // Arc<F>, F: Fn() -> R + Send + Sync + 'static where R: Future<Output=()> + Send + Sync + 'static
+    // use Box<dyn or Arc<dyn for dynamic dispatch and R: Trait for static dispatch
+    // in dynamic dispatch the instance of the type whose impls the trait must be wrapped into the Arc or Box
+    #[derive(Clone)]
+    struct Task{
+        pub job: Io 
+    }
+
+    impl Task{
+        pub fn new() -> Self{
+            Self { job: task!{
+                {
+                    println!("executing an intensive io...");
+                }
+            } }
+        }
+    }
+
+    pub trait OnionService{
+        type Service; 
+        async fn runner(&mut self);
+        async fn stop(&self);
+        async fn spawner(&self, task: Task);
+    }
+
+    impl OnionService for OnionActor{
+        type Service = Self;
+        async fn spawner(&self, task: Task) {
+            self.spawn(task).await; // spawn io task into the eventloop thread
+        }
+        async fn stop(&self) {
+            
+        }
+        async fn runner(&mut self){
+            // run() method takes a callback with the received task as its param
+            // inside the method we'll start receiving from the channel then pass
+            // the received task to the callback, inside the callback however the
+            // task is being exeucted inside another light thread 
+            self.run(|task| async move{ 
+                println!("inside the callback, executing received task");
+                let job = task.job;
+                go!(job);
+                go!(
+                    || Box::pin(async move{
+                        println!("executing an io task inside light thread");
+                    })
+                );
+            }).await;
+        } 
+    }
+    
+    let mut eventLoopService = OnionActor::new();
+    eventLoopService.spawner(Task::new()).await;
+    eventLoopService.runner().await;
+
+}

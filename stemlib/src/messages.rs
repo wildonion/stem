@@ -99,6 +99,11 @@ pub struct ExecutePriodically{
 #[rtype(result = "()")]
 pub struct Execute(pub Io, pub bool);
 
+// always pin the boxed or arced type specially future traits 
+// into the ram so Rust can dynamically allocate more space for 
+// them on the heap without moving them into a new location cause 
+// in that case we violate the ownership and pin rules.
+
 // an io type is an arced closure which returns a pinned boxed 
 // version of an async object or future trait
 pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 

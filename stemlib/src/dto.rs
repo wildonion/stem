@@ -358,20 +358,24 @@ pub struct C3{ // Context Container Component
 
 #[derive(Clone, Debug)]
 pub struct MinIoDriver{
-    pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
+    pub content: Arc<Vec<u8>>,
+    pub path: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct SeaFileDriver{
-    pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
+    pub content: Arc<Vec<u8>>,
+    pub path: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct DigiSpaces{
-    pub content: Arc<Vec<u8>> // thread safe utf8 bytes content of the file
+    pub content: Arc<Vec<u8>>,
+    pub path: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct LocalFileDriver{
-    pub content: Arc<Vec<u8>>
+    pub content: Arc<Vec<u8>>,
+    pub path: String,
 }
