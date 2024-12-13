@@ -1,6 +1,7 @@
 
 ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
+TODO: publish to crate
 TODOs:
         1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
@@ -45,9 +46,11 @@ TODOs:
                                 3 -> receive tx using neuron actor inside the market service (start bookengine actor, call subscribe() method inside the start() method, receive tx orders)
                                 4 -> inside the trade function of the bookengine:
                                                 do the trade process (light thread + locking + channels + double spending issue):
-                                                1 - tx.commit() - will charge the user account
-                                                2 - tx.executeAtomically() - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
-                                                3 - tx.record()
+                                                0 - store the tx order in btreemap to form a tree of orders 
+                                                1 - find a match between orders then create tx object
+                                                2 - tx.commit() - will charge the user account
+                                                3 - tx.executeAtomically() - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
+                                                4 - tx.record()
                                 5 -> send tx to txConfirmedQueue queue 
                                 6 -> receive tx using neuron actor, inside the walle service
                                 7 -> add tx to wallet

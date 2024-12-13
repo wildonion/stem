@@ -17,6 +17,7 @@ use deadpool_lapin::lapin::{
 use futures::StreamExt;
 use log4rs::append;
 use rayon::string;
+use routers::getAllEntitiesHandler;
 use tokio::io::AsyncWriteExt;
 use uuid::timestamp::context;
 use wallexerr::misc::Wallet;
@@ -24,6 +25,7 @@ use crate::*;
 use crate::messages::*;
 use crate::dto::*;
 use crate::interfaces::*;
+use salvo::Router;
 
 
 impl Drop for Neuron{
@@ -90,7 +92,10 @@ impl Neuron{
             wallet: Some(wallexerr::misc::Wallet::new_ed25519()), // wallexerr wallet for this neuron
             internal_executor: InternalExecutor::new(
                 Buffer{ events: std::sync::Arc::new(tokio::sync::Mutex::new(vec![
-                    Event{ data: EventData::default(), status: EventStatus::Committed, offset: 0 }
+                    Event{data: EventData::default(), 
+                        status:EventStatus::Committed, offset: Arc::new(AtomicU64::new(0)), 
+                        timestamp: chrono::Local::now().timestamp() 
+                    }
                 ])), size: bufferSize }
             ), 
             metadata: None,
@@ -1096,5 +1101,224 @@ impl ServiceExt for AppService{
     }
     fn status(&self) {
         
+    }
+}
+
+impl Environment{
+    pub async fn new(envName: String) -> Self{
+        Self { env_name: envName, agents: Arc::new(
+            tokio::sync::Mutex::new(
+                vec![
+                    Neuron::new(100, "neuron-1").await,
+                    Neuron::new(100, "neuron-2").await
+                ]
+            )
+        ),
+        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10) } }
+    }
+
+    pub async fn pushAgent(&mut self, agent: Neuron){
+        let getAgents = self.agents.clone();
+        let mut agents = getAgents.lock().await;
+        (*agents).push(agent);
+    }
+}
+
+impl AppContext{
+    pub async fn new() -> Self{
+        Self { containers: vec![], env: Environment::new(String::from("onionEvn013")).await }
+    }
+    pub fn pushContainer(&mut self, container: Addr<Container<Router>>) -> Self{
+        let Self{containers, env} = self;
+        containers.push(container);
+        Self{containers: containers.to_vec(), env: env.clone() }
+    }
+}
+
+impl Service<Router> for AppService{
+    fn buildRouters(&mut self) -> Router {
+        Router::new()
+    }
+}
+
+impl Service<Router> for EntityDto{
+    fn buildRouters(&mut self) -> Router{
+        let router = Router::with_path("/user-dto")
+            .push(
+                Router::with_path("/get-all")
+                .post(getAllEntitiesHandler)
+            );
+        router
+    }
+}
+
+impl Service<Router> for MinIoDriver{
+    fn buildRouters(&mut self) -> Router {
+        let router = Router::new();
+        // possibly post and get routers
+        // ...
+        router      
+    }
+}
+
+impl Service<Router> for LocalFileDriver{
+    fn buildRouters(&mut self) -> Router {
+        let router = Router::new();
+        // possibly post and get routers
+        // ...
+        router      
+    }
+}
+
+impl Actor for Container<Router>{
+    type Context = Context<Self>;
+    fn started(&mut self, ctx: &mut Self::Context) {
+        println!("the container {} started", self.id);
+    }
+}
+
+// terminating all workers when the instance is going to be dropped
+impl Drop for RunnerActorThreadPoolEventLoop{
+    fn drop(&mut self) {
+        println!("sending terminate message");
+        for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
+            let clonedSender = self.sender.clone();
+            // send the terminate message in the background thread
+            tokio::spawn(async move{
+                clonedSender.send(MessageWorker::Terminate).await;
+            });
+        }
+        println!("shutting down all workers");
+        for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
+            worker.thread.abort(); // abort the future object
+        }
+    }    
+} 
+
+impl RunnerActorThreadPoolEventLoop{
+    pub fn new(size: usize) -> Self{
+
+        let (tx, rx) = tokio::sync::mpsc::channel::<MessageWorker>(100);
+        let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
+        
+        Self{ buffer: Buffer { size: 100, events: Arc::new(tokio::sync::Mutex::new(vec![])) }, workers: {
+            (0..size)
+            .into_iter()
+            .map(|idx| {
+                Worker::new(Uuid::new_v4().to_string(), eventLoop.clone())
+            })
+            .collect::<Vec<Worker>>()
+        }, sender: tx,  eventLoop, pods: vec![], 
+            id: Uuid::new_v4().to_string(), status: RunnerStatus::Started }
+    }
+    pub async fn spawn(&self, msg: MessageWorker){
+        let sender = self.sender.clone();
+        sender.send(msg).await;
+    }
+    pub async fn push(&mut self, job: Job){
+        let buffer = self.buffer.clone(); // clone to prevent the self from moving
+        let mut getData = buffer.events.lock().await;
+
+        let rootJob = Job::new(Arc::new(|event| Box::pin(async move{
+            println!("rootJob task => {:?}", event);
+        })), None);
+        let childJob = Job::new(Arc::new(|event| Box::pin(async move{
+            println!("childJob task => {:?}", event);
+        })), Some(rootJob));
+        
+        (*getData).push(childJob);
+    }
+
+}
+
+impl Worker{
+    pub fn new(id: String, receiver: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<MessageWorker>>>) -> Self{
+        
+        let clonedId = id.clone();
+        let thread = tokio::spawn(async move{
+            let mut getReceiver = receiver.lock().await;
+            while let Some(msg) = getReceiver.recv().await{
+                log::info!("worker {} received task", clonedId);
+                match msg{
+                    MessageWorker::Task(job) => {
+                        job().await;
+                    },
+                    MessageWorker::Terminate => {
+                        println!("terminating worker");
+                        break;
+                    },
+                    MessageWorker::EventBuffer(buffer) => {
+                        let getData = buffer.events;
+                        let mut dataVector = getData.lock().await;
+                        while !dataVector.is_empty(){
+                            let getEvent = dataVector.pop();
+                            if getEvent.is_some(){
+                                let event = getEvent.unwrap();
+                                let job = event.task.clone();
+                                go!{
+                                    {
+                                        job(Event::default()).await;
+                                    }
+                                }
+                            }
+                        }
+
+                    },
+                }
+            }
+        });
+
+        // returning the built thread which has a receiver receiving constantly
+        Self { thread: Arc::new(thread), id, }
+    }
+
+}
+
+// function to create a new Job instance without using generic
+impl Job {
+    pub fn new(task: IoEvent, parent: Option<Arc<Job>>) -> Arc<Self> {
+        Arc::new(Job {
+            task,
+            parent,
+            children: Arc::new(tokio::sync::Mutex::new(Vec::new())),
+        })
+    }
+
+    pub async fn executeChildTasks(&mut self, root: Arc<Job>){
+        let mut queue = vec![root];
+        while !queue.is_empty(){
+            let getNode = queue.pop();
+            if getNode.is_some(){
+                let node = getNode.unwrap();
+                let clonedNode = node.clone();
+                // execute the task of this node
+                tokio::spawn(async move{
+                    let task = clonedNode.task.clone();
+                    task(Event::default()).await;
+                });
+                // push all the children of this node into the queue
+                let children = node.children.lock().await;
+                for child in children.clone().into_iter(){
+                    queue.push(child);
+                }
+            }
+        }
+    }
+
+    pub async fn pushTask(&mut self, child: Arc<Job>){
+        let getChildren = self.children.clone();
+        let mut children = getChildren.lock().await;
+        (*children).push(child);
+    }
+
+    pub async fn popTask(&mut self) -> Option<Arc<Job>>{
+        let getChildren = self.children.clone();
+        let mut children = getChildren.lock().await;
+        if children.is_empty(){
+            return None;
+        } else {
+            let child = (*children).pop();
+            return child;
+        }
     }
 }

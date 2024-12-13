@@ -3391,6 +3391,27 @@ async fn dynamic_static_dispatching1(){
 
 fn dynamic_static_dispatching2(){
 
+    // ===============================
+    // polymorphism with gat, a trait with gat can't be 
+    // made into an object safe trait
+    struct Model;
+    struct Player;
+    impl Player{
+        pub fn new() -> Player{
+            Self{}
+        }
+    }
+    trait Serviceam{
+        type Model;
+        fn getModel(&self) -> Self::Model;
+    }
+    impl Serviceam for Model{
+        type Model = Player;
+        fn getModel(&self) -> Self::Model{
+            Self::Model::new()
+        }
+    }
+
     // -------------------------------------------
     // ------------|callback function|------------
     // -------------------------------------------

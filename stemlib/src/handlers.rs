@@ -8,6 +8,8 @@
     runs it accordingly. 
 */
 
+use salvo::Router;
+
 use crate::*;
 use crate::messages::*;
 use crate::dto::*;
@@ -336,5 +338,37 @@ impl ActixMessageHandler<Execute> for Neuron{
             // execute the task in the background light thread
             tokio::spawn(job()); // tokio takes the job() and await on it inside a light thread
         }
+    }
+}
+
+impl ActixMessageHandler<TalkToContainer> for Container<Router>{ // use this to send the wake up message to a container
+    type Result = ();
+    fn handle(&mut self, msg: TalkToContainer, ctx: &mut Self::Context) -> Self::Result {
+        let TalkToContainer { msg, container } = msg.clone();
+        go!{
+            {
+                container.send(WakeUp { msg }).await;
+            }
+        }
+    }
+}
+
+impl ActixMessageHandler<WakeUp> for Container<Router>{ // use this to wake up a container
+    type Result = ();
+    fn handle(&mut self, msg: WakeUp, ctx: &mut Self::Context) -> Self::Result {
+        let WakeUp { msg } = msg.clone();
+        match msg{
+            MsgType::Serve => {
+                let host = self.host.clone();
+                let port = self.port.clone();
+            },
+            MsgType::Stop => {
+                ctx.stop();
+            },
+            _ => {
+                log::error!("not supported command for the container");
+            }
+        }
+
     }
 }

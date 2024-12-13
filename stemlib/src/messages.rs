@@ -11,6 +11,23 @@ use crate::dto::*;
 use std::pin::Pin;
 use std::future::Future;
 
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct TalkToContainer{
+    pub msg: MsgType,
+    pub container: Recipient<WakeUp> // to talk to the container we should send a WakeUp message
+}
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct WakeUp{
+    pub msg: MsgType
+}
+#[derive(Clone, Debug)]
+pub enum MsgType{
+    Serve,
+    Stop
+}
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]
 #[rtype(result = "()")]
@@ -98,19 +115,3 @@ pub struct ExecutePriodically{
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub struct Execute(pub Io, pub bool);
-
-// always pin the boxed or arced type specially future traits 
-// into the ram so Rust can dynamically allocate more space for 
-// them on the heap without moving them into a new location cause 
-// in that case we violate the ownership and pin rules.
-
-// an io type is an arced closure which returns a pinned boxed 
-// version of an async object or future trait
-pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
-    + Send + Sync + 'static>> 
-    + Send + Sync + 'static>;
-
-// io event
-pub type IoEvent = Arc<dyn Fn(Event) -> Pin<Box<dyn std::future::Future<Output = ()> 
-    + Send + Sync + 'static>> 
-    + Send + Sync + 'static>;

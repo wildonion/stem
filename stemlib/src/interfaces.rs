@@ -6,7 +6,7 @@ use crate::impls::*;
 use crate::dto::*;
 use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
-
+use salvo::Router;
 
 
 pub trait ShaHasher{
@@ -43,4 +43,9 @@ pub trait ObjectStorage{ // the trait supports polymorphism over the fId
     // comapare the current checksum against the passed in file 
     // this is useful to detect steghided pictures and files
     fn checksum(&mut self, file: &mut [u8]) -> bool; 
+}
+
+pub trait Service<R>: Send + Sync + 'static{
+    // build router tree for the current dto
+    fn buildRouters(&mut self) -> R;
 }

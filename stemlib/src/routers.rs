@@ -75,6 +75,16 @@ pub async fn report(
 }
 
 
+#[handler]
+pub async fn getAllEntitiesHandler(
+    req: &mut Request,
+    res: &mut Response,
+    depot: &mut Depot,
+    ctrl: &mut FlowCtrl
+){}
+
+
+
 pub async fn buildRouters() -> Router{
     
     let routers = Router::with_path("/report/")
