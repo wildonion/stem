@@ -5,12 +5,11 @@ use std::future::Future;
 use std::sync::{Arc, Condvar};
 use std::thread::{self, JoinHandle};
 use crate::*;
-use actix_web::web::to;
-use actix_web::Handler;
 use clap::error;
 use deadpool_redis::redis::AsyncCommands;
+use deadpool_redis::Connection;
 use interfaces::{Crypter, ObjectStorage};
-use salvo::Router;
+use salvo::{FlowCtrl, Router};
 use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
 use stemlib::dto::{Neuron, TransmissionMethod, *};
@@ -23,34 +22,70 @@ use stemlib::dsl::*;
 
 
 #[tokio::test]
-pub async fn testNeuronActor(){
+pub async fn onionEnv(){
 
-    use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
-    let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
-    let redisHost = "0.0.0.0";
-    let redisPort = 6379;
-    let redisUsername = "";
-    let redis_conn_url = if !redisPassword.is_empty(){
-        format!("redis://:{}@{}:{}", redisPassword, redisHost, redisPort)
-    } else if !redisPassword.is_empty() && !redisUsername.is_empty(){
-        format!("redis://{}:{}@{}:{}", redisUsername, redisPassword, redisHost, redisPort)
-    } else{
-        format!("redis://{}:{}", redisHost, redisPort)
-    };
-    let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
-    let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
 
-    let Ok(redisConn) = redis_pool.get().await else{
-        panic!("can't get redis connection from the pool");
+    //============== a ctx has an environment and containers
+    // environment: executor and agents / executor: runner
+
+    let entityContainer = Container{
+        service: Arc::new(EntityDto), 
+        id: Uuid::new_v4().to_string(),
+        host: String::from("0.0.0.0"),
+        port: 2875
+    }; // create a container for this service
+
+    let uploadDriverContainer = Container{
+        service: Arc::new(LocalFileDriver{
+            content: {
+                // calling the save() of the interface on the driver instance
+                // we can do this since the interface is implemented for the struct
+                // and we can override the methods
+                let mut file = tokio::fs::File::open("Data.json").await.unwrap();
+                let mut buffer = vec![];
+                let readBytes = file.read_buf(&mut buffer).await.unwrap();
+                let mut secureCellConfig = SecureCellConfig::default();
+                buffer.encrypt(&mut secureCellConfig);
+                Arc::new(buffer)
+            }, 
+            path: String::from("here.txt")
+        }),
+        id: Uuid::new_v4().to_string(),
+        host: String::from("0.0.0.0"),
+        port: 8375
     };
+
+    // start both containers as actors
+    let entityContainerActor = entityContainer.start();
+    let uploadDriverContainerActor = uploadDriverContainer.start();
+    
+    // entityContainerActor wants to talk with the uploadDriverContainerActor
+    entityContainerActor.send(
+        TalkToContainer{
+            msg: MsgType::Serve, 
+            container: uploadDriverContainerActor.clone().recipient()
+        }
+    ).await;
+    let ctx = AppContext::new().await
+        .pushContainer(entityContainerActor)
+        .pushContainer(uploadDriverContainerActor);
+
+    // get the first contianer actor
+    let c1 = ctx.containers.get(1).unwrap();
+
+    // neuron agents
+    let getAgents = ctx.env.agents;
+    let agents = getAgents.lock().await;
+
+    let mut neuron1 = agents.get(0).unwrap().to_owned();
+    let mut neuron = agents.get(1).unwrap().to_owned();
+
     
     // redisConn must be mutable and since we're moving it into another thread 
     // we should make it safe to gets moved and mutated using Arc and Mutex
-    let arcedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
+    let arcedRedisConn = setupRedis().await;
     let clonnedRedisConn = arcedRedisConn.clone();
 
-    let mut neuron1 = Neuron::new(100, "Neuron1").await;
-    let mut neuron = Neuron::new(100, "Neuron2").await;
     
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
     let getNeuronId = neuron.peerId.to_base58();
@@ -209,357 +244,29 @@ pub async fn testNeuronActor(){
         )
     ).await;
 
-    log::info!("executed all..");
-
 
 }
 
-pub async fn onionEnv(){
 
-    // trait based service container (proxy design pattern)
+pub async fn setupRedis() -> Arc<tokio::sync::Mutex<Connection>>{
+    use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
+    let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
+    let redisHost = "0.0.0.0";
+    let redisPort = 6379;
+    let redisUsername = "";
+    let redis_conn_url = if !redisPassword.is_empty(){
+        format!("redis://:{}@{}:{}", redisPassword, redisHost, redisPort)
+    } else if !redisPassword.is_empty() && !redisUsername.is_empty(){
+        format!("redis://{}:{}@{}:{}", redisUsername, redisPassword, redisHost, redisPort)
+    } else{
+        format!("redis://{}:{}", redisHost, redisPort)
+    };
+    let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
+    let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
 
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-    use std::pin::Pin;
-    use tokio::sync::mpsc::{Sender, Receiver};
-
-    // ======== io jobs and tasks
-    pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
-        + Send + Sync + 'static>> 
-        + Send + Sync + 'static>;
-
-    // io event
-    pub type IoEvent = Arc<dyn Fn(Event<String>) -> Pin<Box<dyn std::future::Future<Output = ()> 
-        + Send + Sync + 'static>> 
-        + Send + Sync + 'static>;
-    
-    struct Task<R, T: Fn() -> R + Send + Sync + 'static> where
-        R: Future<Output=()> + Send + Sync + 'static{
-        pub task: Arc<T>,
-        pub io: Io,
-    }
-    
-    #[derive(Clone)]
-    struct Event<T>{
-        pub datum: T,
-        pub timestamp: i64
-    }
-    
-    #[derive(Clone)]
-    struct Buffer<G>{
-        pub data: Arc<Mutex<Vec<G>>>,
-        pub size: usize
-    }
-
-    #[derive(Clone)]
-    struct PipeLine{
-        pub tags: Vec<String>,
-        pub pid: String,
-        pub job: Job
-    }
-    
-    // job node
-    #[derive(Clone)]
-    struct Job{
-        pub taks: Io,
-        pub parent: Arc<Job>, // use Arc to break the cycle
-        pub children: Arc<Mutex<Vec<Job>>>
-    }
-    
-    #[derive(Clone)]
-    enum RunnerStatus{
-        Started,
-        Halted,
-        Executed
-    }
-    
-    #[derive(Clone)]
-    struct Executor{
-        pub runner: RunnerActorThreadPoolEventLoop,
-    }
-
-    impl Environment{
-        pub fn new(envName: String) -> Self{
-            Self { env_name: envName, 
-            executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10) } }
-        }
-    }
-    
-    #[derive(Clone)]
-    struct Environment{
-        pub env_name: String,
-        pub executor: Executor,
-    }
-
-    // ============== the app context
-    #[derive(Clone)]
-    struct AppContext{
-        pub containers: Vec<Addr<Container>>,
-        pub env: Environment
-    }
-    impl AppContext{
-        pub fn new() -> Self{
-            Self { containers: vec![], env: Environment::new(String::from("onionEvn013")) }
-        }
-        pub fn pushContainer(&mut self, container: Addr<Container>) -> Self{
-            let Self{containers, env} = self;
-            containers.push(container);
-            Self{containers: containers.to_vec(), env: env.clone() }
-        }
-    }
-    #[derive(Clone)]
-    struct UserDto;
-    trait Service{
-        // build router tree for the current dto
-        fn buildRouters(&mut self) -> Router;
-    }
-    // ============== implementations
-    impl Service for UserDto{
-        fn buildRouters(&mut self) -> Router{
-            let router = Router::new();
-            // possibly post and get routers
-            // ...
-            router
-        }
-    }
-    impl Service for MinIoDriver{
-        fn buildRouters(&mut self) -> Router {
-            let router = Router::new();
-            // possibly post and get routers
-            // ...
-            router      
-        }
-    }
-    impl Service for LocalFileDriver{
-        fn buildRouters(&mut self) -> Router {
-            let router = Router::new();
-            // possibly post and get routers
-            // ...
-            router      
-        }
-    }
-
-    // ============== the container actors
-    #[derive(Clone)]
-    struct Container{
-        // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
-        // Arc makes the whole service field cloneable cause the container must be cloneable 
-        // to return updated context when pushing new container into its vector 
-        service: Arc<dyn Service>, // dependency injection
-        id: String,
-        // a service must have host and port
-        host: String,
-        port: u16
-    }
-    let user = UserDto;
-    let userContainer = Container{
-        service: Arc::new(user), 
-        id: Uuid::new_v4().to_string(),
-        host: String::from("0.0.0.0"),
-        port: 2875
-    }; // create a container for this service
-
-    let uploadDriverContainer = Container{
-        service: Arc::new(LocalFileDriver{
-            content: {
-                // calling the save() of the interface on the driver instance
-                // we can do this since the interface is implemented for the struct
-                // and we can override the methods
-                let mut file = tokio::fs::File::open("Data.json").await.unwrap();
-                let mut buffer = vec![];
-                let readBytes = file.read_buf(&mut buffer).await.unwrap();
-                let mut secureCellConfig = SecureCellConfig::default();
-                buffer.encrypt(&mut secureCellConfig);
-                Arc::new(buffer)
-            }, 
-            path: String::from("here.txt")
-        }),
-        id: Uuid::new_v4().to_string(),
-        host: String::from("0.0.0.0"),
-        port: 8375
+    let Ok(redisConn) = redis_pool.get().await else{
+        panic!("can't get redis connection from the pool");
     };
 
-    // buffer now contains the encrypted data, no need to mutex the buffer 
-    // cause we don't want to modify the buffer, calling save() method requires 
-    // the type to implement the ObjectStorage trait
-    // let mut fileDriver = uploadDriverContainer.service;
-    // fileDriver.save().await;
-
-    // actor setup
-    impl Actor for Container{
-        type Context = Context<Self>;
-        fn started(&mut self, ctx: &mut Self::Context) {
-            println!("the container {} started", self.id);
-        }
-    }
-    #[derive(Message, Clone, Debug)]
-    #[rtype(result = "()")]
-    pub struct TalkTo{
-        pub msg: MsgType,
-        pub container: Recipient<WakeUp> // to talk to the container we should send a WakeUp message
-    }
-    #[derive(Message, Clone, Debug)]
-    #[rtype(result = "()")]
-    struct WakeUp{
-        pub msg: MsgType
-    }
-    #[derive(Clone, Debug)]
-    enum MsgType{
-        Serve,
-        Stop
-    }
-    impl actix::Handler<TalkTo> for Container{ // use this to send the wake up message to a container
-        type Result = ();
-        fn handle(&mut self, msg: TalkTo, ctx: &mut Self::Context) -> Self::Result {
-            let TalkTo { msg, container } = msg.clone();
-            go!{
-                {
-                    container.send(WakeUp { msg }).await;
-                }
-            }
-        }
-    }
-    impl actix::Handler<WakeUp> for Container{ // use this to wake up a container
-        type Result = ();
-        fn handle(&mut self, msg: WakeUp, ctx: &mut Self::Context) -> Self::Result {
-            let WakeUp { msg } = msg.clone();
-            match msg{
-                MsgType::Serve => {
-                    let host = self.host.clone();
-                    let port = self.port.clone();
-                },
-                MsgType::Stop => {
-                    ctx.stop();
-                },
-                _ => {
-                    log::error!("not supported command for the container");
-                }
-            }
-
-        }
-    }
-    let userContainerActor = userContainer.start();
-    let uploadDriverContainerActor = uploadDriverContainer.start();
-    userContainerActor.send(
-        TalkTo{
-            msg: MsgType::Serve, 
-            container: uploadDriverContainerActor.clone().recipient()
-        }
-    ).await;
-    let ctx = AppContext::new()
-        .pushContainer(userContainerActor)
-        .pushContainer(uploadDriverContainerActor);
-
-    // ============== the runner actor threadpool
-    #[derive(Clone)]
-    struct Worker{
-        pub thread: Arc<tokio::task::JoinHandle<()>>,
-        pub id: String
-    }
-
-    impl Worker{
-        pub fn new(id: String, receiver: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Message>>>) -> Self{
-            
-            let clonedId = id.clone();
-            let thread = tokio::spawn(async move{
-                let mut getReceiver = receiver.lock().await;
-                while let Some(msg) = getReceiver.recv().await{
-                    log::info!("worker {} received task", clonedId);
-                    match msg{
-                        Message::Task(job) => {
-                            job().await;
-                        },
-                        Message::Terminate => {
-                            println!("terminating worker");
-                            break;
-                        },
-                        Message::EventBuffer(buffer) => {
-                            let getData = buffer.data;
-                            let mut dataVector = getData.lock().await;
-                            while !dataVector.is_empty(){
-                                let getEvent = dataVector.pop();
-                                if getEvent.is_some(){
-                                    let event = getEvent.unwrap();
-                                    let job = event.datum;
-                                    go!{
-                                        {
-                                            job().await;
-                                        }
-                                    }
-                                }
-                            }
-
-                        },
-                    }
-                }
-            });
-
-            // returning the built thread which has a receiver receiving constantly
-            Self { thread: Arc::new(thread), id, }
-        }
-    }
-
-    enum Message{
-        EventBuffer(Buffer<Event<Io>>),
-        Task(Io),
-        Terminate
-    }
-
-    #[derive(Clone)]
-    struct RunnerActorThreadPoolEventLoop{
-        pub workers: Vec<Worker>,
-        pub buffer: Buffer<Event<Io>>,
-        pub sender: tokio::sync::mpsc::Sender<Message>,
-        pub eventLoop: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Message>>>,
-        pub pods: Vec<PipeLine>,
-        pub id: String,
-        pub status: RunnerStatus
-    }
-
-    // terminating all workers when the instance is going to be dropped
-    impl Drop for RunnerActorThreadPoolEventLoop{
-        fn drop(&mut self) {
-            println!("sending terminate message");
-            for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
-                let clonedSender = self.sender.clone();
-                // send the terminate message in the background thread
-                tokio::spawn(async move{
-                    clonedSender.send(Message::Terminate).await;
-                });
-            }
-            println!("shutting down all workers");
-            for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
-                worker.thread.abort(); // abort the future object
-            }
-        }    
-    } 
-
-    impl RunnerActorThreadPoolEventLoop{
-        pub fn new(size: usize) -> Self{
-
-            let (tx, rx) = tokio::sync::mpsc::channel::<Message>(100);
-            let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
-            
-            Self{ buffer: Buffer { data: Arc::new(Mutex::new(vec![])), size: 100 }, workers: {
-                (0..size)
-                .into_iter()
-                .map(|idx| {
-                    Worker::new(Uuid::new_v4().to_string(), eventLoop.clone())
-                })
-                .collect::<Vec<Worker>>()
-            }, sender: tx,  eventLoop, pods: vec![], 
-                id: Uuid::new_v4().to_string(), status: RunnerStatus::Started }
-        }
-        pub async fn spawn(&self, msg: Message){
-            let sender = self.sender.clone();
-            sender.send(msg).await;
-        }
-        pub async fn push(&mut self, job: Io){
-            let buffer = self.buffer.clone(); // clone to prevent the self from moving
-            let mut getData = buffer.data.lock().await;
-            (*getData).push(Event { datum: job, timestamp: chrono::Local::now().timestamp() });
-        }
-
-    }
-
+    Arc::new(tokio::sync::Mutex::new(redisConn))
 }

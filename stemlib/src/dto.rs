@@ -8,10 +8,12 @@
 use std::pin::Pin;
 use interfaces::ObjectStorage;
 use interfaces::ServiceExt1;
+use salvo::Router;
 use crate::*;
 use crate::messages::*;
 use crate::impls::*;
 use crate::handlers::*;
+use crate::interfaces::Service;
 
 pub type LapinPoolConnection = deadpool_lapin::Pool;
 
@@ -211,7 +213,14 @@ pub struct EventData{
 }
 
 #[derive(Clone)]
-pub struct Worker{
+pub struct PipeLine{
+    pub tags: Vec<String>,
+    pub pid: String,
+    pub job: Job
+}
+
+#[derive(Clone)]
+pub struct StdWorker{
     pub id: String,
     pub thread: std::sync::Arc<tokio::task::JoinHandle<()>>,
 }
@@ -237,27 +246,63 @@ pub struct InternalExecutor<Event>{
     pub eventloop: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Event>>> 
 }
 
+#[derive(Clone)]
+pub struct Job{ // Job tree
+    pub task: IoEvent,
+    pub parent: Option<Arc<Job>>, // use Arc to break the cycle to avoid memory leaks
+    pub children: Arc<tokio::sync::Mutex<Vec<Arc<Job>>>>
+}
+
+// Pin, Arc, Box are smart pointers Pin pin the pointee into the ram 
+// at an stable position which won't allow the type to gets moved.
+#[derive(Clone)]
+struct Task1<Fut, T: Fn(Event) -> Fut + Send + Sync + 'static> where
+    Fut: Future<Output=()> + Send + Sync + 'static{
+    pub task: Arc<T>,
+    pub io: Io,
+    pub ioEvent: IoEvent
+}
+
 // a job contains the io task 
-pub struct Job<J: Clone, S>
+pub struct Job0<J: Clone, S>
 where J: std::future::Future<Output = ()> + Send + Sync + 'static{
     pub id: String, 
     pub task: Task<J, S>,
     pub io: Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>> + Send + Sync + 'static >
 }
 
-// Pin, Arc, Box are smart pointers Pin pin the pointee into the ram 
-// at an stable position which won't allow the type to gets moved.
-struct Task0<R, F: Fn() -> std::pin::Pin<Arc<R>> + Send + Sync + 'static> where 
-R: std::future::Future<Output=()> + Send + Sync + 'static{
-    pub job: Arc<F>
+#[derive(Clone)]
+pub enum RunnerStatus{
+    Started,
+    Halted,
+    Executed
+}
+
+#[derive(Clone)]
+pub struct Executor{
+    pub runner: RunnerActorThreadPoolEventLoop,
+}
+
+#[derive(Clone)]
+pub struct Environment{
+    pub env_name: String,
+    pub executor: Executor,
+    pub agents: Arc<tokio::sync::Mutex<Vec<Neuron>>> // the neuron actor can be started later 
+}
+
+#[derive(Clone)]
+pub struct AppContext{
+    pub containers: Vec<Addr<Container<Router>>>,
+    pub env: Environment
 }
 
 // an event contains the offset in the cluster, execution status and the data
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct Event{
     pub data: EventData,
     pub status: EventStatus,
-    pub offset: u64, // the position of the event inside the brain network
+    pub timestamp: i64,
+    pub offset: Arc<AtomicU64>, // the position of the event inside the brain network
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -306,9 +351,9 @@ pub struct Neuron{
     pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,  /* -- all neuron atomic transactions -- */
     pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,         /* -- an internal lighthread worker -- */
     pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
-    pub internal_none_async_threadpool: std::sync::Arc<Option<RunnerActor>>, /* -- internal none async threadpool -- */
+    pub internal_none_async_threadpool: std::sync::Arc<Option<RunnerActor>>,         /* -- internal none async threadpool -- */
     pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
-    pub dependency: std::sync::Arc<dyn ServiceExt>,                                  /* -- inject any type that impls the ServiceExt trait as a dependency -- */
+    pub dependency: std::sync::Arc<dyn Service<Router>>,                             /* -- inject any type that impls the Service trait as a dependency -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
@@ -379,3 +424,57 @@ pub struct LocalFileDriver{
     pub content: Arc<Vec<u8>>,
     pub path: String,
 }
+
+#[derive(Clone)]
+pub struct EntityDto;
+
+#[derive(Clone)]
+pub struct Container<R>{
+    // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
+    // Arc makes the whole service field cloneable cause the container must be cloneable 
+    // to return updated context when pushing new container into its vector 
+    pub service: Arc<dyn Service<R>>, // dependency injection supports different router setup
+    pub id: String,
+    // a service must have host and port
+    pub host: String,
+    pub port: u16
+}
+
+pub enum MessageWorker{
+    EventBuffer(Buffer<Arc<Job>>),
+    Task(Io),
+    Terminate
+}
+
+#[derive(Clone)]
+pub struct RunnerActorThreadPoolEventLoop{
+    pub workers: Vec<Worker>,
+    pub buffer: Buffer<Arc<Job>>,
+    pub sender: tokio::sync::mpsc::Sender<MessageWorker>,
+    pub eventLoop: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<MessageWorker>>>,
+    pub pods: Vec<PipeLine>,
+    pub id: String,
+    pub status: RunnerStatus
+}
+
+#[derive(Clone)]
+pub struct Worker{
+    pub thread: Arc<tokio::task::JoinHandle<()>>,
+    pub id: String
+}
+
+// always pin the boxed or arced type specially future traits 
+// into the ram so Rust can dynamically allocate more space for 
+// them on the heap without moving them into a new location cause 
+// in that case we violate the ownership and pin rules.
+
+// an io type is an arced closure which returns a pinned boxed 
+// version of an async object or future trait
+pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()> 
+    + Send + Sync + 'static>> 
+    + Send + Sync + 'static>;
+
+// io event
+pub type IoEvent = Arc<dyn Fn(Event) -> Pin<Box<dyn std::future::Future<Output = ()> 
+    + Send + Sync + 'static>> 
+    + Send + Sync + 'static>;
