@@ -29,6 +29,14 @@
 use crate::*;
 
 
+
+#[macro_export]
+macro_rules! find {
+    ($pid:ident in $arr:expr) => {
+        $arr.into_iter().find(|e| e.pid == $pid)
+    };
+}
+
 #[macro_export]
 macro_rules! task {
     ($logic:block) => {

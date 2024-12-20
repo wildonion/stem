@@ -1,7 +1,6 @@
 
 ُREAD: desktop books for neuroscience mind and information theory
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
-TODO: publish to crate
 TODOs:
         1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
@@ -16,6 +15,7 @@ TODOs:
                         find the match with that order based on amount, quantity, side and the base/qoute
                         build atomic tx and execute the tx inside a lock and a light thread
                 neuron crypter based operations:
+                        Hiding correct information between wrong ones and its combination with zkp  
                         neuron ed25519 wallet to sign each message and verify in its handlers
                         contract and wallet over zk
                         encrypt the neuron object instance using aes256 encryption 
@@ -23,7 +23,6 @@ TODOs:
                         noise (ed25519) and rustls for secure communication between neurons in a brain (playground/app.rs)
                         #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network using mmio
                 ssh based keypair with ed25519 wallet: use a high entropy seed with mnemonic for the rng to generate the keypair then convert sig and keypair into hex/base64/base58
-                neuron instance sign messages with its ed25519 wallet prvkey like the one in ssh then verify in its handlers with pubkey
                 talking with the engine through rmq (rpc and streaming) p2p req-res
                 WalletServiceActorWorker (updatePrice/txCrawler/DepositActorWorker) 
                 DepositActorWorker checks the latest deposits to send the increase balance command to the WalletServiceActorWorker through rmq 
@@ -58,7 +57,6 @@ TODOs:
                 stockBotAgents for broker, sexchange with gemini service (attach stemlib to the app) in market() method:
                         stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 
                         salvoHttp2(stemlibGrpc) / ws, short http2 polling JobId <----stemlib.grpc.rmq.p2p---> gemini grpc pubsub worker(stemlibGrpcP2pRmq)
-                        impl Service for Dto{}: object storage, otp, migrator, default trait method impl
                         walletWorker, GeminiWorker, txPoolWorker, marketMatchEngineWorker 
                         Talk to match engine using gRPC and RMQ from the main http2 server: make an order -> server -stemlib.rmq-> matchEngine order pool 
                         services must talk with each other  based on their wallet and data signing  

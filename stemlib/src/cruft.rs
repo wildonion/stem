@@ -5210,6 +5210,23 @@ pub async fn neuron_actor_cruft(){
 
 pub async fn makeMeService(){
 
+    // accessing none ass methods of the trait
+    trait Test{
+        type ResultMe;
+        fn park();
+    }
+    struct Me{}
+    impl Test for Me{
+        type ResultMe = Self;
+        fn park() {
+            
+        }
+    }
+    let me = Me{};
+    fn getMe<M: Test>(me: M){
+        let park = <M as Test>::park();
+    }
+
     // multiple return type through polymorphism and gat
     pub trait RetType<T>{
         type Ret;

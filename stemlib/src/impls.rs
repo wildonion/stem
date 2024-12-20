@@ -9,7 +9,7 @@
 use deadpool_lapin::lapin::options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions};
 use deadpool_lapin::lapin::types::FieldTable;
 use deadpool_lapin::lapin::{Connection as LapinConnection, ConnectionProperties};
-use deadpool_lapin::{Config, Manager, Pool as LapinDeadPool, Runtime};
+use deadpool_lapin::{Config, Connection, Manager, Pool as LapinDeadPool, Runtime};
 use deadpool_lapin::lapin::{
     options::BasicPublishOptions,
     BasicProperties,
@@ -102,7 +102,6 @@ impl Neuron{
             internal_worker: None,
             transactions: None,
             internal_locker: None,
-            internal_none_async_threadpool: Arc::new(None),
             signal: std::sync::Arc::new(std::sync::Condvar::new()),
             contract: None,
             rmqPool: {
@@ -882,8 +881,8 @@ impl ServiceExt1 for C3{
     fn stopService(&mut self) {}
 }
 
-impl OnionStream for Neuron{
-    type Model = Neuron;
+impl OnionStream for Event{
+    type Model = Event;
 
     async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
             F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
@@ -1114,7 +1113,7 @@ impl Environment{
                 ]
             )
         ),
-        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10) } }
+        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10), id: thread::current().id } }
     }
 
     pub async fn pushAgent(&mut self, agent: Neuron){
@@ -1196,11 +1195,18 @@ impl Drop for RunnerActorThreadPoolEventLoop{
 } 
 
 impl RunnerActorThreadPoolEventLoop{
+
+    const MAX_WORKERS: usize = 10;
+
     pub fn new(size: usize) -> Self{
 
         let (tx, rx) = tokio::sync::mpsc::channel::<MessageWorker>(100);
         let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
         
+        if size > MAX_WORKERS{
+            return;
+        }
+
         Self{ buffer: Buffer { size: 100, events: Arc::new(tokio::sync::Mutex::new(vec![])) }, workers: {
             (0..size)
             .into_iter()
@@ -1208,9 +1214,48 @@ impl RunnerActorThreadPoolEventLoop{
                 Worker::new(Uuid::new_v4().to_string(), eventLoop.clone())
             })
             .collect::<Vec<Worker>>()
-        }, sender: tx,  eventLoop, pods: vec![], 
+        }, sender: tx,  eventLoop, pods: Arc::new(tokio::sync::Mutex::new(vec![])), 
             id: Uuid::new_v4().to_string(), status: RunnerStatus::Started }
     }
+
+    pub async fn pushPipeline(&mut self, pipeline: PipeLine) -> Self{
+        let getPipelines = self.pods.clone();
+        go!{
+            {
+                let mut pods = getPipelines.lock().await;
+                (*pods).push(pipeline);
+            }
+        }
+        self.clone()
+    }
+
+    // execute the passed in pipeline in a light thread
+    pub async fn executePipeline(&mut self, pid: String){
+        let getPipelines = self.pods.clone();
+        go!{ // run the whole logic in the background light thread
+            {
+                if let Ok(mut pods) = getPipelines.try_lock(){ // try to acquire the lock
+                    let getPipeline = find!{pid in pods.to_owned()};
+                    if let Some(p) = getPipeline{
+                        let stages = p.stages;
+                        for stage in stages{
+                            let jobs = stage.jobs;
+                            for job in jobs{
+                                go!{
+                                    {
+                                        let getTask = job.task;
+                                        getTask(Event::default()).await;
+                                    }
+                                }  
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+
     pub async fn spawn(&self, msg: MessageWorker){
         let sender = self.sender.clone();
         sender.send(msg).await;
@@ -1279,12 +1324,14 @@ impl Job {
     pub fn new(task: IoEvent, parent: Option<Arc<Job>>) -> Arc<Self> {
         Arc::new(Job {
             task,
+            weight: 100,
+            executorId: std::thread::current().id, // initially we've considered the current thead id for this
             parent,
             children: Arc::new(tokio::sync::Mutex::new(Vec::new())),
         })
     }
 
-    pub async fn executeChildTasks(&mut self, root: Arc<Job>){
+    pub async fn executeTasksOf(&mut self, root: Arc<Job>){
         let mut queue = vec![root];
         while !queue.is_empty(){
             let getNode = queue.pop();
@@ -1320,5 +1367,19 @@ impl Job {
             let child = (*children).pop();
             return child;
         }
+    }
+}
+
+// the implementation of cahcing event instances
+impl<T: Clone> Cacher for T{ // we can cache everything
+    
+    type Engine = deadpool_redis::Connection; // it can be redis or other caching system
+    
+    async fn cache(&mut self) {
+        let data = self.clone();
+        
+    }
+    async fn get(key: String) -> Result<String, String>{
+        todo!()
     }
 }

@@ -9,6 +9,7 @@ use std::pin::Pin;
 use interfaces::ObjectStorage;
 use interfaces::ServiceExt1;
 use salvo::Router;
+use thread::ThreadId;
 use crate::*;
 use crate::messages::*;
 use crate::impls::*;
@@ -215,8 +216,8 @@ pub struct EventData{
 #[derive(Clone)]
 pub struct PipeLine{
     pub tags: Vec<String>,
+    pub stages: Vec<Stage>,
     pub pid: String,
-    pub job: Job
 }
 
 #[derive(Clone)]
@@ -246,9 +247,19 @@ pub struct InternalExecutor<Event>{
     pub eventloop: std::sync::Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Event>>> 
 }
 
+
+#[derive(Clone)]
+pub struct Stage{
+    pub name: String,
+    pub id: String,
+    pub jobs: Vec<Job>
+}
+
 #[derive(Clone)]
 pub struct Job{ // Job tree
-    pub task: IoEvent,
+    pub task: IoEvent, // an io task with the event instance 
+    pub weight: u32,
+    pub executorId: std::thread::ThreadId,
     pub parent: Option<Arc<Job>>, // use Arc to break the cycle to avoid memory leaks
     pub children: Arc<tokio::sync::Mutex<Vec<Arc<Job>>>>
 }
@@ -262,6 +273,9 @@ struct Task1<Fut, T: Fn(Event) -> Fut + Send + Sync + 'static> where
     pub io: Io,
     pub ioEvent: IoEvent
 }
+
+#[derive(Clone)]
+struct useContext(pub Io, pub &[T]);
 
 // a job contains the io task 
 pub struct Job0<J: Clone, S>
@@ -280,6 +294,7 @@ pub enum RunnerStatus{
 
 #[derive(Clone)]
 pub struct Executor{
+    pub id: ThreadId,
     pub runner: RunnerActorThreadPoolEventLoop,
 }
 
@@ -351,7 +366,6 @@ pub struct Neuron{
     pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,  /* -- all neuron atomic transactions -- */
     pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,         /* -- an internal lighthread worker -- */
     pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
-    pub internal_none_async_threadpool: std::sync::Arc<Option<RunnerActor>>,         /* -- internal none async threadpool -- */
     pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
     pub dependency: std::sync::Arc<dyn Service<Router>>,                             /* -- inject any type that impls the Service trait as a dependency -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
@@ -433,7 +447,7 @@ pub struct Container<R>{
     // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
     // Arc makes the whole service field cloneable cause the container must be cloneable 
     // to return updated context when pushing new container into its vector 
-    pub service: Arc<dyn Service<R>>, // dependency injection supports different router setup
+    pub service: Arc<dyn Service<R>>, // dependency injection supports different router setup through dynamic dispatching
     pub id: String,
     // a service must have host and port
     pub host: String,
@@ -446,13 +460,19 @@ pub enum MessageWorker{
     Terminate
 }
 
+
+#[derive(Clone)]
+pub struct CronScheduler{
+    pub jobs: Vec<Job>
+}
+
 #[derive(Clone)]
 pub struct RunnerActorThreadPoolEventLoop{
     pub workers: Vec<Worker>,
     pub buffer: Buffer<Arc<Job>>,
     pub sender: tokio::sync::mpsc::Sender<MessageWorker>,
     pub eventLoop: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<MessageWorker>>>,
-    pub pods: Vec<PipeLine>,
+    pub pods: Arc<tokio::sync::Mutex<Vec<PipeLine>>>, // a runner might have multiple pipeline
     pub id: String,
     pub status: RunnerStatus
 }

@@ -3,10 +3,10 @@
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::sync::{Arc, Condvar};
-use std::thread::{self, JoinHandle};
+use std::thread::{self, park, JoinHandle};
 use crate::*;
 use clap::error;
-use deadpool_redis::redis::AsyncCommands;
+use deadpool_redis::redis::{AsyncCommands, RedisError};
 use deadpool_redis::Connection;
 use interfaces::{Crypter, ObjectStorage};
 use salvo::{FlowCtrl, Router};
@@ -24,9 +24,18 @@ use stemlib::dsl::*;
 #[tokio::test]
 pub async fn onionEnv(){
 
+    // a design pattern to create dto as a service and deploy
+    // them as a serverless obejct
+
+
+    // Dto ---> Container(DtoService) ---> Actor(Container)
+    // a dto can be registred as a service inside a container 
+    // a container has an id, host and port for the related service
+    // a container is an actor component that allows us to talk with other actor component; container talking
+    // ex: a container can send an MsgType::Serve message to another contianer to start the second container service on the defined host and port
+    // a container can receive and send messages from/to other containers and different parts of the app
 
     //============== a ctx has an environment and containers
-    // environment: executor and agents / executor: runner
 
     let entityContainer = Container{
         service: Arc::new(EntityDto), 
@@ -66,6 +75,42 @@ pub async fn onionEnv(){
             container: uploadDriverContainerActor.clone().recipient()
         }
     ).await;
+
+
+    let appContext = 
+        ctx!{
+            containers: [ // containers
+
+                // all the following dtos must implement the Service trait
+                /* ------------
+                |   service 1
+                */ 
+                fileService: LocalFileDriver{
+                    content: {
+                        // calling the save() of the interface on the driver instance
+                        // we can do this since the interface is implemented for the struct
+                        // and we can override the methods
+                        let mut file = tokio::fs::File::open("Data.json").await.unwrap();
+                        let mut buffer = vec![];
+                        let readBytes = file.read_buf(&mut buffer).await.unwrap();
+                        let mut secureCellConfig = SecureCellConfig::default();
+                        buffer.encrypt(&mut secureCellConfig);
+                        Arc::new(buffer)
+                    }, 
+                    path: String::from("here.txt")
+                } @ 0.0.0.0:2222, // local file driver object as service hosted on port 2222
+                
+                /* ------------
+                |   service 2
+                */ 
+                entityService: EntityDto{
+
+                } @ 0.0.0.0:1345 // entity dto object as service hosted on port 1345
+            
+            ]
+        };
+
+    // push the containers into the app context
     let ctx = AppContext::new().await
         .pushContainer(entityContainerActor)
         .pushContainer(uploadDriverContainerActor);
@@ -80,11 +125,10 @@ pub async fn onionEnv(){
     let mut neuron1 = agents.get(0).unwrap().to_owned();
     let mut neuron = agents.get(1).unwrap().to_owned();
 
-    
     // redisConn must be mutable and since we're moving it into another thread 
     // we should make it safe to gets moved and mutated using Arc and Mutex
     let arcedRedisConn = setupRedis().await;
-    let clonnedRedisConn = arcedRedisConn.clone();
+    let clonnedRedisConn = Arc::new(tokio::sync::Mutex::new(arcedRedisConn.unwrap()));
 
     
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
@@ -107,7 +151,7 @@ pub async fn onionEnv(){
         println!("i'm running every 10 seconds, with retries of 12 and timeout 0");
     }, 10, 12, 0).await;
 
-    // -----------------------------------------------------------------
+    // --------------------------
     // ------- sending message through actor mailbox eventloop receiver:
     // by default actors run on the system arbiter thread using 
     // its eventloop, we can run multiple instances of an actor 
@@ -153,7 +197,7 @@ pub async fn onionEnv(){
             local_spawn: todo!(),
             // this is a callback that will be executed per each received event
             callback: Arc::new(|event| Box::pin({
-                
+
                 // clone before going into the async move{} scope
                 let clonnedRedisConn = clonnedRedisConn.clone();
                 async move{
@@ -175,7 +219,7 @@ pub async fn onionEnv(){
                         let eventId = event.clone().data.id;
                         let eventString = serde_json::to_string(&event).unwrap();
                         let redisKey = format!("cahceEventWithId: {}", eventId);
-                        let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap();
+                        let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap(); // cache for 5 mins
                     });
                     /* ------------------------------------------------------------ */
     
@@ -247,8 +291,8 @@ pub async fn onionEnv(){
 
 }
 
-
-pub async fn setupRedis() -> Arc<tokio::sync::Mutex<Connection>>{
+type RedisConnResult = Result<Connection, deadpool_redis::PoolError>;
+pub async fn setupRedis() -> RedisConnResult{
     use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
     let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
     let redisHost = "0.0.0.0";
@@ -264,9 +308,7 @@ pub async fn setupRedis() -> Arc<tokio::sync::Mutex<Connection>>{
     let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
     let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
 
-    let Ok(redisConn) = redis_pool.get().await else{
-        panic!("can't get redis connection from the pool");
-    };
+    let conn = redis_pool.get().await;
+    conn
 
-    Arc::new(tokio::sync::Mutex::new(redisConn))
 }

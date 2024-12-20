@@ -162,7 +162,7 @@ use std::error::Error;
 use std::future::Future;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::process::Output;
-use actor::workerthreadpool::sync::RunnerActor;
+use cruft_::workerthreadpool::sync::RunnerActor;
 use interfaces::ServiceExt;
 use task::Task;
 use task::TaskStatus;
@@ -178,7 +178,7 @@ const APP_NAME: &str = "stemlib";
 
 pub mod cruft;
 pub mod task;
-pub mod actor;
+pub mod cruft_;
 pub mod tx;
 pub mod interfaces;
 pub mod dsl;

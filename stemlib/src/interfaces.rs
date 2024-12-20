@@ -47,5 +47,12 @@ pub trait ObjectStorage{ // the trait supports polymorphism over the fId
 
 pub trait Service<R>: Send + Sync + 'static{
     // build router tree for the current dto
+    // the trait is generic over any router 
     fn buildRouters(&mut self) -> R;
+}
+
+pub trait Storage{
+    type Engine;
+    async fn store(&mut self);
+    async fn fetch(key: String) -> Result<String, String>;
 }
