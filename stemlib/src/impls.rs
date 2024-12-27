@@ -2,7 +2,7 @@
 
 
 /* ------------------------------- implementations: 
-    schemas implementations 
+    dtos, schemas and interface implementations 
 */
 
 
@@ -14,10 +14,13 @@ use deadpool_lapin::lapin::{
     options::BasicPublishOptions,
     BasicProperties,
 };
+use deadpool_redis::redis::{AsyncCommands, RedisResult};
 use futures::StreamExt;
 use log4rs::append;
+use misc::setupRedis;
 use rayon::string;
 use routers::getAllEntitiesHandler;
+use salvo::conn::TcpListener;
 use tokio::io::AsyncWriteExt;
 use uuid::timestamp::context;
 use wallexerr::misc::Wallet;
@@ -25,7 +28,7 @@ use crate::*;
 use crate::messages::*;
 use crate::dto::*;
 use crate::interfaces::*;
-use salvo::Router;
+use salvo::{Listener, Router, Server};
 
 
 impl Drop for Neuron{
@@ -50,7 +53,7 @@ impl Neuron{
             /* *********************************************************** */
             /* **************** BUILDING SYNAPSE PROTOCOL **************** */
             /* *********************************************************** */
-            synProt: { 
+            synProt: {
                 // building the swarm object with our network behaviour contains our synapse protocol
                 let mut swarm = SwarmBuilder::with_new_identity()
                 .with_tokio()
@@ -117,7 +120,6 @@ impl Neuron{
                 let lapin_pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
                 Arc::new(lapin_pool)
             },
-            dependency: std::sync::Arc::new(AppService{}),
             state: 0 // this can be mutated by sending the update state message to the actor
         }
     }
@@ -805,82 +807,45 @@ impl Actor for Neuron{
     
 }
 
-impl ObjectStorage for MinIoDriver{
 
-    async fn save(&mut self) {
+/// a distributed object storage to store objects (instances and files) on ram
+impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync> ObjectStorage for T{
+    
+    /// store the object on ram
+    async fn store(&mut self) -> String {
+    
+        let redisPool = setupRedis().await.unwrap();
+        let mut conn = redisPool.get().await.unwrap();
+        
+        let data = self.clone();
+        let mut objId = Uuid::new_v4().to_string();
+        objId.hashMe();
+        let string = serde_json::to_string(&data).unwrap();
+        let _: () = conn.set(&objId, &string).await.unwrap();
+
+        objId
+    }
+
+    /// fetch the object from ram
+    async fn fetch(key: &str) -> Vec<u8> {
+
+        let redisPool = setupRedis().await.unwrap();
+        let mut conn = redisPool.get().await.unwrap();
+        
+        let value: String = conn.get(key).await.unwrap();
+        let data = value.as_bytes();
+        data.to_vec()
         
     }
-    async fn getFile(&mut self, fId: String) -> &[u8] {
-        let file = &[0];
-        file
-    }
 
-    fn checksum(&mut self, file: &mut [u8]) -> bool {
+    /// check that either two objects are the same or not
+    fn checksum(&mut self, objId: &str) -> bool {
         true
     }
+
 }
 
-impl ObjectStorage for SeaFileDriver{
-
-    async fn save(&mut self) {
-        
-    }
-    async fn getFile(&mut self, fId: String) -> &[u8] {
-        let file = &[0];
-        file
-    }
-
-    fn checksum(&mut self, file: &mut [u8]) -> bool {
-        true
-    }
-}
-
-impl ObjectStorage for DigiSpaces{
-    
-    async fn save(&mut self){
-        
-    }
-    async fn getFile(&mut self, fId: String) -> &[u8]{
-        let file = &[0];
-        file
-    }
-    
-    fn checksum(&mut self, file: &mut [u8]) -> bool {
-        true
-    }
-}
-
-impl ObjectStorage for LocalFileDriver{
-    
-    async fn getFile(&mut self, fId: String) -> &[u8] {
-        let file = &[0]; // object file or bytes
-        file
-    }
-    async fn save(&mut self) {
-        let content = &self.content;
-        let mut file = tokio::fs::File::open(&self.path).await.unwrap();
-        file.write_all(content).await;
-    }
-    fn checksum(&mut self, file: &mut [u8]) -> bool {
-        true
-    }
-}
-
-// make C3 as an isolated actor worker (message passing, interval execution in light thread) 
-impl Actor for C3{
-    type Context = Context<Self>;
-}
-
-// impl the interface for any T
-// impl<T> ServiceExt1 for T{
-//     fn startService(&mut self) {}
-//     fn stopService(&mut self) {}
-// }
-impl ServiceExt1 for C3{
-    fn startService(&mut self) {}
-    fn stopService(&mut self) {}
-}
-
+/// this would allows us to stream over an event like sending and receiving events and executing callbacks
 impl OnionStream for Event{
     type Model = Event;
 
@@ -892,85 +857,7 @@ impl OnionStream for Event{
         // or sent events on redis or inside db , the process can be done inside 
         // the callback instead of handling it in here
 
-        let get_internal_executor = &self.clone().internal_executor;
-        let get_events = get_internal_executor.buffer.events.lock().await;
-        let cloned_get_internal_executor = get_internal_executor.clone();
-        let last_event = get_events.last().unwrap();
-
-        // in order to use * or deref mark on last_event the Copy trait must be implemented 
-        // for the type since the Copy is not implemented for heap data types thus we should 
-        // use clone() method on them to return the owned type.
-        let owned_last_event = last_event.clone();
-
-        match eventType{
-            "send" => {
-
-                match streamer{
-                    "local" => { // use internal executor channel and eventloop receiver
-                        // sending in the background
-                        let first_token_last_event = owned_last_event.clone();
-                        
-                        // spawn an event for the executor, this would send the event into the channel
-                        // in the background lightweight thread
-                        tokio::spawn(async move{
-                            match cloned_get_internal_executor.spawn(first_token_last_event).await{
-                                Ok(this) => {
-                                    tokio::spawn(
-                                        callback(
-                                            owned_last_event.to_owned(), 
-                                            None
-                                        )
-                                    );
-                                },
-                                Err(e) => {
-                                    tokio::spawn(
-                                        callback(
-                                            owned_last_event.to_owned(), 
-                                            Some(StreamError::Sender(e.source().unwrap().to_string()))
-                                        )
-                                    );
-                                }
-                            }
-                        });
-
-                        self.clone()
-
-                    },
-                    "rmq" => {
-                        self.clone()
-                    },
-                    _ => {
-                        log::error!("unknown streamer!");
-                        self.clone()
-                    },
-                }
-            },
-            "receive" => {
-                match streamer{
-                    "local" => { // use internal executor channel and eventloop receiver
-                        // running the eventloop to receive event streams from the channel 
-                        // this would be done in the background lightweight thread, we've passed
-                        // the callback to execute it in there
-                        tokio::spawn(async move{
-                            cloned_get_internal_executor.run(callback).await;
-                        });
-                        self.clone()
-                    },
-                    "rmq" => {
-                        self.clone()
-                    },
-                    _ => {
-                        log::error!("unknown streamer!");
-                        self.clone()
-                    }
-                }
-
-            },
-            _ => {
-                log::info!("unknown event type!");
-                self.clone()
-            }
-        }
+        todo!()
 
     }
     
@@ -1094,15 +981,6 @@ impl ShaHasher for String{
     }
 }
 
-impl ServiceExt for AppService{
-    fn start(&mut self) {
-        
-    }
-    fn status(&self) {
-        
-    }
-}
-
 impl Environment{
     pub async fn new(envName: String) -> Self{
         Self { env_name: envName, agents: Arc::new(
@@ -1113,7 +991,7 @@ impl Environment{
                 ]
             )
         ),
-        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10), id: thread::current().id } }
+        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10), id: thread::current().id() } }
     }
 
     pub async fn pushAgent(&mut self, agent: Neuron){
@@ -1127,49 +1005,55 @@ impl AppContext{
     pub async fn new() -> Self{
         Self { containers: vec![], env: Environment::new(String::from("onionEvn013")).await }
     }
-    pub fn pushContainer(&mut self, container: Addr<Container<Router>>) -> Self{
+    pub fn pushContainer(&mut self, container: Addr<Container>) -> Self{
         let Self{containers, env} = self;
-        containers.push(container);
+        containers.push(Arc::new(container));
         Self{containers: containers.to_vec(), env: env.clone() }
     }
+    pub fn getContainers(&self) -> Vec<Arc<Addr<Container>>>{
+        let containers = self.clone().containers;
+        containers
+    }
+
 }
 
-impl Service<Router> for AppService{
-    fn buildRouters(&mut self) -> Router {
-        Router::new()
+impl Container{
+
+    pub fn deploy(&mut self){
+        let host = &self.host;
+        let port = self.port;
+        let mut service = Arc::clone(&self.service);
+        service.startService(host, port);
     }
 }
 
-impl Service<Router> for EntityDto{
-    fn buildRouters(&mut self) -> Router{
-        let router = Router::with_path("/user-dto")
-            .push(
-                Router::with_path("/get-all")
-                .post(getAllEntitiesHandler)
-            );
-        router
+// impl Service for dtos
+impl Service for WalletDto{
+    fn startService(&self, host: &str, port: u16){
+        let host = host.to_string();
+        go!{
+            {
+                let router = routers::buildRouters();
+                let acceptor = TcpListener::new(&format!("{}:{}", host, port)).bind().await;
+                Server::new(acceptor).serve(router).await;
+            }
+        }
     }
 }
 
-impl Service<Router> for MinIoDriver{
-    fn buildRouters(&mut self) -> Router {
-        let router = Router::new();
-        // possibly post and get routers
+impl Service for MinIoDriver{
+    fn startService(&self, host: &str, port: u16) {
         // ...
-        router      
     }
 }
 
-impl Service<Router> for LocalFileDriver{
-    fn buildRouters(&mut self) -> Router {
-        let router = Router::new();
-        // possibly post and get routers
+impl Service for LocalFileDriver{
+    fn startService(&self, host: &str, port: u16) {
         // ...
-        router      
     }
 }
 
-impl Actor for Container<Router>{
+impl Actor for Container{
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
         println!("the container {} started", self.id);
@@ -1183,6 +1067,7 @@ impl Drop for RunnerActorThreadPoolEventLoop{
         for worker in &self.workers{ // Worker doesn't implement Clone, we're borrowing it
             let clonedSender = self.sender.clone();
             // send the terminate message in the background thread
+            // so all spawned workers stops executing 
             tokio::spawn(async move{
                 clonedSender.send(MessageWorker::Terminate).await;
             });
@@ -1196,17 +1081,15 @@ impl Drop for RunnerActorThreadPoolEventLoop{
 
 impl RunnerActorThreadPoolEventLoop{
 
-    const MAX_WORKERS: usize = 10;
+    pub const MAX_WORKERS: usize = 10;
 
     pub fn new(size: usize) -> Self{
 
         let (tx, rx) = tokio::sync::mpsc::channel::<MessageWorker>(100);
         let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
         
-        if size > MAX_WORKERS{
-            return;
-        }
-
+        assert!(size < Self::MAX_WORKERS, "reached maximum workers");
+        
         Self{ buffer: Buffer { size: 100, events: Arc::new(tokio::sync::Mutex::new(vec![])) }, workers: {
             (0..size)
             .into_iter()
@@ -1261,12 +1144,19 @@ impl RunnerActorThreadPoolEventLoop{
         sender.send(msg).await;
     }
     pub async fn push(&mut self, job: Job){
+        
         let buffer = self.buffer.clone(); // clone to prevent the self from moving
+
+        // if the events was locked any thread that needs the events will be blocked until the lock gets freed
+        // caller thread will always block if the mutex is locked
         let mut getData = buffer.events.lock().await;
 
+        // the parent and the root job
         let rootJob = Job::new(Arc::new(|event| Box::pin(async move{
             println!("rootJob task => {:?}", event);
         })), None);
+
+        // the child job
         let childJob = Job::new(Arc::new(|event| Box::pin(async move{
             println!("childJob task => {:?}", event);
         })), Some(rootJob));
@@ -1286,11 +1176,16 @@ impl Worker{
                 log::info!("worker {} received task", clonedId);
                 match msg{
                     MessageWorker::Task(job) => {
-                        job().await;
+                        // executing the job in the background thread
+                        go!{
+                            {
+                                job().await;
+                            }
+                        }
                     },
                     MessageWorker::Terminate => {
                         println!("terminating worker");
-                        break;
+                        break; // break out of the loop since we don't need to receive new tasks
                     },
                     MessageWorker::EventBuffer(buffer) => {
                         let getData = buffer.events;
@@ -1313,7 +1208,7 @@ impl Worker{
             }
         });
 
-        // returning the built thread which has a receiver receiving constantly
+        // returning the spawned thread which has a receiver receiving constantly
         Self { thread: Arc::new(thread), id, }
     }
 
@@ -1325,7 +1220,7 @@ impl Job {
         Arc::new(Job {
             task,
             weight: 100,
-            executorId: std::thread::current().id, // initially we've considered the current thead id for this
+            executorId: std::thread::current().id(), // initially we've considered the current thead id for this
             parent,
             children: Arc::new(tokio::sync::Mutex::new(Vec::new())),
         })
@@ -1368,18 +1263,5 @@ impl Job {
             return child;
         }
     }
-}
 
-// the implementation of cahcing event instances
-impl<T: Clone> Cacher for T{ // we can cache everything
-    
-    type Engine = deadpool_redis::Connection; // it can be redis or other caching system
-    
-    async fn cache(&mut self) {
-        let data = self.clone();
-        
-    }
-    async fn get(key: String) -> Result<String, String>{
-        todo!()
-    }
 }

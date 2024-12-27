@@ -7,7 +7,6 @@
 
 use std::pin::Pin;
 use interfaces::ObjectStorage;
-use interfaces::ServiceExt1;
 use salvo::Router;
 use thread::ThreadId;
 use crate::*;
@@ -174,10 +173,6 @@ pub struct YmlConfig{
     pub redisPassword: String,
 }
 
-#[derive(Clone)]
-pub struct AppService{
-}
-
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct CompressionConfig{
@@ -275,7 +270,7 @@ struct Task1<Fut, T: Fn(Event) -> Fut + Send + Sync + 'static> where
 }
 
 #[derive(Clone)]
-struct useContext(pub Io, pub &[T]);
+struct useContext<'valid, T>(pub Io, pub &'valid [T]);
 
 // a job contains the io task 
 pub struct Job0<J: Clone, S>
@@ -307,7 +302,7 @@ pub struct Environment{
 
 #[derive(Clone)]
 pub struct AppContext{
-    pub containers: Vec<Addr<Container<Router>>>,
+    pub containers: Vec<Arc<Addr<Container>>>,
     pub env: Environment
 }
 
@@ -367,7 +362,6 @@ pub struct Neuron{
     pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,         /* -- an internal lighthread worker -- */
     pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
     pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
-    pub dependency: std::sync::Arc<dyn Service<Router>>,                             /* -- inject any type that impls the Service trait as a dependency -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
@@ -384,35 +378,6 @@ pub struct StemError{
 pub enum ErrorKind{
     Io(std::io::Error),
     StreamError
-}
-
-/* --------------------------------------------------
-    reusable components are trait objects that can be implemented 
-    for any type which enables us to access different types through 
-    a single interface, can be used for testing, building sdks with 
-    multiple engine like ObjectStorage trait for File handler that
-    can supports uploading file to multiple backends, building actor 
-    worker isoalted componenets that can talk with each other and other parts
-    of the app through message sending, app contexts or services through
-    dependency injection and dynamic dispatching.  
-
-    accessing multiple types through a single interface
-    we can use the interface trait to register a service 
-    of any type whose impls the ServiceExt trait, build 
-    reusable componenets, sdks and testing logics.
-    by implementing Actor trait for the C3 each instance 
-    of C3 can talk to each other and other components of 
-    the app through message sending pattern.
-
-    solid design pattern: n different type of services can be accessible 
-    through a single interface like implementing Actor trait for a component
-    with dep inj, dyn dist and poly which enables us for isolated talking
-*/
-pub struct C3{ // Context Container Component
-    pub id: String,
-    pub name: String,
-    pub task: Arc<dyn Fn() -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
-    pub service: Box<dyn ServiceExt1> // the trait must be object safe trait for dep injection through dyn dispatch pattern
 }
 
 #[derive(Clone, Debug)]
@@ -433,21 +398,21 @@ pub struct DigiSpaces{
     pub path: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LocalFileDriver{
     pub content: Arc<Vec<u8>>,
     pub path: String,
 }
 
 #[derive(Clone)]
-pub struct EntityDto;
+pub struct WalletDto;
 
 #[derive(Clone)]
-pub struct Container<R>{
+pub struct Container{
     // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
     // Arc makes the whole service field cloneable cause the container must be cloneable 
     // to return updated context when pushing new container into its vector 
-    pub service: Arc<dyn Service<R>>, // dependency injection supports different router setup through dynamic dispatching
+    pub service: Arc<dyn Service>, // dependency injection through dynamic dispatching
     pub id: String,
     // a service must have host and port
     pub host: String,

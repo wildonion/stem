@@ -49,6 +49,7 @@ macro_rules! task {
     };
 }
 
+// OS dones't know about the lightweight or green threads!
 #[macro_export]
 macro_rules! go {
     ($logic:block) => {
@@ -69,7 +70,7 @@ macro_rules! go {
                 we must ensure that we do not try to move the closure out of the Arc directly 
             */
             tokio::spawn(async move $logic);
-        }
+        } 
     };
     ($task:expr) => {
         {

@@ -23,6 +23,12 @@ pub struct TalkToContainer{
 pub struct WakeUp{
     pub msg: MsgType
 }
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct Deploy{
+}
+
 #[derive(Clone, Debug)]
 pub enum MsgType{
     Serve,

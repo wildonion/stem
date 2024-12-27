@@ -5215,14 +5215,14 @@ pub async fn makeMeService(){
         type ResultMe;
         fn park();
     }
-    struct Me{}
-    impl Test for Me{
+    struct Me2{}
+    impl Test for Me2{
         type ResultMe = Self;
         fn park() {
             
         }
     }
-    let me = Me{};
+    let me = Me2{};
     fn getMe<M: Test>(me: M){
         let park = <M as Test>::park();
     }
@@ -5471,7 +5471,6 @@ pub async fn makeMeService(){
 
 
     fn whichDep(param: Box<dyn Me>){}
-
     let param: Box<dyn Me> = if true{
         Box::new(This{})
     } else{
@@ -5642,5 +5641,25 @@ pub async fn idm(){
             .or_insert(arr[idx]);
     }
 
+
+    // deleting files in the background thread per each file
+    let paths = vec![""];
+    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    for path in paths{
+        let sender = tx.clone();
+        tokio::spawn(async move{
+            let res = tokio::fs::remove_file(path).await;
+            if let Err(e) = res{
+                sender.send(e).await;
+            }
+        });
+    }
+
+    // receiving error in the background thread
+    tokio::spawn(async move{
+        while let Some(err) = rx.recv().await{
+
+        }
+    });
     
 }

@@ -15,10 +15,10 @@ use sha2::digest::Output;
 use stemlib::dto::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
 use stemlib::interfaces::OnionStream;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use wallexerr::misc::SecureCellConfig; // import the interface to use the on() method on the Neuron instance
 use stemlib::dsl::*;
-
+use stemlib::misc::setupRedis;
 
 
 #[tokio::test]
@@ -27,18 +27,15 @@ pub async fn onionEnv(){
     // a design pattern to create dto as a service and deploy
     // them as a serverless obejct
 
-
-    // Dto ---> Container(DtoService) ---> Actor(Container)
+    // Actor(Container(Service(Dto)))
     // a dto can be registred as a service inside a container 
     // a container has an id, host and port for the related service
     // a container is an actor component that allows us to talk with other actor component; container talking
     // ex: a container can send an MsgType::Serve message to another contianer to start the second container service on the defined host and port
     // a container can receive and send messages from/to other containers and different parts of the app
 
-    //============== a ctx has an environment and containers
-
     let entityContainer = Container{
-        service: Arc::new(EntityDto), 
+        service: Arc::new(WalletDto), 
         id: Uuid::new_v4().to_string(),
         host: String::from("0.0.0.0"),
         port: 2875
@@ -77,48 +74,99 @@ pub async fn onionEnv(){
     ).await;
 
 
-    let appContext = 
-        ctx!{
-            containers: [ // containers
-
-                // all the following dtos must implement the Service trait
-                /* ------------
-                |   service 1
-                */ 
-                fileService: LocalFileDriver{
-                    content: {
-                        // calling the save() of the interface on the driver instance
-                        // we can do this since the interface is implemented for the struct
-                        // and we can override the methods
-                        let mut file = tokio::fs::File::open("Data.json").await.unwrap();
-                        let mut buffer = vec![];
-                        let readBytes = file.read_buf(&mut buffer).await.unwrap();
-                        let mut secureCellConfig = SecureCellConfig::default();
-                        buffer.encrypt(&mut secureCellConfig);
-                        Arc::new(buffer)
-                    }, 
-                    path: String::from("here.txt")
-                } @ 0.0.0.0:2222, // local file driver object as service hosted on port 2222
-                
-                /* ------------
-                |   service 2
-                */ 
-                entityService: EntityDto{
-
-                } @ 0.0.0.0:1345 // entity dto object as service hosted on port 1345
-            
-            ]
-        };
-
+    //============== a ctx has an environment and containers
+    // a dto is a copmponent that can be used to model an antity and interact with the core 
+    // of the entity including db calls and updating its state; we can convert a dto into a 
+    // service to host it on an address and port by adding it inside a container as a service 
+    // trait object, each container is also an actor which can communicate internally with 
+    // other container through message sending. 
     // push the containers into the app context
     let ctx = AppContext::new().await
         .pushContainer(entityContainerActor)
         .pushContainer(uploadDriverContainerActor);
-
+    
     // get the first contianer actor
-    let c1 = ctx.containers.get(1).unwrap();
+    let containers = ctx.getContainers();
+    let c1 = containers[1].clone();
+    let clonedC1 = c1.clone();
+    
+    // deploy the container service in the background thread
+    // it starts the service on the specified host and port  
+    go!{
+        {
+            clonedC1.send(Deploy{}).await;
+        }
+    }
 
-    // neuron agents
+    // execute an async io task priodically
+    c1.send(
+        ExecutePriodically{
+            period: 40, // every 40 seconds
+            job: task!{
+                {
+                    // we can check the status of the task
+                    println!("inside async io task...");
+                }
+            }
+        }
+    ).await;
+
+    // execute arbitrary async io task function inside either the actor thread or tokio light thread 
+    c1.send(
+        Execute(
+            task!(
+                { // block logic 
+                    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+                    tx.send(String::from("wildonion sender")).await;
+                    while let Some(data) = rx.recv().await{
+                        log::info!("received data in task!()");
+                    }
+                } 
+            ),
+            true // local spawn, set to true if we want to execute the task inside the actor thread
+        )
+    ).await;
+
+    // event dto instance tests
+    let mut event = Event::default();
+    let objId = event.store().await; // cache the event instance
+    let stringEvent = Event::fetch(&objId).await; // fetch the object from the storage, it's a byte array and can be anything files and instances
+    let mut event = serde_json::from_slice::<Event>(&stringEvent).unwrap(); // decode the fetched object into the Event struct
+    event.on("rmq", "send", |event, error| async move{ // start sending event streams with executing callback
+        if let Some(err) = error{
+            log::error!("the error in sending event");
+        }
+        log::info!("executing callback");
+    }).await;
+
+    // storing file on object storage
+    let mut file = {
+        // calling the save() of the interface on the driver instance
+        // we can do this since the interface is implemented for the struct
+        // and we can override the methods
+        let mut file = tokio::fs::File::open("Data.json").await.unwrap();
+        let mut buffer = vec![];
+        let readBytes = file.read_buf(&mut buffer).await.unwrap();
+        let mut secureCellConfig = SecureCellConfig::default();
+        buffer.encrypt(&mut secureCellConfig); // encrypt the buffer or the file content
+        buffer
+    };
+
+    // store the encrypted file bytes on redis and return the object id 
+    let id = file.store().await;
+    let mut fileBuffer = Vec::<u8>::fetch(&id).await;
+    let mut file = tokio::fs::File::create("saved.txt").await.unwrap();
+    file.write(&mut fileBuffer).await;
+
+    // media idm file streaming chunk with chan and codec rather than loading the entire file into the ram
+    // streaming over file chunk to send each chunk asyncly to the channel
+    // ...
+    
+    
+
+    // ===========================================================================
+    // ============================== NEURON AGENTS ==============================
+    // ===========================================================================
     let getAgents = ctx.env.agents;
     let agents = getAgents.lock().await;
 
@@ -127,8 +175,14 @@ pub async fn onionEnv(){
 
     // redisConn must be mutable and since we're moving it into another thread 
     // we should make it safe to gets moved and mutated using Arc and Mutex
-    let arcedRedisConn = setupRedis().await;
-    let clonnedRedisConn = Arc::new(tokio::sync::Mutex::new(arcedRedisConn.unwrap()));
+    let redisPool = setupRedis().await;
+    let Ok(pool) = redisPool else{
+        return;
+    };
+
+    let clonedRedisPool = pool.clone();
+    let redisConn = clonedRedisPool.get().await.unwrap();
+    let clonedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
 
     
     let getNeuronWallet = neuron.wallet.as_ref().unwrap();
@@ -199,7 +253,8 @@ pub async fn onionEnv(){
             callback: Arc::new(|event| Box::pin({
 
                 // clone before going into the async move{} scope
-                let clonnedRedisConn = clonnedRedisConn.clone();
+                let clonedRedisConn = clonedRedisConn.clone();
+
                 async move{
 
                     /* ------------------------------------------------------------
@@ -215,7 +270,7 @@ pub async fn onionEnv(){
     
                     // cache event on redis inside the callback
                     tokio::spawn(async move{
-                        let mut redisConn = clonnedRedisConn.lock().await;
+                        let mut redisConn = clonedRedisConn.lock().await;
                         let eventId = event.clone().data.id;
                         let eventString = serde_json::to_string(&event).unwrap();
                         let redisKey = format!("cahceEventWithId: {}", eventId);
@@ -288,27 +343,5 @@ pub async fn onionEnv(){
         )
     ).await;
 
-
-}
-
-type RedisConnResult = Result<Connection, deadpool_redis::PoolError>;
-pub async fn setupRedis() -> RedisConnResult{
-    use deadpool_redis::{Config as DeadpoolRedisConfig, Runtime as DeadPoolRedisRuntime};
-    let redisPassword = "geDteDd0Ltg2135FJYQ6rjNYHYkGQa70";
-    let redisHost = "0.0.0.0";
-    let redisPort = 6379;
-    let redisUsername = "";
-    let redis_conn_url = if !redisPassword.is_empty(){
-        format!("redis://:{}@{}:{}", redisPassword, redisHost, redisPort)
-    } else if !redisPassword.is_empty() && !redisUsername.is_empty(){
-        format!("redis://{}:{}@{}:{}", redisUsername, redisPassword, redisHost, redisPort)
-    } else{
-        format!("redis://{}:{}", redisHost, redisPort)
-    };
-    let redis_pool_cfg = DeadpoolRedisConfig::from_url(&redis_conn_url);
-    let redis_pool = Arc::new(redis_pool_cfg.create_pool(Some(DeadPoolRedisRuntime::Tokio1)).unwrap()); 
-
-    let conn = redis_pool.get().await;
-    conn
 
 }

@@ -1,16 +1,20 @@
 
-ُREAD: desktop books for neuroscience mind and information theory
+
+ُREAD: desktop books for quantum computing and neuroscience
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
 TODOs:
-        1 -> feed GPT with p2p concepts and synapse network behavior: stream, request response, kademlia, gossipsub:
+        0 -> loadbalancer for container services (Container{}) with weighted requests, deploy BPF object
+        1 ->  uniqueDhtFileobject, worker!{event -> publish}, #[event] and OnionStreamer for Event supports stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
-        2 -> serverless stemlib exchange and game mmq (match making and match engine order book) with wrangler, tauri, bevy to deploy functions and objects:
-             cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
+        2 -> serverless stemlib based iot, opentable, khadangApp, exchange, stockbot, broker and game:
+                cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
+                infra: ci/cd(build,bumpV,push,pull) /> services: walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
                 OTC:
                         build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
                         update tokens with locking in light thread db atomically inside the app 
                         in withdraw the user sends a withdraw request so we can transfer money to his acc
                 MATCH ENGINE ORDER BOOK: 
+                        code match engine in rust /> compile to wasm /> load in browser
                         receive order from queue
                         find the match with that order based on amount, quantity, side and the base/qoute
                         build atomic tx and execute the tx inside a lock and a light thread
@@ -30,8 +34,8 @@ TODOs:
                 create bridge between chains
                 Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
-                live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise  
-                wrangler, salvo, p2p and raft docs for stockBot, vr/ar, game, iot and sexchange dsl engine with raft over neuron actor
+                live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise
+                wrangler with raft, wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
                 streaming with rmq and p2p gossipsub kad + req-rep with rmq rpc and p2p req-res + main server with salvo http2 and ws
                 wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes (use it to test if a given TCP host/port are available); if it's up already execute the codes also handle notif signal and interval exec with timeout
                 custom error handler and log the error using logger neuron broadcaster
@@ -40,19 +44,23 @@ TODOs:
                 DSL design [actor workers: walletService, marketService, txPoolService, salvo http2/ws/swagger servers: sexchanegServer]:
                         marke!{
                                 otc, // exchange type || meob
-                                1 -> create tx order inside the main server
+                                1 -> create tx order inside the main server (ws, http2)
                                 2 -> send tx to txRawQueue queue through rmq using neuron stemlib actor
-                                3 -> receive tx using neuron actor inside the market service (start bookengine actor, call subscribe() method inside the start() method, receive tx orders)
+                                3 -> receive tx using neuron actor inside the market service:
+                                        start bookengine actor, 
+                                        call subscribe() method inside the start() method, 
+                                        receive tx orders
                                 4 -> inside the trade function of the bookengine:
-                                                do the trade process (light thread + locking + channels + double spending issue):
+                                                do the trade process (acid + light thread + locking + channels + double spending issue):
                                                 0 - store the tx order in btreemap to form a tree of orders 
                                                 1 - find a match between orders then create tx object
                                                 2 - tx.commit() - will charge the user account
                                                 3 - tx.executeAtomically() - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
-                                                4 - tx.record()
-                                5 -> send tx to txConfirmedQueue queue 
+                                                4 - tx.record() - to store the info inside the db
+                                5 -> send the completed tx to txConfirmedQueue queue 
                                 6 -> receive tx using neuron actor, inside the walle service
-                                7 -> add tx to wallet
+                                7 -> add tx to wallet then produce a completed transaction notif to rmq
+                                8 -> short polling to receive the notifications in client side
                         }
                 stockBotAgents for broker, sexchange with gemini service (attach stemlib to the app) in market() method:
                         stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 

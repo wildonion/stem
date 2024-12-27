@@ -85,7 +85,7 @@ pub async fn getAllEntitiesHandler(
 
 
 
-pub async fn buildRouters() -> Router{
+pub fn buildRouters() -> Router{
     
     let routers = Router::with_path("/report/")
         .hoop(countCall)

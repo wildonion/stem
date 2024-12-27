@@ -9,7 +9,6 @@
 */
 
 use salvo::Router;
-
 use crate::*;
 use crate::messages::*;
 use crate::dto::*;
@@ -318,9 +317,14 @@ impl ActixMessageHandler<ExecutePriodically> for Neuron{
         // a callback is called after ticking the time during the interval process
         // we'll execute the job in each period of time. 
         ctx.run_interval(std::time::Duration::from_secs(period), move |actor, ctx|{
-            
+
+            let goClonedJob = clonedJob.clone();
             // execute the passed in task inside the tokio light thread in the background
-            tokio::spawn(clonedJob());
+            go!{
+                {
+                    goClonedJob().await;
+                }
+            }
 
         });
     }
@@ -341,19 +345,19 @@ impl ActixMessageHandler<Execute> for Neuron{
     }
 }
 
-impl ActixMessageHandler<TalkToContainer> for Container<Router>{ // use this to send the wake up message to a container
+impl ActixMessageHandler<TalkToContainer> for Container{ // use this to send the wake up message to a container
     type Result = ();
     fn handle(&mut self, msg: TalkToContainer, ctx: &mut Self::Context) -> Self::Result {
         let TalkToContainer { msg, container } = msg.clone();
         go!{
             {
-                container.send(WakeUp { msg }).await;
+                container.send(WakeUp { msg }).await; // send the wakeup message to the container
             }
         }
     }
 }
 
-impl ActixMessageHandler<WakeUp> for Container<Router>{ // use this to wake up a container
+impl ActixMessageHandler<WakeUp> for Container{ // use this to wake up a container
     type Result = ();
     fn handle(&mut self, msg: WakeUp, ctx: &mut Self::Context) -> Self::Result {
         let WakeUp { msg } = msg.clone();
@@ -370,5 +374,45 @@ impl ActixMessageHandler<WakeUp> for Container<Router>{ // use this to wake up a
             }
         }
 
+    }
+}
+
+impl ActixMessageHandler<Deploy> for Container{
+    type Result = ();
+    fn handle(&mut self, msg: Deploy, ctx: &mut Self::Context) -> Self::Result {
+        self.deploy();
+    }
+}
+
+impl ActixMessageHandler<ExecutePriodically> for Container{
+    type Result = ();
+    fn handle(&mut self, msg: ExecutePriodically, ctx: &mut Self::Context) -> Self::Result {
+
+        let ExecutePriodically{period, job} = msg;
+        let clonedJob = job.clone(); // return type of closure is async io task
+
+        // a callback is called after ticking the time during the interval process
+        // we'll execute the job in each period of time. 
+        ctx.run_interval(std::time::Duration::from_secs(period), move |actor, ctx|{
+            
+            // execute the passed in task inside the tokio light thread in the background
+            tokio::spawn(clonedJob());
+
+        });
+    }
+} 
+
+impl ActixMessageHandler<Execute> for Container{
+    type Result = ();
+    fn handle(&mut self, msg: Execute, ctx: &mut Self::Context) -> Self::Result {
+        let Execute(job, local_spawn) = msg.clone();
+
+        if local_spawn{
+            // spawn the async task inside the actor thread itself
+            job().into_actor(self).spawn(ctx);
+        } else{
+            // execute the task in the background light thread
+            tokio::spawn(job()); // tokio takes the job() and await on it inside a light thread
+        }
     }
 }
