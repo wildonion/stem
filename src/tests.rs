@@ -1,5 +1,3 @@
-
-
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::sync::{Arc, Condvar};
@@ -127,6 +125,9 @@ pub async fn onionEnv(){
         )
     ).await;
 
+
+    // ============================================
+    // =========== object storage tests
     // event dto instance tests
     let mut event = Event::default();
     let objId = event.store().await; // cache the event instance
@@ -155,13 +156,31 @@ pub async fn onionEnv(){
     // store the encrypted file bytes on redis and return the object id 
     let id = file.store().await;
     let mut fileBuffer = Vec::<u8>::fetch(&id).await;
-    let mut file = tokio::fs::File::create("saved.txt").await.unwrap();
-    file.write(&mut fileBuffer).await;
+    let mut file1 = tokio::fs::File::create("saved.txt").await.unwrap();
+    file1.write(&mut fileBuffer).await;
 
-    // media idm file streaming chunk with chan and codec rather than loading the entire file into the ram
-    // streaming over file chunk to send each chunk asyncly to the channel
-    // ...
+    // ==================================== file chunk streaming
+    let chunkSize = 5;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    for b in (0..file.len()).step_by(chunkSize){
+        let mut end = b + chunkSize; // get from b up to b + chunkSize
+        if end > file.len(){ // if we reach the end of the bytes
+            end = file.len(); // the end would be the last element 
+        }
+        let chunk = &file[b..end];
+        tx.send(chunk.to_vec()).await;
+    }
+    // gather the whole chunks to form the buffer
+    tokio::spawn(async move{
+        let mut buffer = vec![];
+        while let Some(chunk) = rx.recv().await{
+            buffer.extend(chunk);
+        }
+        // we have a fullfilled buffer in here
+    });
     
+
+    // ============================================
     
 
     // ===========================================================================
