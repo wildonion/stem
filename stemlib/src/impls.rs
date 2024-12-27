@@ -31,20 +31,6 @@ use crate::interfaces::*;
 use salvo::{Listener, Router, Server};
 
 
-impl Drop for Neuron{
-    fn drop(&mut self) {
-        let this = self.clone();
-        tokio::spawn(async move{
-            let getInternalWorker = &this.internal_worker;
-            if getInternalWorker.is_some(){
-                let mut internalWorker = getInternalWorker.clone().unwrap();
-                let mut unloackedInternalWorker = internalWorker.lock().await;
-                (*unloackedInternalWorker).thread.abort(); // abort the thread handler, the tokio threads are future based thread so we can easily abort them
-            }
-        });
-    }
-}
-
 impl Neuron{
     
     pub async fn new(bufferSize: usize, name: &str) -> Self{
@@ -71,10 +57,11 @@ impl Neuron{
                 .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
                 .build();
 
-                // as soon as the actor is started the swarm eventloop will be executed
+                // as soon as the actor is started the swarm eventloop code will be executed
                 // and set to be listened on different ports.
                 // a shareable, cloneable and thread safe p2p swarm object containing 
-                // all the network behaviours
+                // all the network behaviours including kademlia routing and gossipsub 
+                // message streaming and req-res pattern 
                 SynapseProtocol{
                     swarm: std::sync::Arc::new(
                         tokio::sync::Mutex::new(
@@ -102,10 +89,7 @@ impl Neuron{
                 ])), size: bufferSize }
             ), 
             metadata: None,
-            internal_worker: None,
             transactions: None,
-            internal_locker: None,
-            signal: std::sync::Arc::new(std::sync::Condvar::new()),
             contract: None,
             rmqPool: {
                 let ymlConfigFile = tokio::fs::read_to_string("cfg.yml").await;
@@ -580,35 +564,6 @@ impl Neuron{
             }
         });
 
-    }
-
-    // if we can acquire the lock means the lock is free
-    // and is not being in used by another process which 
-    // causes the second process to be awaited until the 
-    // lock gets freed.
-    pub async fn execute<J: std::future::Future<Output = ()> + Send + Sync + 'static + Clone, S>
-        (&mut self) where S: Send + Sync + 'static{
-
-        if self.internal_worker.is_none(){
-            return;
-        }
-
-        let get_internal_worker = self.internal_worker.clone().unwrap();
-        let worker_lock = get_internal_worker.try_lock();
-
-        // if the lock is busy reject the execution
-        if worker_lock.is_err(){
-            return;
-        }
-
-        let mut worker = worker_lock.unwrap();
-
-        // update the worker thread with a new runner 
-        (*worker).thread = std::sync::Arc::new(
-            tokio::spawn(async move{
-               // ...
-            })
-        );
     }
 
     pub async fn executekMeIntervally(&mut self){

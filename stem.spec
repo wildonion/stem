@@ -8,7 +8,7 @@ TODOs:
                 startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
         2 -> serverless stemlib based iot, opentable, khadangApp, exchange, stockbot, broker and game:
                 cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
-                infra: ci/cd(build,bumpV,push,pull) /> services: walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
+                infra: ci/cd(build,bumpV,push,pull) /> services: KycWorker, walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
                 OTC:
                         build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
                         update tokens with locking in light thread db atomically inside the app 

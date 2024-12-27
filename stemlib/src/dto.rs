@@ -359,9 +359,6 @@ pub struct Neuron{
     pub metadata: Option<serde_json::Value>,                                         /* -- json object contains the actual info of an object which is being carried by this neuron -- */
     pub internal_executor: InternalExecutor<Event>,                                  /* -- eventloop sender and thread safe receiver, potentially we can use the actor msg sending pattern as well -- */
     pub transactions: Option<std::sync::Arc<tokio::sync::Mutex<Vec<Transaction>>>>,  /* -- all neuron atomic transactions -- */
-    pub internal_worker: Option<std::sync::Arc<tokio::sync::Mutex<Worker>>>,         /* -- an internal lighthread worker -- */
-    pub internal_locker: Option<std::sync::Arc<tokio::sync::Mutex<()>>>,             /* -- internal locker -- */
-    pub signal: std::sync::Arc<std::sync::Condvar>,                                  /* -- the condition variable signal for this neuron -- */
     pub contract: Option<Contract>, // circom and noir for zk verifier contract (TODO: use crypter)
     pub state: u8
 }
