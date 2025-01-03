@@ -26,13 +26,13 @@ pub struct WakeUp{
 
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
-pub struct Deploy{
-}
+pub struct Deploy;
 
 #[derive(Clone, Debug)]
 pub enum MsgType{
     Serve,
-    Stop
+    Stop,
+    Event(Event)
 }
 
 #[derive(Message, Clone, Serialize, Deserialize, Debug, Default)]

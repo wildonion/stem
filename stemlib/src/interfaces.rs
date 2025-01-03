@@ -19,10 +19,10 @@ pub trait Crypter{
 }
 
 pub trait OnionStream{
-    type Model;
+    type Channel;
     async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
         F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
-        (&mut self, streamer: &str, eventType: &str, callback: F) -> Self::Model;
+        (&mut self, streamer: &str, eventType: &str, callback: F) -> Self;
 }
 
 /// a distributed object storage interface supports object and instances and files (video, audio and image)
@@ -33,7 +33,7 @@ pub trait ObjectStorage{ // it can be any bytes io or &[u8], an encoded instance
     async fn store(&mut self) -> String;
     /// load the object from the storage as u8 bytes
     async fn fetch(key: &str) -> Vec<u8>;
-    /// comapare the current checksum against the passed in file this is useful to detect steghided pictures and files
+    /// comapare the current checksum against the passed in object id, this is useful to detect steghided object
     fn checksum(&mut self, objId: &str) -> bool; 
 }
 

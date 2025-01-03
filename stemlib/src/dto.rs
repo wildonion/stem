@@ -252,6 +252,7 @@ pub struct Stage{
 
 #[derive(Clone)]
 pub struct Job{ // Job tree
+    pub id: String,
     pub task: IoEvent, // an io task with the event instance 
     pub weight: u32,
     pub executorId: std::thread::ThreadId,
@@ -313,6 +314,19 @@ pub struct Event{
     pub status: EventStatus,
     pub timestamp: i64,
     pub offset: Arc<AtomicU64>, // the position of the event inside the brain network
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub enum ChannelType{
+    #[default]
+    Local,
+    Remote(String) // p2p, rmq, ws
+}
+
+#[derive(Clone)]
+pub struct JobResult<T: Send + Sync + 'static>{
+    pub jobId: String,
+    pub data: T
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -405,12 +419,22 @@ pub struct LocalFileDriver{
 pub struct WalletDto;
 
 #[derive(Clone)]
+pub struct Otp;
+
+#[derive(Clone)]
+pub struct WebHookHandler;
+
+#[derive(Clone)]
+pub struct RateLimiter;
+
+#[derive(Clone)]
 pub struct Container{
     // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
     // Arc makes the whole service field cloneable cause the container must be cloneable 
     // to return updated context when pushing new container into its vector 
     pub service: Arc<dyn Service>, // dependency injection through dynamic dispatching
     pub id: String,
+    pub requests: Arc<Vec<salvo::Request>>,
     // a service must have host and port
     pub host: String,
     pub port: u16

@@ -4,6 +4,7 @@ use std::sync::{Arc, Condvar};
 use std::thread::{self, park, JoinHandle};
 use crate::*;
 use clap::error;
+use crypter::wallet::ed25519;
 use deadpool_redis::redis::{AsyncCommands, RedisError};
 use deadpool_redis::Connection;
 use interfaces::{Crypter, ObjectStorage};
@@ -22,24 +23,63 @@ use stemlib::misc::setupRedis;
 #[tokio::test]
 pub async fn onionEnv(){
 
-    // a design pattern to create dto as a service and deploy
-    // them as a serverless obejct
+    // a actor based design pattern to create dto as a service container 
+    // and deploy them as a serverless obejct
 
-    // Actor(Container(Service(Dto)))
-    // a dto can be registred as a service inside a container 
-    // a container has an id, host and port for the related service
-    // a container is an actor component that allows us to talk with other actor component; container talking
-    // ex: a container can send an MsgType::Serve message to another contianer to start the second container service on the defined host and port
-    // a container can receive and send messages from/to other containers and different parts of the app
-
-    let entityContainer = Container{
-        service: Arc::new(WalletDto), 
+    /* 
+        Actor(Container(Service(Dto)))
+        a dto can be registred as a service inside a container 
+        a container has an id, host and port for the related service
+        a container is an actor component that allows us to talk with other actor component; container talking
+        ex: a container can send an MsgType::Serve message to another contianer to start the second container service on the defined host and port
+        a container can receive and send messages from/to other containers and different parts of the app
+        a container componenet can talk with other component by sending message
+        
+        components are container actor workers which contains a dto as a service (not necessarily) 
+        they can talk locally and remotely using .on() methods with each other through message 
+        sending pattern and can be deployed as a server less object like user or otp container 
+        have its own set of routers and a deployable service an so on for notification container.
+    */
+    
+    // ================================================================================
+    // ============================== SERVICE CONTAINERS ==============================
+    // ================================================================================
+    // each container is a different component inside the app like we have otp service
+    // actor responsible for sending otp , rate limiter service actor responsible for 
+    // handling rate limits
+    let mut webhookHandlerComponent = Container{
+        service: Arc::new(WebHookHandler),
         id: Uuid::new_v4().to_string(),
+        requests: Arc::new(vec![]),
+        host: String::from("0.0.0.0"), // the server of webhook hanlder
+        port: 2879
+    };
+
+    let mut otpComponent = Container{
+        service: Arc::new(Otp),
+        id: Uuid::new_v4().to_string(),
+        requests: Arc::new(vec![]),
+        host: String::from("0.0.0.0"),
+        port: 2877
+    };
+
+    let mut rateLimiterComponent = Container{
+        service: Arc::new(RateLimiter),
+        id: Uuid::new_v4().to_string(),
+        requests: Arc::new(vec![]),
+        host: String::from("0.0.0.0"),
+        port: 2870
+    };
+    
+    let mut walletComponent = Container{
+        service: Arc::new(WalletDto), // object safe trait for dependency injection, WalletDto impls the Service trait
+        id: Uuid::new_v4().to_string(),
+        requests: Arc::new(vec![]),
         host: String::from("0.0.0.0"),
         port: 2875
-    }; // create a container for this service
+    };
 
-    let uploadDriverContainer = Container{
+    let uploadDriverComponent = Container{
         service: Arc::new(LocalFileDriver{
             content: {
                 // calling the save() of the interface on the driver instance
@@ -56,18 +96,40 @@ pub async fn onionEnv(){
         }),
         id: Uuid::new_v4().to_string(),
         host: String::from("0.0.0.0"),
-        port: 8375
+        port: 8375,
+        requests: Arc::new(vec![])
     };
 
+    // streaming over contanier is also possible, generally this sugar syntax is better
+    // than sending message using .send() method, behind the scene it's using the actor 
+    // sending message pattern, this is before starting the container actor
+    walletComponent.on("mpsc", "send", |event, error| async move{
+
+        if error.is_some(){
+            log::error!("error has happened: {:?}", error.unwrap());
+        }
+        log::info!("sent event: {:?}", event);
+
+    }).await;
+
+
     // start both containers as actors
-    let entityContainerActor = entityContainer.start();
-    let uploadDriverContainerActor = uploadDriverContainer.start();
+    let walletComponentActor = walletComponent.start();
+    let uploadDriverComponentActor = uploadDriverComponent.start();
     
-    // entityContainerActor wants to talk with the uploadDriverContainerActor
-    entityContainerActor.send(
+    // walletComponentActor wants to talk with the uploadDriverComponentActor
+    walletComponentActor.send(
         TalkToContainer{
             msg: MsgType::Serve, 
-            container: uploadDriverContainerActor.clone().recipient()
+            container: uploadDriverComponentActor.clone().recipient()
+        }
+    ).await;
+
+    // send an event data to the uploadDriverComponentActor 
+    walletComponentActor.send(
+        TalkToContainer{
+            msg: MsgType::Event(Event::default()),
+            container: uploadDriverComponentActor.clone().recipient()
         }
     ).await;
 
@@ -80,19 +142,20 @@ pub async fn onionEnv(){
     // other container through message sending. 
     // push the containers into the app context
     let ctx = AppContext::new().await
-        .pushContainer(entityContainerActor)
-        .pushContainer(uploadDriverContainerActor);
+        .pushContainer(walletComponentActor)
+        .pushContainer(uploadDriverComponentActor);
     
     // get the first contianer actor
     let containers = ctx.getContainers();
     let c1 = containers[1].clone();
     let clonedC1 = c1.clone();
     
+    //============== testing container actor local message passing
     // deploy the container service in the background thread
-    // it starts the service on the specified host and port  
+    // it starts its service on the specified host and port  
     go!{
         {
-            clonedC1.send(Deploy{}).await;
+            clonedC1.send(Deploy).await; // wallet dto model starts an http server, it can by any server overwritten in Service trait methods
         }
     }
 
@@ -103,7 +166,7 @@ pub async fn onionEnv(){
             job: task!{
                 {
                     // we can check the status of the task
-                    println!("inside async io task...");
+                    println!("i'm being executed every 40 seconds...");
                 }
             }
         }
@@ -124,10 +187,11 @@ pub async fn onionEnv(){
             true // local spawn, set to true if we want to execute the task inside the actor thread
         )
     ).await;
+ 
 
-
-    // ============================================
-    // =========== object storage tests
+    // ============================================================================
+    // ============================== OBJECT STORAGE ==============================
+    // ============================================================================
     // event dto instance tests
     let mut event = Event::default();
     let objId = event.store().await; // cache the event instance
@@ -155,30 +219,33 @@ pub async fn onionEnv(){
 
     // store the encrypted file bytes on redis and return the object id 
     let id = file.store().await;
-    let mut fileBuffer = Vec::<u8>::fetch(&id).await;
+    let mut fileBuffer = Vec::<u8>::fetch(&id).await; // fetch the stored object into the vector of u8 bytes
+    // now we can store the bytes in a file
     let mut file1 = tokio::fs::File::create("saved.txt").await.unwrap();
     file1.write(&mut fileBuffer).await;
 
-    // ==================================== file chunk streaming
+    // file chunk streaming
     let chunkSize = 5;
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     for b in (0..file.len()).step_by(chunkSize){
         let mut end = b + chunkSize; // get from b up to b + chunkSize
         if end > file.len(){ // if we reach the end of the bytes
-            end = file.len(); // the end would be the last element 
+            end = file.len(); // the end would be the last element since we've reached the last elem
         }
         let chunk = &file[b..end];
-        tx.send(chunk.to_vec()).await;
+        // TODO - encode each chunk using a codec
+        // ...
+        tx.send(chunk.to_vec()).await; // this can be any channel (ws, tcp, p2p)
     }
     // gather the whole chunks to form the buffer
     tokio::spawn(async move{
         let mut buffer = vec![];
         while let Some(chunk) = rx.recv().await{
+            // extending the buffer with the received bytes
             buffer.extend(chunk);
         }
-        // we have a fullfilled buffer in here
+        // we have a fullfilled buffer in here contains the file bytes
     });
-    
 
     // ============================================
     
@@ -186,181 +253,181 @@ pub async fn onionEnv(){
     // ===========================================================================
     // ============================== NEURON AGENTS ==============================
     // ===========================================================================
-    let getAgents = ctx.env.agents;
-    let agents = getAgents.lock().await;
+    // let getAgents = ctx.env.agents;
+    // let agents = getAgents.lock().await;
 
-    let mut neuron1 = agents.get(0).unwrap().to_owned();
-    let mut neuron = agents.get(1).unwrap().to_owned();
+    // let mut neuron1 = agents.get(0).unwrap().to_owned();
+    // let mut neuron = agents.get(1).unwrap().to_owned();
 
-    // redisConn must be mutable and since we're moving it into another thread 
-    // we should make it safe to gets moved and mutated using Arc and Mutex
-    let redisPool = setupRedis().await;
-    let Ok(pool) = redisPool else{
-        return;
-    };
+    // // redisConn must be mutable and since we're moving it into another thread 
+    // // we should make it safe to gets moved and mutated using Arc and Mutex
+    // let redisPool = setupRedis().await;
+    // let Ok(pool) = redisPool else{
+    //     return;
+    // };
 
-    let clonedRedisPool = pool.clone();
-    let redisConn = clonedRedisPool.get().await.unwrap();
-    let clonedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
+    // let clonedRedisPool = pool.clone();
+    // let redisConn = clonedRedisPool.get().await.unwrap();
+    // let clonedRedisConn = Arc::new(tokio::sync::Mutex::new(redisConn));
 
     
-    let getNeuronWallet = neuron.wallet.as_ref().unwrap();
-    let getNeuronId = neuron.peerId.to_base58();
+    // let getNeuronWallet = neuron.wallet.as_ref().unwrap();
+    // let getNeuronId = neuron.peerId.to_base58();
 
-    let neuronWallet = neuron.wallet.as_ref().unwrap();
-    let executor = neuron.internal_executor.clone();
+    // let neuronWallet = neuron.wallet.as_ref().unwrap();
+    // let executor = neuron.internal_executor.clone();
 
-    /* --------------------------
-        execution thread process for solving future:
-        await on async task suspend it to get the result but won't block thread 
-        means the light thread can continue executing other tasks
-        future objects are being done in the background awaiting on or polling  
-        them tells runtime that we need the result if the future was ready he sends the 
-        result to the caller otherwise it forces the thread to get another task 
-        from the eventloop to execute it meanwhile the future is being solved, 
-        this allows to execute tasks in a none blocking manner 
-    */
-    neuron.runInterval(|| async move{
-        println!("i'm running every 10 seconds, with retries of 12 and timeout 0");
-    }, 10, 12, 0).await;
+    // /* --------------------------
+    //     execution thread process for solving future:
+    //     await on async task suspend it to get the result but won't block thread 
+    //     means the light thread can continue executing other tasks
+    //     future objects are being done in the background awaiting on or polling  
+    //     them tells runtime that we need the result if the future was ready he sends the 
+    //     result to the caller otherwise it forces the thread to get another task 
+    //     from the eventloop to execute it meanwhile the future is being solved, 
+    //     this allows to execute tasks in a none blocking manner 
+    // */
+    // neuron.runInterval(|| async move{
+    //     println!("i'm running every 10 seconds, with retries of 12 and timeout 0");
+    // }, 10, 12, 0).await;
 
-    // --------------------------
-    // ------- sending message through actor mailbox eventloop receiver:
-    // by default actors run on the system arbiter thread using 
-    // its eventloop, we can run multiple instances of an actor 
-    // in parallel with SyncArbiter. 
-    // actor mailbox is the eventloop receiver of actor jobq mpsc channel
-    // which receive messages and execute them in a light thread or process 
+    // // --------------------------
+    // // ------- sending message through actor mailbox eventloop receiver:
+    // // by default actors run on the system arbiter thread using 
+    // // its eventloop, we can run multiple instances of an actor 
+    // // in parallel with SyncArbiter. 
+    // // actor mailbox is the eventloop receiver of actor jobq mpsc channel
+    // // which receive messages and execute them in a light thread or process 
 
-    // starting the neuron actor 
-    let neuronComponentActor = neuron.clone().start();
+    // // starting the neuron actor 
+    // let neuronComponentActor = neuron.clone().start();
     
-    // sending update state message
-    neuronComponentActor.send(
-        UpdateState{new_state: 1}
-    ).await;
+    // // sending update state message
+    // neuronComponentActor.send(
+    //     UpdateState{new_state: 1}
+    // ).await;
 
-    // send shutdown message to the neuron
-    neuronComponentActor.send(ShutDown).await;
+    // // send shutdown message to the neuron
+    // neuronComponentActor.send(ShutDown).await;
 
-    // send payload remotely using the neuron actor
-    neuronComponentActor.send(
-        InjectPayload{
-            payload: String::from("0x01ff").as_bytes().to_vec(), 
-            method: TransmissionMethod::Remote(String::from("p2p-synapse"))
-        }
-    ).await;
+    // // send payload remotely using the neuron actor
+    // neuronComponentActor.send(
+    //     InjectPayload{
+    //         payload: String::from("0x01ff").as_bytes().to_vec(), 
+    //         method: TransmissionMethod::Remote(String::from("p2p-synapse"))
+    //     }
+    // ).await;
 
-    // broadcast
-    neuronComponentActor.send(
-        Broadcast{
-            local_spawn: todo!(),
-            notif_data: todo!(),
-            rmqConfig: todo!(),
-            p2pConfig: todo!(),
-            encryptionConfig: todo!(),
-        }
-    ).await;
+    // // broadcast
+    // neuronComponentActor.send(
+    //     Broadcast{
+    //         local_spawn: todo!(),
+    //         notif_data: todo!(),
+    //         rmqConfig: todo!(),
+    //         p2pConfig: todo!(),
+    //         encryptionConfig: todo!(),
+    //     }
+    // ).await;
 
-    // subscribe with callback execution process
-    neuronComponentActor.send(
-        Subscribe{
-            p2pConfig: todo!(),
-            rmqConfig: todo!(),
-            local_spawn: todo!(),
-            // this is a callback that will be executed per each received event
-            callback: Arc::new(|event| Box::pin({
+    // // subscribe with callback execution process
+    // neuronComponentActor.send(
+    //     Subscribe{
+    //         p2pConfig: todo!(),
+    //         rmqConfig: todo!(),
+    //         local_spawn: todo!(),
+    //         // this is a callback that will be executed per each received event
+    //         callback: Arc::new(|event| Box::pin({
 
-                // clone before going into the async move{} scope
-                let clonedRedisConn = clonedRedisConn.clone();
+    //             // clone before going into the async move{} scope
+    //             let clonedRedisConn = clonedRedisConn.clone();
 
-                async move{
+    //             async move{
 
-                    /* ------------------------------------------------------------
-                    event is the received event, we can send the event in here
-                    through gRPC or RPC to another service or cache it, 
-                    for example:
-                    we're receiving a massive of transactions through subsription 
-                    process, for each tx we'll send it to the wallet service 
-                    through gRPC or cache it on redis
-                    */
-                        
-                    //    ... 
+    //                 /* ------------------------------------------------------------
+    //                 event is the received event, we can send the event in here
+    //                 through gRPC or RPC to another service or cache it, 
+    //                 for example:
+    //                 we're receiving a massive of transactions through subsription 
+    //                 process, for each tx we'll send it to the wallet service 
+    //                 through gRPC or cache it on redis
+    //                 */
+  
+    //                 //    ... 
     
-                    // cache event on redis inside the callback
-                    tokio::spawn(async move{
-                        let mut redisConn = clonedRedisConn.lock().await;
-                        let eventId = event.clone().data.id;
-                        let eventString = serde_json::to_string(&event).unwrap();
-                        let redisKey = format!("cahceEventWithId: {}", eventId);
-                        let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap(); // cache for 5 mins
-                    });
-                    /* ------------------------------------------------------------ */
+    //                 // cache event on redis inside the callback
+    //                 tokio::spawn(async move{
+    //                     let mut redisConn = clonedRedisConn.lock().await;
+    //                     let eventId = event.clone().data.id;
+    //                     let eventString = serde_json::to_string(&event).unwrap();
+    //                     let redisKey = format!("cahceEventWithId: {}", eventId);
+    //                     let _: () = redisConn.set_ex(eventId, eventString, 300).await.unwrap(); // cache for 5 mins
+    //                 });
+    //                 /* ------------------------------------------------------------ */
     
-                }
-            })),
-            decryptionConfig: todo!(),
-        }
-    ).await.unwrap();
+    //             }
+    //         })),
+    //         decryptionConfig: todo!(),
+    //     }
+    // ).await.unwrap();
 
-    // send a request to a neuron over eithre rmq or p2p (req, res model)
-    neuronComponentActor.send(
-        SendRequest{
-            rmqConfig: todo!(),
-            p2pConfig: todo!(),
-            encryptionConfig: todo!(),
-        }
-    ).await;
+    // // send a request to a neuron over eithre rmq or p2p (req, res model)
+    // neuronComponentActor.send(
+    //     SendRequest{
+    //         rmqConfig: todo!(),
+    //         p2pConfig: todo!(),
+    //         encryptionConfig: todo!(),
+    //     }
+    // ).await;
 
-    // receive a response from a neuron over eitehr rmq or p2p (req, res model)
-    let getResponse = neuronComponentActor.send(
-        ReceiveResposne{
-            rmqConfig: todo!(),
-            p2pConfig: todo!(),
-            decryptionConfig: todo!(),
-        }
-    ).await;
-    let Ok(resp) = getResponse else{
-        panic!("can't receive response from the neuron");
-    };
-    let res = resp.0.await; // await on the pinned box so the future can gets executed
+    // // receive a response from a neuron over eitehr rmq or p2p (req, res model)
+    // let getResponse = neuronComponentActor.send(
+    //     ReceiveResposne{
+    //         rmqConfig: todo!(),
+    //         p2pConfig: todo!(),
+    //         decryptionConfig: todo!(),
+    //     }
+    // ).await;
+    // let Ok(resp) = getResponse else{
+    //     panic!("can't receive response from the neuron");
+    // };
+    // let res = resp.0.await; // await on the pinned box so the future can gets executed
 
-    // talking between local actors
-    let neuronComponentActor1 = neuron1.start().recipient();
-    neuronComponentActor
-        .send(TalkTo{
-            neuron: neuronComponentActor1,
-            message: String::from("hello from neuronComponentActor")
-        }).await;
+    // // talking between local actors
+    // let neuronComponentActor1 = neuron1.start().recipient();
+    // neuronComponentActor
+    //     .send(TalkTo{
+    //         neuron: neuronComponentActor1,
+    //         message: String::from("hello from neuronComponentActor")
+    //     }).await;
 
 
-    // execute an async io task inside the neuron actor thread priodically
-    neuronComponentActor.send(
-        ExecutePriodically{
-            period: 40, // every 40 seconds
-            job: task!{
-                {
-                    println!("inside async io task...");
-                }
-            }
-        }
-    ).await;
+    // // execute an async io task inside the neuron actor thread priodically
+    // neuronComponentActor.send(
+    //     ExecutePriodically{
+    //         period: 40, // every 40 seconds
+    //         job: task!{
+    //             {
+    //                 println!("inside async io task...");
+    //             }
+    //         }
+    //     }
+    // ).await;
 
-    // execute arbitrary async io task function inside either the actor thread or tokio light thread 
-    neuronComponentActor.send(
-        Execute(
-            task!(
-                { // block logic 
-                    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-                    tx.send(String::from("")).await;
-                    while let Some(data) = rx.recv().await{
-                        log::info!("received data in task!()");
-                    }
-                } 
-            ),
-            true // local spawn, set to true if we want to execute the task inside the actor thread
-        )
-    ).await;
+    // // execute arbitrary async io task function inside either the actor thread or tokio light thread 
+    // neuronComponentActor.send(
+    //     Execute(
+    //         task!(
+    //             { // block logic 
+    //                 let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    //                 tx.send(String::from("")).await;
+    //                 while let Some(data) = rx.recv().await{
+    //                     log::info!("received data in task!()");
+    //                 }
+    //             } 
+    //         ),
+    //         true // local spawn, set to true if we want to execute the task inside the actor thread
+    //     )
+    // ).await;
 
 
 }

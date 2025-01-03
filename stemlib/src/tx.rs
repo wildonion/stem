@@ -119,6 +119,7 @@ pub struct Transaction{
     hash: Option<String>, // sha256 ash of the transaction
     tx_sig: Option<String>, // the signature result of signing the tx hash with private key, this will use to verify the tx along with the pubkey of the signer
     signer: String, // the one who has signed the tx
+    payer: String, // the one who has paid for the gas fee
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
@@ -164,7 +165,8 @@ impl Transaction{
             treasury_type: TreasuryType::Credit,
             hash: Some(String::from("")), // stringify the whole tx object then hash it
             tx_sig: Some(String::from("")), // sign the the stringified_tx_object with prvkey
-            signer: String::from("") // the one who has signed with the prv key usually the server
+            signer: String::from(""), // the one who has signed with the prv key usually the server
+            payer: String::from("")
         };
 
         tx_data

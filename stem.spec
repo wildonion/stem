@@ -2,11 +2,15 @@
 
 ُREAD: desktop books for quantum computing and neuroscience
 READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
-TODOs:
-        0 -> loadbalancer for container services (Container{}) with weighted requests, deploy BPF object
-        1 ->  uniqueDhtFileobject, worker!{event -> publish}, #[event] and OnionStreamer for Event supports stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub:
-                startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest() 
-        2 -> serverless stemlib based iot, opentable, khadangApp, exchange, stockbot, broker and game:
+TASKS:
+        0 -> #[derive(Service(prot=http, host=0.0.0.0, port=2535))] pub struct OtpDto; gives the Otp, deploy(), routers() and stop() methods
+        1 -> complete impl OnionStream for Container{} and impl OnionStream for Event{} and #[event] proc macro for event varaints
+        2 -> serverless deployement of container objects and their services as BPF also impl different services for different dtos like tcp service for MinIoDriver dto
+        3 -> loadbalancer for container services (Container{}) with round robing and weighted round robin, 
+        4 -> stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub, wrtc, quic, tcp, ws, http2:
+             startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), 
+             sendP2pRequest(), sendRpcRequest() 
+        5 -> serverless stemlib based iot, opentable, khadangApp, exchange, stockbot, broker and game mmq:
                 cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
                 infra: ci/cd(build,bumpV,push,pull) /> services: KycWorker, walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
                 OTC:
@@ -19,8 +23,10 @@ TODOs:
                         find the match with that order based on amount, quantity, side and the base/qoute
                         build atomic tx and execute the tx inside a lock and a light thread
                 neuron crypter based operations:
+                        update atomic object in qrcode and zkp noir coding 
+                        impl ContractInterface for Event{} to do wallet ops
                         Hiding correct information between wrong ones and its combination with zkp  
-                        neuron ed25519 wallet to sign each message and verify in its handlers
+                        neuron ed25519 wallet to sign each message and verify in all actor msg handlers
                         contract and wallet over zk
                         encrypt the neuron object instance using aes256 encryption 
                         #[inject(ed25519WalletSecure)]
@@ -35,7 +41,7 @@ TODOs:
                 Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
                 live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise
-                wrangler with raft, wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
+                serverless smart contract wrangler with raft, wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
                 streaming with rmq and p2p gossipsub kad + req-rep with rmq rpc and p2p req-res + main server with salvo http2 and ws
                 wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes (use it to test if a given TCP host/port are available); if it's up already execute the codes also handle notif signal and interval exec with timeout
                 custom error handler and log the error using logger neuron broadcaster
@@ -70,7 +76,7 @@ TODOs:
                         services must talk with each other  based on their wallet and data signing  
                         stemlib, lunatic, wrangler wasm actors, dyn stat dist, poly and dep injection
                         Actor: Vec<joinHandle>, interval executor, eventloop receiver, message passing for executing arbitrary tasks inside a thread of the actor, actor address 
-        3 -> other features inside the stemlib
+        6 -> build onion based protocols for neuron stemlib:
                 SYNAPSE protocol network behavior features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
                 SYNAPSE protocol network behavior features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns/cdn server, packet sniffer
                 ▶ onion protocol with noise, tcp, quic, wrtc, ws, udp and p2p, os, codec like ffmpeg and Gstreamer (streaming over video using grpc, p2p, tcp using while let some)
@@ -114,23 +120,6 @@ TODOs:
                         ▶ our VPS must detect the amount of CPU and RAM that every servers needs to get, without running the app
                         ▶ our VPS must detect the number of instances of every servers needs to be run and the load balancing algorithm 
                         bpf based proxy, firewall, vpns, packet sniffer and load balancer 
-Concepts:
-        dynamic dispatch use cases: 
-                - used for coding polymorphism to support multiple types within a single type
-                - the implementor of the trait would be specified at runtime
-                - since traits are dynamically sized on the heap so the trait must be object safe trait
-                - methods of the trait on the instance will be called dynamically through vtable pointers 
-                - used with Pin<Arc<dyn Trait>> and Pin<Box<dyn Trait>> for self-ref types like future traits
-                - used with Box or Arc for dynamic memory allocation for the pinned location (since Rust moves types inside the ram)
-                - used with Arc<dyn Trait> and Box<dyn Trait> for regular trait interfaces
-                - accessing multiple types through a single interface to register them as a service
-                - dependency injection, sdk writing like object storage and otp, testing, proxy design pattern
-                - example:
-                        protobuf codes holds interfaces and contracts between server and clients
-                        grpc has protobuf data codec the proto should be compiled into Rust codes and services
-                        into trait interfaces then we could implement services for structs inside the Rust codes 
-                        which is the design pattern proxy and dependency injection that enables to call service 
-                        methods on struct instance allows us calling object methods directly through http2
 https://shivangsnewsletter.com/p/why-doesnt-cloudflare-use-containers
 https://www.youtube.com/watch?v=rht1vO2MBIg
 https://medium.com/@harshiljani2002/building-stock-market-engine-from-scratch-in-rust-ii-0c7b5d8a60b6

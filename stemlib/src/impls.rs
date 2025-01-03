@@ -775,7 +775,9 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync> ObjectStora
         let data = self.clone();
         let mut objId = Uuid::new_v4().to_string();
         objId.hashMe();
-        let string = serde_json::to_string(&data).unwrap();
+        // T implements the Serialize and Deserialize traits 
+        // so we can simply convert it into string 
+        let string = serde_json::to_string(&data).unwrap(); // convert the data into string
         let _: () = conn.set(&objId, &string).await.unwrap();
 
         objId
@@ -788,9 +790,8 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync> ObjectStora
         let mut conn = redisPool.get().await.unwrap();
         
         let value: String = conn.get(key).await.unwrap();
-        let data = value.as_bytes();
-        data.to_vec()
-        
+        let data = serde_json::to_vec(&value).unwrap(); // convert the loaded string back to bytes
+        data
     }
 
     /// check that either two objects are the same or not
@@ -800,22 +801,37 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync> ObjectStora
 
 }
 
-/// this would allows us to stream over an event like sending and receiving events and executing callbacks
+/// this would allows us to stream over an event like sending and receiving events and executing callbacks on those events
+/// supports stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub:
 impl OnionStream for Event{
-    type Model = Event;
+    type Channel = ChannelType;
 
+    /// a method to stream over various channels and execute callback based on those events
     async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
             F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
-            (&mut self, streamer: &str, eventType: &str, callback: F) -> Self::Model {
-                
-        // execute callback instead of directly caching and storing the received 
-        // or sent events on redis or inside db , the process can be done inside 
-        // the callback instead of handling it in here
+            (&mut self, streamer: &str, eventType: &str, callback: F) -> Self {
+
+        // execute callback in the background thread, it can be storing 
+        // and caching the event on redis and db.
 
         todo!()
 
     }
     
+}
+
+
+impl OnionStream for Container{
+
+    type Channel = ChannelType;
+
+    async  fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, // the io task 
+            F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static> // the callback with event and optional streaming error
+            (&mut self, streamer: &str, eventType: &str, callback: F) -> Self {
+        
+        todo!()
+
+    }
 }
 
 // used for en(de)crypting data in form of string
@@ -978,7 +994,7 @@ impl Container{
         let host = &self.host;
         let port = self.port;
         let mut service = Arc::clone(&self.service);
-        service.startService(host, port);
+        service.startService(host, port); // calling the startService method of Service trait on the service dependency
     }
 }
 
@@ -986,9 +1002,10 @@ impl Container{
 impl Service for WalletDto{
     fn startService(&self, host: &str, port: u16){
         let host = host.to_string();
+        // start an http server for the WalletDto model
         go!{
             {
-                let router = routers::buildRouters();
+                let router = routers::buildWalletDtoRouters();
                 let acceptor = TcpListener::new(&format!("{}:{}", host, port)).bind().await;
                 Server::new(acceptor).serve(router).await;
             }
@@ -998,12 +1015,36 @@ impl Service for WalletDto{
 
 impl Service for MinIoDriver{
     fn startService(&self, host: &str, port: u16) {
+        // we can start a ws server in here
+        // ...
+    }
+}
+
+impl Service for Otp{
+    fn startService(&self, host: &str, port: u16) {
+        // we can start a http server in here
+        // ...
+    }
+}
+
+impl Service for WebHookHandler{
+    fn startService(&self, host: &str, port: u16) {
+        // start a webhook handler server
+        // build its routers in here
+        // ...        
+    }
+}
+
+impl Service for RateLimiter{
+    fn startService(&self, host: &str, port: u16) {
+        // we can start a tcp, quic, udp, http, ws server in here
         // ...
     }
 }
 
 impl Service for LocalFileDriver{
     fn startService(&self, host: &str, port: u16) {
+        // we can start a tcp/quic/udp server in here
         // ...
     }
 }
@@ -1173,6 +1214,7 @@ impl Worker{
 impl Job {
     pub fn new(task: IoEvent, parent: Option<Arc<Job>>) -> Arc<Self> {
         Arc::new(Job {
+            id: Uuid::new_v4().to_string(),
             task,
             weight: 100,
             executorId: std::thread::current().id(), // initially we've considered the current thead id for this
