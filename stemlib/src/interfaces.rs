@@ -37,7 +37,7 @@ pub trait ObjectStorage{ // it can be any bytes io or &[u8], an encoded instance
     fn checksum(&mut self, objId: &str) -> bool; 
 }
 
-pub trait Service: Send + Sync + 'static{
+pub trait Service: Send + Sync + 'static{ // don't inheritence from Serialize and Deserialize cause it can't be object safe trait
     // build router tree for the current dto
     // the trait is generic over any router 
     fn startService(&self, host: &str, port: u16);

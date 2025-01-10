@@ -151,7 +151,11 @@ pub mod wannacry{
     
         let mut buffer = vec![]; // file content in form of utf8
         file.unwrap().read_to_end(&mut buffer).await; // await on it to fill the buffer    
-        let mut default_secure_cell_config = &mut SecureCellConfig::default();
+        let mut default_secure_cell_config = &mut SecureCellConfig{ // don't use default cause we'll face invalid param
+            secret_key: hex::encode("secret"),
+            passphrase: hex::encode("passphrase"),
+            data: vec![],
+        };
 
         default_secure_cell_config.secret_key = {
             hex::encode(
@@ -356,7 +360,11 @@ pub mod eddsa_with_symmetric_signing{
     //------------------------------
     pub fn ed25519_secure_cell_signing(data: &str, mut wallet: Wallet) -> String{
 
-        let mut default_secure_cell_config = &mut SecureCellConfig::default();
+        let mut default_secure_cell_config = &mut SecureCellConfig{ // don't use default cause we'll face invalid param
+            secret_key: hex::encode("secret"),
+            passphrase: hex::encode("passphrase"),
+            data: vec![],
+        };
         // following secret key is the sha3 keccak256 hash of random chars
         default_secure_cell_config.secret_key = {
             hex::encode(

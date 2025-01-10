@@ -27,7 +27,11 @@ pub static SECURECELLCONFIG_TCPWALLET: Lazy<(wallexerr::misc::SecureCellConfig, 
     // which itself is mutable means we can change the content of the pointer later with 
     // a new binding this would change the underlying data as well as the address inside 
     // the pointer which the pointer is pointing to.
-    let mut aes256_config = &mut wallexerr::misc::SecureCellConfig::default();
+    let mut aes256_config = &mut wallexerr::misc::SecureCellConfig{ // don't use default cause we'll face invalid param
+        secret_key: hex::encode("secret"),
+        passphrase: hex::encode("passphrase"),
+        data: vec![],
+    };
     // following secret key is the sha3 keccak256 hash of random chars
     aes256_config.secret_key = {
         hex::encode(

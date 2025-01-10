@@ -50,7 +50,11 @@ pub mod symmteric{
     pub use super::*;
 
     pub fn get_default_secure_cell_config() -> SecureCellConfig{
-        SecureCellConfig::default()
+        SecureCellConfig{ // don't use default cause we'll face invalid param
+            secret_key: hex::encode("secret"),
+            passphrase: hex::encode("passphrase"),
+            data: vec![],
+        }
     }
 
     pub fn get_default_aes256_config() -> Aes256Config{

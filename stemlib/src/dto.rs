@@ -253,6 +253,7 @@ pub struct Stage{
 #[derive(Clone)]
 pub struct Job{ // Job tree
     pub id: String,
+    pub status: JobStatus,
     pub task: IoEvent, // an io task with the event instance 
     pub weight: u32,
     pub executorId: std::thread::ThreadId,
@@ -286,6 +287,13 @@ pub enum RunnerStatus{
     Started,
     Halted,
     Executed
+}
+
+#[derive(Clone)]
+pub enum JobError{
+    Halted,
+    Executed,
+    Rejected
 }
 
 #[derive(Clone)]
@@ -326,6 +334,7 @@ pub enum ChannelType{
 #[derive(Clone)]
 pub struct JobResult<T: Send + Sync + 'static>{
     pub jobId: String,
+    pub error: JobError, // use custom error handler 
     pub data: T
 }
 
@@ -450,6 +459,13 @@ pub enum MessageWorker{
 #[derive(Clone)]
 pub struct CronScheduler{
     pub jobs: Vec<Job>
+}
+
+#[derive(Clone)]
+pub enum JobStatus{
+    Initializing,
+    Executed,
+    Aborted,
 }
 
 #[derive(Clone)]

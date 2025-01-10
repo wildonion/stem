@@ -1,3 +1,4 @@
+use core::time;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::sync::{Arc, Condvar};
@@ -20,7 +21,6 @@ use stemlib::dsl::*;
 use stemlib::misc::setupRedis;
 
 
-#[tokio::test]
 pub async fn onionEnv(){
 
     // a actor based design pattern to create dto as a service container 
@@ -46,7 +46,8 @@ pub async fn onionEnv(){
     // ================================================================================
     // each container is a different component inside the app like we have otp service
     // actor responsible for sending otp , rate limiter service actor responsible for 
-    // handling rate limits
+    // handling rate limits, each container component can transfer data between different
+    // thread and parts of the app through message sending logics like pubsub and mpsc
     let mut webhookHandlerComponent = Container{
         service: Arc::new(WebHookHandler),
         id: Uuid::new_v4().to_string(),
@@ -88,7 +89,11 @@ pub async fn onionEnv(){
                 let mut file = tokio::fs::File::open("Data.json").await.unwrap();
                 let mut buffer = vec![];
                 let readBytes = file.read_buf(&mut buffer).await.unwrap();
-                let mut secureCellConfig = SecureCellConfig::default();
+                let mut secureCellConfig = SecureCellConfig{ // don't use default cause we'll face invalid param
+                    secret_key: hex::encode("secret"),
+                    passphrase: hex::encode("passphrase"),
+                    data: vec![],
+                };
                 buffer.encrypt(&mut secureCellConfig);
                 Arc::new(buffer)
             }, 
@@ -100,18 +105,18 @@ pub async fn onionEnv(){
         requests: Arc::new(vec![])
     };
 
+
     // streaming over contanier is also possible, generally this sugar syntax is better
     // than sending message using .send() method, behind the scene it's using the actor 
     // sending message pattern, this is before starting the container actor
-    walletComponent.on("mpsc", "send", |event, error| async move{
+    // walletComponent.on("send", "mpsc", |event, error| async move{
 
-        if error.is_some(){
-            log::error!("error has happened: {:?}", error.unwrap());
-        }
-        log::info!("sent event: {:?}", event);
+    //     if error.is_some(){
+    //         log::error!("error has happened: {:?}", error.unwrap());
+    //     }
+    //     log::info!("sent event: {:?}", event);
 
-    }).await;
-
+    // }).await;
 
     // start both containers as actors
     let walletComponentActor = walletComponent.start();
@@ -123,7 +128,14 @@ pub async fn onionEnv(){
             msg: MsgType::Serve, 
             container: uploadDriverComponentActor.clone().recipient()
         }
-    ).await;
+    ).await.unwrap();
+
+    walletComponentActor.send(
+        TalkToContainer{
+            msg: MsgType::Stop, 
+            container: uploadDriverComponentActor.clone().recipient()
+        }
+    ).await.unwrap();
 
     // send an event data to the uploadDriverComponentActor 
     walletComponentActor.send(
@@ -131,9 +143,13 @@ pub async fn onionEnv(){
             msg: MsgType::Event(Event::default()),
             container: uploadDriverComponentActor.clone().recipient()
         }
+    ).await.unwrap();
+
+    let underlyingService = walletComponentActor.send(
+        GetService
     ).await;
 
-
+    let clonedWalletComponentActor = walletComponentActor.clone();
     //============== a ctx has an environment and containers
     // a dto is a copmponent that can be used to model an antity and interact with the core 
     // of the entity including db calls and updating its state; we can convert a dto into a 
@@ -142,8 +158,8 @@ pub async fn onionEnv(){
     // other container through message sending. 
     // push the containers into the app context
     let ctx = AppContext::new().await
-        .pushContainer(walletComponentActor)
-        .pushContainer(uploadDriverComponentActor);
+        .pushContainer(walletComponentActor.clone())
+        .pushContainer(uploadDriverComponentActor.clone());
     
     // get the first contianer actor
     let containers = ctx.getContainers();
@@ -155,12 +171,12 @@ pub async fn onionEnv(){
     // it starts its service on the specified host and port  
     go!{
         {
-            clonedC1.send(Deploy).await; // wallet dto model starts an http server, it can by any server overwritten in Service trait methods
+            clonedWalletComponentActor.send(Deploy).await.unwrap(); // wallet dto model starts an http server, it can by any server overwritten in Service trait methods
         }
     }
 
     // execute an async io task priodically
-    c1.send(
+    walletComponentActor.clone().send(
         ExecutePriodically{
             period: 40, // every 40 seconds
             job: task!{
@@ -170,93 +186,103 @@ pub async fn onionEnv(){
                 }
             }
         }
-    ).await;
+    ).await.unwrap();
 
     // execute arbitrary async io task function inside either the actor thread or tokio light thread 
-    c1.send(
+    walletComponentActor.clone().send(
         Execute(
             task!(
                 { // block logic 
                     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
                     tx.send(String::from("wildonion sender")).await;
                     while let Some(data) = rx.recv().await{
-                        log::info!("received data in task!()");
+                        log::info!("received data in task!() > {:?}", data);
                     }
                 } 
             ),
             true // local spawn, set to true if we want to execute the task inside the actor thread
         )
-    ).await;
+    ).await.unwrap();
  
 
+    // wait for service to be up
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    
     // ============================================================================
     // ============================== OBJECT STORAGE ==============================
     // ============================================================================
     // event dto instance tests
-    let mut event = Event::default();
-    let objId = event.store().await; // cache the event instance
-    let stringEvent = Event::fetch(&objId).await; // fetch the object from the storage, it's a byte array and can be anything files and instances
-    let mut event = serde_json::from_slice::<Event>(&stringEvent).unwrap(); // decode the fetched object into the Event struct
-    event.on("rmq", "send", |event, error| async move{ // start sending event streams with executing callback
-        if let Some(err) = error{
-            log::error!("the error in sending event");
-        }
-        log::info!("executing callback");
-    }).await;
+    // let mut event = Event::default();
+    // let objId = event.store().await; // cache the event instance
+    // let stringEvent = Event::fetch(&objId).await; // fetch the object from the storage, it's a byte array and can be anything files and instances
+    // let mut event = serde_json::from_slice::<Event>(&stringEvent).unwrap(); // decode the fetched object into the Event struct
+    // event.on("rmq", "send", |event, error| async move{ // start sending event streams with executing callback
+    //     if let Some(err) = error{
+    //         log::error!("the error in sending event");
+    //     }
+    //     log::info!("executing callback");
+    // }).await;
 
-    // storing file on object storage
-    let mut file = {
-        // calling the save() of the interface on the driver instance
-        // we can do this since the interface is implemented for the struct
-        // and we can override the methods
-        let mut file = tokio::fs::File::open("Data.json").await.unwrap();
-        let mut buffer = vec![];
-        let readBytes = file.read_buf(&mut buffer).await.unwrap();
-        let mut secureCellConfig = SecureCellConfig::default();
-        buffer.encrypt(&mut secureCellConfig); // encrypt the buffer or the file content
-        buffer
-    };
+    // // storing file on object storage
+    // let mut file = {
+    //     // calling the save() of the interface on the driver instance
+    //     // we can do this since the interface is implemented for the struct
+    //     // and we can override the methods
+    //     let mut file = tokio::fs::File::open("Data.json").await.unwrap();
+    //     let mut buffer = vec![];
+    //     let readBytes = file.read_buf(&mut buffer).await.unwrap();
+    //     let mut secureCellConfig = SecureCellConfig{ // don't use default cause we'll face invalid param
+    //         secret_key: hex::encode("secret"),
+    //         passphrase: hex::encode("passphrase"),
+    //         data: vec![],
+    //     };
+    //     buffer.encrypt(&mut secureCellConfig); // encrypt the buffer or the file content
+    //     buffer
+    // };
 
-    // store the encrypted file bytes on redis and return the object id 
-    let id = file.store().await;
-    let mut fileBuffer = Vec::<u8>::fetch(&id).await; // fetch the stored object into the vector of u8 bytes
-    // now we can store the bytes in a file
-    let mut file1 = tokio::fs::File::create("saved.txt").await.unwrap();
-    file1.write(&mut fileBuffer).await;
+    // // store the encrypted file bytes on redis and return the object id 
+    // let id = file.store().await;
+    // let mut fileBuffer = Vec::<u8>::fetch(&id).await; // fetch the stored object into the vector of u8 bytes
+    // // now we can store the bytes in a file
+    // let mut file1 = tokio::fs::File::create("saved.txt").await.unwrap();
+    // file1.write(&mut fileBuffer).await;
 
-    // file chunk streaming
-    let chunkSize = 5;
-    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-    for b in (0..file.len()).step_by(chunkSize){
-        let mut end = b + chunkSize; // get from b up to b + chunkSize
-        if end > file.len(){ // if we reach the end of the bytes
-            end = file.len(); // the end would be the last element since we've reached the last elem
-        }
-        let chunk = &file[b..end];
-        // TODO - encode each chunk using a codec
-        // ...
-        tx.send(chunk.to_vec()).await; // this can be any channel (ws, tcp, p2p)
-    }
-    // gather the whole chunks to form the buffer
-    tokio::spawn(async move{
-        let mut buffer = vec![];
-        while let Some(chunk) = rx.recv().await{
-            // extending the buffer with the received bytes
-            buffer.extend(chunk);
-        }
-        // we have a fullfilled buffer in here contains the file bytes
-    });
+    // // file chunk streaming
+    // let chunkSize = 5;
+    // let (tx, mut stream) = tokio::sync::mpsc::channel(100);
+    // for b in (0..file.len()).step_by(chunkSize){
+    //     let mut end = b + chunkSize; // get from b up to b + chunkSize
+    //     if end > file.len(){ // if we reach the end of the bytes
+    //         end = file.len(); // the end would be the last element since we've reached the last elem
+    //     }
+    //     let chunk = &file[b..end];
+    //     // TODO - encode each chunk using a codec
+    //     // ...
+    //     tx.send(chunk.to_vec()).await; // this can be any channel (ws, tcp, p2p)
+    // }
+    // // gather the whole chunks to form the buffer
+    // tokio::spawn(async move{
+    //     let mut buffer = vec![];
+    //     while let Some(chunk) = stream.recv().await{ // receiving the bytes from a channel, this can be a tcp based channel
+    //         // extending the buffer with the received bytes
+    //         buffer.extend(chunk);
+    //     }
+    //     // we have a fullfilled buffer in here contains the file bytes
+    // });
 
     // ============================================
-    
 
-    // ===========================================================================
-    // ============================== NEURON AGENTS ==============================
-    // ===========================================================================
+
+    // // ===========================================================================
+    // // ============================== NEURON AGENTS ==============================
+    // // ===========================================================================
+    // // neuron stemlib is an agent used to build an actor worker bot which can be
+    // // a server and client to send and receive messages remotely and locally
+    
     // let getAgents = ctx.env.agents;
     // let agents = getAgents.lock().await;
 
-    // let mut neuron1 = agents.get(0).unwrap().to_owned();
+    // let mut errorTracer = agents.get(0).unwrap().to_owned(); // it's an error tracer and can be used to send runtime errors to rmq queue
     // let mut neuron = agents.get(1).unwrap().to_owned();
 
     // // redisConn must be mutable and since we're moving it into another thread 
@@ -291,6 +317,7 @@ pub async fn onionEnv(){
     //     println!("i'm running every 10 seconds, with retries of 12 and timeout 0");
     // }, 10, 12, 0).await;
 
+
     // // --------------------------
     // // ------- sending message through actor mailbox eventloop receiver:
     // // by default actors run on the system arbiter thread using 
@@ -298,7 +325,7 @@ pub async fn onionEnv(){
     // // in parallel with SyncArbiter. 
     // // actor mailbox is the eventloop receiver of actor jobq mpsc channel
     // // which receive messages and execute them in a light thread or process 
-
+  
     // // starting the neuron actor 
     // let neuronComponentActor = neuron.clone().start();
     
@@ -393,7 +420,7 @@ pub async fn onionEnv(){
     // let res = resp.0.await; // await on the pinned box so the future can gets executed
 
     // // talking between local actors
-    // let neuronComponentActor1 = neuron1.start().recipient();
+    // let neuronComponentActor1 = errorTracer.start().recipient();
     // neuronComponentActor
     //     .send(TalkTo{
     //         neuron: neuronComponentActor1,

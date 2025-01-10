@@ -32,7 +32,11 @@ impl ActixMessageHandler<Broadcast> for Neuron{
             } = msg;
         
         let mut stringData = serde_json::to_string(&notif_data).unwrap();
-        let mut scc = SecureCellConfig::default();
+        let mut scc = SecureCellConfig{ // don't use default cause we'll face invalid param
+            secret_key: hex::encode("secret"),
+            passphrase: hex::encode("passphrase"),
+            data: vec![],
+        };
         let mut ruk = String::from(""); 
 
         let finalData = if encryptionConfig.is_some(){
@@ -365,9 +369,23 @@ impl ActixMessageHandler<WakeUp> for Container{ // use this to wake up a contain
             MsgType::Serve => {
                 let host = self.host.clone();
                 let port = self.port.clone();
+                self.service.startService(&host, port);
             },
+            _ => {
+                log::error!("not supported command for the container");
+            }
+        }
+
+    }
+}
+
+impl ActixMessageHandler<Stop> for Container{ // use this to wake up a container
+    type Result = ();
+    fn handle(&mut self, msg: Stop, ctx: &mut Self::Context) -> Self::Result {
+        let Stop { msg } = msg.clone();
+        match msg{
             MsgType::Stop => {
-                ctx.stop();
+                ctx.stop(); // stop the current container actor component or maybe the service
             },
             _ => {
                 log::error!("not supported command for the container");
@@ -380,6 +398,7 @@ impl ActixMessageHandler<WakeUp> for Container{ // use this to wake up a contain
 impl ActixMessageHandler<Deploy> for Container{
     type Result = ();
     fn handle(&mut self, msg: Deploy, ctx: &mut Self::Context) -> Self::Result {
+        log::info!("message Deploy received!");
         self.deploy();
     }
 }
@@ -414,5 +433,12 @@ impl ActixMessageHandler<Execute> for Container{
             // execute the task in the background light thread
             tokio::spawn(job()); // tokio takes the job() and await on it inside a light thread
         }
+    }
+}
+
+impl ActixMessageHandler<GetService> for Container{
+    type Result = ();
+    fn handle(&mut self, msg: GetService, ctx: &mut Self::Context) -> Self::Result {
+        
     }
 }

@@ -6,6 +6,8 @@
     with neuron actors
 */
 
+use interfaces::Service;
+
 use crate::*;
 use crate::dto::*;
 use std::pin::Pin;
@@ -26,7 +28,17 @@ pub struct WakeUp{
 
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
+pub struct Stop{
+    pub msg: MsgType
+}
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
 pub struct Deploy;
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct GetService;
 
 #[derive(Clone, Debug)]
 pub enum MsgType{

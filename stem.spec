@@ -10,9 +10,13 @@ TASKS:
         4 -> stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub, wrtc, quic, tcp, ws, http2:
              startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), 
              sendP2pRequest(), sendRpcRequest() 
-        5 -> serverless stemlib based iot, opentable, khadangApp, exchange, stockbot, broker and game mmq:
+        5 -> serverless stemlib based iot, opentable, khadangApp, broker exchange, stockbot and game mmq with stemlib and wrangler:
+                tor like p2p distribtued redis based obj storage interface with  kad, stemlib, fsm, redis atomic tx, rayon, tokio, codec, synprot: https://arpitbhayani.me/blogs/consistent-hashing/
+                actor worker container component context runner pods for serverless object deployment supports various protocols
+                wrangler worker: crontab, queue, streaming, req/res to deploy the wasm on v8 engines to run on browser: https://developers.cloudflare.com/learning-paths/
+                cronjobs with neuron actor worker containers: ctx, tokioTime, redisPubSubExpChan, webhook, polling, parking
                 cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
-                infra: ci/cd(build,bumpV,push,pull) /> services: KycWorker, walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
+                infra: ci/cd(build,bumpV,push,pull) /> services: KycWorker, txPoolWorker, walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
                 OTC:
                         build atomic tx object with their sides (bid/buy, ask/sell), amount, type(base, quote)
                         update tokens with locking in light thread db atomically inside the app 
@@ -41,7 +45,7 @@ TASKS:
                 Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
                 live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise
-                serverless smart contract wrangler with raft, wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
+                serverless smart contract wrangler with raft, chan, streaming/req-res based, wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
                 streaming with rmq and p2p gossipsub kad + req-rep with rmq rpc and p2p req-res + main server with salvo http2 and ws
                 wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes (use it to test if a given TCP host/port are available); if it's up already execute the codes also handle notif signal and interval exec with timeout
                 custom error handler and log the error using logger neuron broadcaster
@@ -61,21 +65,13 @@ TASKS:
                                                 0 - store the tx order in btreemap to form a tree of orders 
                                                 1 - find a match between orders then create tx object
                                                 2 - tx.commit() - will charge the user account
-                                                3 - tx.executeAtomically() - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet
+                                                3 - tx.executeAtomically() - must be called within the period of 10 mins otherwise the money will be paid back to the user wallet: https://marabos.nl/atomics/atomics.html
                                                 4 - tx.record() - to store the info inside the db
                                 5 -> send the completed tx to txConfirmedQueue queue 
                                 6 -> receive tx using neuron actor, inside the walle service
                                 7 -> add tx to wallet then produce a completed transaction notif to rmq
                                 8 -> short polling to receive the notifications in client side
                         }
-                stockBotAgents for broker, sexchange with gemini service (attach stemlib to the app) in market() method:
-                        stream based: rmq and p2p pubsub / req-res based: p2p, rmq rpc and grpc / bidi streaming: grpc / local: mpsc jobq eventloop 
-                        salvoHttp2(stemlibGrpc) / ws, short http2 polling JobId <----stemlib.grpc.rmq.p2p---> gemini grpc pubsub worker(stemlibGrpcP2pRmq)
-                        walletWorker, GeminiWorker, txPoolWorker, marketMatchEngineWorker 
-                        Talk to match engine using gRPC and RMQ from the main http2 server: make an order -> server -stemlib.rmq-> matchEngine order pool 
-                        services must talk with each other  based on their wallet and data signing  
-                        stemlib, lunatic, wrangler wasm actors, dyn stat dist, poly and dep injection
-                        Actor: Vec<joinHandle>, interval executor, eventloop receiver, message passing for executing arbitrary tasks inside a thread of the actor, actor address 
         6 -> build onion based protocols for neuron stemlib:
                 SYNAPSE protocol network behavior features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 
                 SYNAPSE protocol network behavior features2: loadbalancer, ingress listener like ngrok, reverse proxy and dns/cdn server, packet sniffer

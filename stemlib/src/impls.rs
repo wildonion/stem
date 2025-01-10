@@ -39,6 +39,8 @@ impl Neuron{
             /* *********************************************************** */
             /* **************** BUILDING SYNAPSE PROTOCOL **************** */
             /* *********************************************************** */
+            // ---- node discovery, message routing with kad
+            // ---- relay messages using gossipsub, encryption with aes
             synProt: {
                 // building the swarm object with our network behaviour contains our synapse protocol
                 let mut swarm = SwarmBuilder::with_new_identity()
@@ -51,7 +53,7 @@ impl Neuron{
                 .unwrap()
                 .with_quic()
                 .with_behaviour(|key|{
-                    Ok(NeuronBehaviour::new(key.clone()))
+                    Ok(NeuronBehaviour::new(key.clone())) // use kad to route message across nodes
                 })
                 .unwrap()
                 .with_swarm_config(|c| c.with_idle_connection_timeout(tokio::time::Duration::from_secs(60)))
@@ -827,7 +829,7 @@ impl OnionStream for Container{
 
     async  fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, // the io task 
             F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static> // the callback with event and optional streaming error
-            (&mut self, streamer: &str, eventType: &str, callback: F) -> Self {
+            (&mut self, eventType: &str, streamer: &str, callback: F) -> Self {
         
         todo!()
 
@@ -962,7 +964,7 @@ impl Environment{
                 ]
             )
         ),
-        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(10), id: thread::current().id() } }
+        executor: Executor { runner: RunnerActorThreadPoolEventLoop::new(8), id: thread::current().id() } }
     }
 
     pub async fn pushAgent(&mut self, agent: Neuron){
@@ -1002,9 +1004,10 @@ impl Container{
 impl Service for WalletDto{
     fn startService(&self, host: &str, port: u16){
         let host = host.to_string();
-        // start an http server for the WalletDto model
+        // start an http server for the WalletDto model in the background thread
         go!{
             {
+                log::info!("[+] starting http server for WalletDto container...");
                 let router = routers::buildWalletDtoRouters();
                 let acceptor = TcpListener::new(&format!("{}:{}", host, port)).bind().await;
                 Server::new(acceptor).serve(router).await;
@@ -1215,6 +1218,7 @@ impl Job {
     pub fn new(task: IoEvent, parent: Option<Arc<Job>>) -> Arc<Self> {
         Arc::new(Job {
             id: Uuid::new_v4().to_string(),
+            status: JobStatus::Initializing,
             task,
             weight: 100,
             executorId: std::thread::current().id(), // initially we've considered the current thead id for this

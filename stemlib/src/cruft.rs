@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::sync::Condvar;
 use std::{collections::HashMap};
 use futures::future::{BoxFuture, FutureExt};
+use interfaces::ObjectStorage;
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use tokio::net::tcp;
@@ -5641,7 +5642,13 @@ pub async fn idm(){
             .or_insert(arr[idx]);
     }
 
-
+    // example of:
+    // task execution handler intervally (cronjob: ctx, tokioTime, redisPubSubExpChan, webhook, polling) then unpark thread
+    // check photocount every 10 seconds then if it was 2>= break the loop and send jobResult to channel or actor msg channel
+    // checking user status every 10 seconds to update other fields in db
+    // removing files in a light thread and send the jobResult errors to a channel (graylog)
+    // background scheduler worker like a bot with neuron stemlib 
+    // check periodically that if job.weight > 10 spawn another job 
     // deleting files in the background thread per each file
     let paths = vec![""];
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
@@ -5661,5 +5668,57 @@ pub async fn idm(){
 
         }
     });
+    
+}
+
+pub async fn chainHandlers(){
+    // graph based chain of handlers
+    trait Kind{}
+    struct Context{}
+    struct State<F, R>
+        where F: Fn(Context) -> R + Send + Sync + 'static,
+        R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        handlers: Vec<fn(Arc<dyn Kind>, F)>, // vector of handlers 
+        jobs: Vec<Arc<Job>> // a Job instance is a graph based node with parent and children
+    }
+    impl<F: Fn(Context) -> R + Send + Sync + 'static,
+        R: std::future::Future<Output = ()> + Send + Sync + 'static> State<F, R>{
+        pub fn new(handler: fn(Arc<dyn Kind>, F)) -> Self{
+            Self { handlers: vec![handler], jobs: vec![Job::new(
+                Arc::new(
+                    |event| Box::pin(async move{})
+                ), None)] }
+        }
+    }
+    impl<F: Fn(Context) -> R + Send + Sync + 'static, R: std::future::Future<Output = ()> + Send + Sync + 'static> 
+        ObjectStorage for State<F, R>{ 
+        async fn store(&mut self) -> String{
+            let jobs = self.jobs.clone();
+            for job in jobs{
+                match job.status{
+                    JobStatus::Executed => {
+                        
+                    },
+                    _ => {}
+                } 
+            }
+
+            todo!()
+        }
+        async fn fetch(key: &str) -> Vec<u8>{
+            todo!()
+        }
+        fn checksum(&mut self, objId: &str) -> bool{
+            todo!()
+        }
+    }
+    fn handler<R, F>(kind: Arc<dyn Kind>, cb: F) 
+    where F: Fn(Context) -> R + Send + Sync + 'static,
+    R: std::future::Future<Output = ()> + Send + Sync + 'static{
+        
+        tokio::spawn(cb(Context{}));
+        
+    }
+    let event = crate::dto::Event::default();
     
 }
