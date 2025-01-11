@@ -310,9 +310,13 @@ pub struct Environment{
 }
 
 #[derive(Clone)]
-pub struct AppContext{
+pub struct AppContext<T>{
     pub containers: Vec<Arc<Addr<Container>>>,
-    pub env: Environment
+    pub env: Environment,
+    pub value: T,
+    pub timeout: tokio::time::Instant,
+    pub deadline: tokio::time::Instant,
+    pub isDone: bool
 }
 
 // an event contains the offset in the cluster, execution status and the data

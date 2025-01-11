@@ -974,14 +974,27 @@ impl Environment{
     }
 }
 
-impl AppContext{
+impl AppContext<String>{
     pub async fn new() -> Self{
-        Self { containers: vec![], env: Environment::new(String::from("onionEvn013")).await }
+        Self { 
+            containers: vec![], 
+            isDone: false,
+            deadline: tokio::time::Instant::now(),
+            timeout: tokio::time::Instant::now(),
+            value: String::from(""),
+            env: Environment::new(String::from("onionEvn013")).await }
     }
     pub fn pushContainer(&mut self, container: Addr<Container>) -> Self{
-        let Self{containers, env} = self;
+        let Self{value, deadline, timeout, isDone, containers, env} = self;
         containers.push(Arc::new(container));
-        Self{containers: containers.to_vec(), env: env.clone() }
+        Self{
+            deadline: deadline.to_owned(), 
+            timeout: timeout.to_owned(), 
+            isDone: isDone.to_owned(), 
+            value: value.to_owned(),
+            containers: containers.to_vec(), 
+            env: env.clone() 
+        }
     }
     pub fn getContainers(&self) -> Vec<Arc<Addr<Container>>>{
         let containers = self.clone().containers;

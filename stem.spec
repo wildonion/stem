@@ -9,12 +9,12 @@ TASKS:
         3 -> loadbalancer for container services (Container{}) with round robing and weighted round robin, 
         4 -> stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub, wrtc, quic, tcp, ws, http2:
              startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), 
-             sendP2pRequest(), sendRpcRequest() 
+             sendP2pRequest(), sendRpcRequest()
         5 -> serverless stemlib based iot, opentable, khadangApp, broker exchange, stockbot and game mmq with stemlib and wrangler:
+                send notif with cronjobs and neuron actor worker containers: timeout, ctx, tokioTime, redisPubSubExpChan, webhook, polling, parking, jobq mpsc, redis and rmq pubsub, rpc, grpc and p2p gossipsub
                 tor like p2p distribtued redis based obj storage interface with  kad, stemlib, fsm, redis atomic tx, rayon, tokio, codec, synprot: https://arpitbhayani.me/blogs/consistent-hashing/
                 actor worker container component context runner pods for serverless object deployment supports various protocols
                 wrangler worker: crontab, queue, streaming, req/res to deploy the wasm on v8 engines to run on browser: https://developers.cloudflare.com/learning-paths/
-                cronjobs with neuron actor worker containers: ctx, tokioTime, redisPubSubExpChan, webhook, polling, parking
                 cloudflare wasm worker wrangler with neuron actor cli for the p2p based Dex and Cex
                 infra: ci/cd(build,bumpV,push,pull) /> services: KycWorker, txPoolWorker, walletWroker(apiSigning), MarketWorker(MatchEngine), MainServer(ws,Http2), stemlib NeuronActor 
                 OTC:
@@ -45,7 +45,7 @@ TASKS:
                 Cex broker order book and MatchEngineActorWorker using neuron actor rmq which contains all orders
                 Atomic orderTx in WalletServiceActorWorker and neuron actor
                 live orders with IPFS raft crypter graph concept through Ws, wrtc, tcp, udp, ed25519 noise
-                serverless smart contract wrangler with raft, chan, streaming/req-res based, wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
+                serverless smart contract wrangler with raft, chan, streaming/req-res based[http,p2p,rmqrpc], wasm, ws, wrtc, http2, p2p, tcp, udp, grpc, rpc, redis, sqlx, rmq, chan, spawn, cb(event) 
                 streaming with rmq and p2p gossipsub kad + req-rep with rmq rpc and p2p req-res + main server with salvo http2 and ws
                 wait-for-it worker using stemlib actor: s1 must wait for s2 to be up to execute its codes (use it to test if a given TCP host/port are available); if it's up already execute the codes also handle notif signal and interval exec with timeout
                 custom error handler and log the error using logger neuron broadcaster

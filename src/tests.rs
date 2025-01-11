@@ -21,29 +21,41 @@ use stemlib::dsl::*;
 use stemlib::misc::setupRedis;
 
 
+
+
+
+// ================================================================================
+// ================================================================================
+// ================================================================================
+// an actor based design pattern to create dto as a service container 
+// and deploy them as a serverless obejct through their service
+
+/* 
+    Actor(Container(Service(Dto))):
+        we want to deploy the Dto as a serverless object which is a of type 
+        Service trait and wrapped by Container which is an actor based component 
+    - a dto can be registred as a service inside a container 
+    - a container has an id, host and port for the related service
+    - a container is an actor component that allows us to talk with other actor component; container talking
+        ex: a container can send an MsgType::Serve message to another contianer 
+            to start the second container service on the defined host and port
+    - a container can receive and send messages from/to other containers and different parts of the app
+    - a container componenet can talk with other component by sending message
+    
+    components are container actor workers which contains a dto as a service (not necessarily) 
+    they can talk locally and remotely using .on() methods with each other through message 
+    sending pattern and can be deployed as a server less object like user or otp container 
+    have its own set of routers and a deployable service an so on for notification container.
+*/
+// ================================================================================
+// ================================================================================
+// ================================================================================
 pub async fn onionEnv(){
 
-    // a actor based design pattern to create dto as a service container 
-    // and deploy them as a serverless obejct
 
-    /* 
-        Actor(Container(Service(Dto)))
-        a dto can be registred as a service inside a container 
-        a container has an id, host and port for the related service
-        a container is an actor component that allows us to talk with other actor component; container talking
-        ex: a container can send an MsgType::Serve message to another contianer to start the second container service on the defined host and port
-        a container can receive and send messages from/to other containers and different parts of the app
-        a container componenet can talk with other component by sending message
-        
-        components are container actor workers which contains a dto as a service (not necessarily) 
-        they can talk locally and remotely using .on() methods with each other through message 
-        sending pattern and can be deployed as a server less object like user or otp container 
-        have its own set of routers and a deployable service an so on for notification container.
-    */
-    
-    // ================================================================================
-    // ============================== SERVICE CONTAINERS ==============================
-    // ================================================================================
+    // ==============================================================================
+    // ======================= STEP 1) CREATE CONTAINER COMPONENTS AND THEIR SERVICES
+    // ==============================================================================
     // each container is a different component inside the app like we have otp service
     // actor responsible for sending otp , rate limiter service actor responsible for 
     // handling rate limits, each container component can transfer data between different
@@ -118,10 +130,16 @@ pub async fn onionEnv(){
 
     // }).await;
 
+    // ======================================================
+    // ======================= STEP 2) START CONTAINER ACTOR 
+    // ======================================================
     // start both containers as actors
     let walletComponentActor = walletComponent.start();
     let uploadDriverComponentActor = uploadDriverComponent.start();
     
+    // =========================================================================================
+    // ======================= STEP 3) TALK TO EACH CONTAINER THROUGH SENDING MESSAGE USING MPSC
+    // ========================================================================================= 
     // walletComponentActor wants to talk with the uploadDriverComponentActor
     walletComponentActor.send(
         TalkToContainer{
@@ -149,8 +167,9 @@ pub async fn onionEnv(){
         GetServiceInfo
     ).await;
 
-    let clonedWalletComponentActor = walletComponentActor.clone();
-    //============== a ctx has an environment and containers
+    // ================================================================================
+    // ======================= STEP 4) BUIL APP CONTEXT AND PUSH THE CONTAINERS INTO IT
+    // ================================================================================ 
     // a dto is a copmponent that can be used to model an antity and interact with the core 
     // of the entity including db calls and updating its state; we can convert a dto into a 
     // service to host it on an address and port by adding it inside a container as a service 
@@ -171,12 +190,12 @@ pub async fn onionEnv(){
     // it starts its service on the specified host and port  
     go!{
         {
-            clonedWalletComponentActor.send(Deploy).await.unwrap(); // wallet dto model starts an http server, it can by any server overwritten in Service trait methods
+            clonedC1.send(Deploy).await.unwrap(); // wallet dto model starts an http server, it can by any server overwritten in Service trait methods
         }
     }
 
     // execute an async io task priodically
-    walletComponentActor.clone().send(
+    c1.clone().send(
         ExecutePriodically{
             period: 40, // every 40 seconds
             job: task!{
@@ -189,7 +208,7 @@ pub async fn onionEnv(){
     ).await.unwrap();
 
     // execute arbitrary async io task function inside either the actor thread or tokio light thread 
-    walletComponentActor.clone().send(
+    c1.clone().send(
         Execute(
             task!(
                 { // block logic 
@@ -205,7 +224,7 @@ pub async fn onionEnv(){
     ).await.unwrap();
  
 
-    // keep the service up
+    // keep the app up so the dto service can be in a constant execution process
     loop{}
 
     // ============================================================================
