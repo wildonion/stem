@@ -436,9 +436,11 @@ impl ActixMessageHandler<Execute> for Container{
     }
 }
 
-impl ActixMessageHandler<GetService> for Container{
+impl ActixMessageHandler<GetServiceInfo> for Container{
     type Result = ();
-    fn handle(&mut self, msg: GetService, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: GetServiceInfo, ctx: &mut Self::Context) -> Self::Result {
         
+        // retreive the underlying service info
+        let serviceInfo = self.service.getServiceInfo();
     }
 }

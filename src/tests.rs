@@ -146,7 +146,7 @@ pub async fn onionEnv(){
     ).await.unwrap();
 
     let underlyingService = walletComponentActor.send(
-        GetService
+        GetServiceInfo
     ).await;
 
     let clonedWalletComponentActor = walletComponentActor.clone();
@@ -205,9 +205,9 @@ pub async fn onionEnv(){
     ).await.unwrap();
  
 
-    // wait for service to be up
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    
+    // keep the service up
+    loop{}
+
     // ============================================================================
     // ============================== OBJECT STORAGE ==============================
     // ============================================================================

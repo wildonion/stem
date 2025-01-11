@@ -41,4 +41,5 @@ pub trait Service: Send + Sync + 'static{ // don't inheritence from Serialize an
     // build router tree for the current dto
     // the trait is generic over any router 
     fn startService(&self, host: &str, port: u16);
+    fn getServiceInfo(&self) -> String;
 }

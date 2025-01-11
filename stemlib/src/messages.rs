@@ -17,7 +17,7 @@ use std::future::Future;
 #[rtype(result = "()")]
 pub struct TalkToContainer{
     pub msg: MsgType,
-    pub container: Recipient<WakeUp> // to talk to the container we should send a WakeUp message
+    pub container: Recipient<WakeUp> // to talk to the container only send a WakeUp message
 }
 
 #[derive(Message, Clone, Debug)]
@@ -38,7 +38,7 @@ pub struct Deploy;
 
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
-pub struct GetService;
+pub struct GetServiceInfo;
 
 #[derive(Clone, Debug)]
 pub enum MsgType{

@@ -1014,6 +1014,9 @@ impl Service for WalletDto{
             }
         }
     }
+    fn getServiceInfo(&self) -> String {
+        String::from("")
+    }
 }
 
 impl Service for MinIoDriver{
@@ -1021,12 +1024,18 @@ impl Service for MinIoDriver{
         // we can start a ws server in here
         // ...
     }
+    fn getServiceInfo(&self) -> String {
+        String::from("")
+    }
 }
 
 impl Service for Otp{
     fn startService(&self, host: &str, port: u16) {
         // we can start a http server in here
         // ...
+    }
+    fn getServiceInfo(&self) -> String {
+        String::from("")
     }
 }
 
@@ -1036,12 +1045,18 @@ impl Service for WebHookHandler{
         // build its routers in here
         // ...        
     }
+    fn getServiceInfo(&self) -> String {
+        String::from("")
+    }
 }
 
 impl Service for RateLimiter{
     fn startService(&self, host: &str, port: u16) {
         // we can start a tcp, quic, udp, http, ws server in here
         // ...
+    }
+    fn getServiceInfo(&self) -> String {
+        String::from("")
     }
 }
 
@@ -1050,12 +1065,18 @@ impl Service for LocalFileDriver{
         // we can start a tcp/quic/udp server in here
         // ...
     }
+    fn getServiceInfo(&self) -> String {
+        String::from("")
+    }
 }
 
 impl Actor for Container{
     type Context = Context<Self>;
     fn started(&mut self, ctx: &mut Self::Context) {
         println!("the container {} started", self.id);
+    }
+    fn stopped(&mut self, ctx: &mut Self::Context) {
+        log::info!("container {} has stopped", self.id);
     }
 }
 
