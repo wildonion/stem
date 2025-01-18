@@ -7,7 +7,7 @@
 
 
 use std::collections::BTreeMap;
-
+use bytes::Bytes;
 use deadpool_lapin::lapin::options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions};
 use deadpool_lapin::lapin::types::FieldTable;
 use deadpool_lapin::lapin::{Connection as LapinConnection, ConnectionProperties};
@@ -17,7 +17,7 @@ use deadpool_lapin::lapin::{
     BasicProperties,
 };
 use deadpool_redis::redis::{AsyncCommands, RedisResult};
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use log4rs::append;
 use misc::setupRedis;
 use rayon::string;
@@ -768,8 +768,26 @@ impl Actor for Neuron{
 
 
 /// a distributed object storage to store objects (instances and files) on ram
-impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync> ObjectStorage for T{
+impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static> ObjectStorage for T{
+
+    // we can call next() method on this method to get the next future item of the stream
+    async fn fetchChunk(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>> {
+        
+        let chunk_size = 10;
+        let bytes = Self::fetch(key).await;
     
+        // streaming over async obejcts, iter() method takes the ownership of 
+        // bytes thus we should create a new one to own it since bytes is owned 
+        // by the function and can't gets moved into a new scope or it must live
+        // longer than iter
+        stream::iter(
+            bytes // we can't return bytes which is owned by the function 
+                .chunks(chunk_size) 
+                .map(|c| Ok(Bytes::copy_from_slice(c)))
+                .collect::<Vec<_>>() // collect into a new ownership for bytes
+        )
+    }
+
     /// store the object on ram
     async fn store(&mut self) -> String {
     
@@ -796,6 +814,7 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync> ObjectStora
         let value: String = conn.get(key).await.unwrap();
         let data = serde_json::to_vec(&value).unwrap(); // convert the loaded string back to bytes
         data
+
     }
 
     /// check that either two objects are the same or not

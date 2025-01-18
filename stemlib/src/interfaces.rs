@@ -4,6 +4,7 @@ use std::error::Error;
 use crate::messages::*;
 use crate::impls::*;
 use crate::dto::*;
+use bytes::Bytes;
 use tokio::sync::mpsc::Receiver;
 use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
@@ -35,6 +36,8 @@ pub trait ObjectStorage{ // it can be any bytes io or &[u8], an encoded instance
     async fn store(&mut self) -> String;
     /// load the object from the storage as u8 bytes
     async fn fetch(key: &str) -> Vec<u8>;
+    /// load the object from the storage by streaming over its chunk
+    async fn fetchChunk(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>>;
     /// comapare the current checksum against the passed in object id, this is useful to detect steghided object
     fn checksum(&mut self, objId: &str) -> bool; 
 }

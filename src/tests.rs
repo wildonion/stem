@@ -1,3 +1,4 @@
+
 use core::time;
 use std::collections::{HashMap, VecDeque};
 use std::default;
@@ -10,7 +11,10 @@ use crypter::wallet::ed25519;
 use deadpool_lapin::lapin::protocol::channel;
 use deadpool_redis::redis::{AsyncCommands, RedisError};
 use deadpool_redis::Connection;
+use fut::stream;
+use futures::StreamExt;
 use interfaces::{Crypter, ObjectStorage, PubSub};
+use is_type::Is;
 use salvo::{FlowCtrl, Router};
 use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
@@ -123,14 +127,14 @@ pub async fn onionEnv(){
     // streaming over contanier is also possible, generally this sugar syntax is better
     // than sending message using .send() method, behind the scene it's using the actor 
     // sending message pattern, this is before starting the container actor
-    // walletComponent.on("send", "mpsc", |event, error| async move{
+    walletComponent.on("send", "mpsc", |event, error| async move{
 
-    //     if error.is_some(){
-    //         log::error!("error has happened: {:?}", error.unwrap());
-    //     }
-    //     log::info!("sent event: {:?}", event);
+        if error.is_some(){
+            log::error!("error has happened: {:?}", error.unwrap());
+        }
+        log::info!("sent event: {:?}", event);
 
-    // }).await;
+    }).await;
 
     // webhook handler container publish data for the passed in topic to the channel
     // wallet component container can subscribe to the topic to receive the data
@@ -138,7 +142,17 @@ pub async fn onionEnv(){
     let getReceiver = walletComponent.subscribe("topic").await;
     tokio::spawn(async move{
         let mut receiver = getReceiver.lock().await;
-        while let Some(d) = receiver.recv().await{
+        while let Some(mut d) = receiver.recv().await{
+            
+            let objectId = d.store().await;
+            let object = String::fetch(&objectId).await;
+            let mut                                                                                                                                                                                         streamer = String::fetchChunk(&objectId).await;
+            let mut buffer = vec![];
+            // streaming over object chunk
+            while let Some(d) = streamer.next().await{
+                let b = d.unwrap();
+                buffer.extend_from_slice(b.to_vec().as_slice());
+            }
             // ...
         }
     });

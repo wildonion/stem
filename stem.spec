@@ -7,7 +7,7 @@ TASKS:
         3 -> loadbalancer for container services (Container{}) with round robing and weighted round robin, 
         4 -> stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub, wrtc, quic, tcp, ws, http2:
              startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest()
-        5 -> serverless stemlib based iot, opentable, khadangApp, broker exchange, stockbot and game mmq with stemlib and wrangler:
+        5 -> serverless stemlib based iot, opentable, khadangApp, broker exchange, stockbot with stemlib and wrangler:
                 send notif with cronjobs and neuron actor worker containers: timeout, ctx, tokioTime, redisPubSubExpChan, webhook, polling, parking, jobq mpsc, redis and rmq pubsub, rpc, grpc and p2p gossipsub
                 tor like p2p distribtued redis based obj storage interface with  kad, stemlib, fsm, redis atomic tx, rayon, tokio, codec, synprot: https://arpitbhayani.me/blogs/consistent-hashing/
                 actor worker container component context runner pods for serverless object deployment supports various protocols

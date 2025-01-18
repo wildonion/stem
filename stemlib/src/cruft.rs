@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::Condvar;
 use std::{collections::HashMap};
+use bytes::Bytes;
 use futures::future::{BoxFuture, FutureExt};
 use interfaces::ObjectStorage;
 use rand::seq::SliceRandom;
@@ -5713,28 +5714,6 @@ pub async fn chainHandlers(){
                 Arc::new(
                     |event| Box::pin(async move{})
                 ), None)] }
-        }
-    }
-    impl<F: Fn(Context) -> R + Send + Sync + 'static, R: std::future::Future<Output = ()> + Send + Sync + 'static> 
-        ObjectStorage for State<F, R>{ 
-        async fn store(&mut self) -> String{
-            let jobs = self.jobs.clone();
-            for job in jobs{
-                match job.status{
-                    JobStatus::Executed => {
-                        
-                    },
-                    _ => {}
-                } 
-            }
-
-            todo!()
-        }
-        async fn fetch(key: &str) -> Vec<u8>{
-            todo!()
-        }
-        fn checksum(&mut self, objId: &str) -> bool{
-            todo!()
         }
     }
     fn handler<R, F>(kind: Arc<dyn Kind>, cb: F) 
