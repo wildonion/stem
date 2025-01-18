@@ -735,6 +735,31 @@ fn dynamic_typing(){
 
 
 fn but_the_point_is1(){
+
+    // in rust since we don't have gc thus each var will be moved and dropped 
+    // as soon as their scopes get ended this means rust moves them often into 
+    // other location inside the ram for memory optimisation instead of allocating 
+    // more spaces per each var, in order to use them in later scopes we should 
+    // borrow or clone them but once they go into a new scope they'll take a 
+    // new ownership and new address. this rules of borrowing and ownership prevents
+    // a type or var from being moved if the type is behind a pointer cause we know 
+    // rust moves data but what happened if we have a pointer to the location of 
+    // that data and imagine the data has moved!? yeah there would be a danlging 
+    // pointer pointing to no where or a free space, rust prevents moving the type
+    // if it's behind a shared pointer or a pointer which is being used or will be 
+    // used by other scopes.  
+    let name = String::from("");
+    println!("address of name: {:p}", &name);
+    fn getNameOfThis1(name: String){
+        println!("address of name: {:p}", &name)
+    }
+    fn getNameOfThis2(name: &String){
+        println!("address of name: {:p}", name)
+    }
+    // name is not moved in here and we have the same address outside of the function
+    getNameOfThis2(&name);
+    // name has moved in here thus have new address and ownership
+    getNameOfThis1(name);
     
     let fut = async move{};
     let pinned = Box::pin(fut);
@@ -5721,4 +5746,82 @@ pub async fn chainHandlers(){
     }
     let event = crate::dto::Event::default();
     
+}
+
+async fn pubsubTest(){
+   
+    use std::sync::Arc;
+    use std::collections::HashMap;
+    use tokio::sync::{Mutex, mpsc::{Sender, Receiver}};
+    
+    #[derive(Clone)]
+    pub struct PubSub{
+        pub channels: Arc<Mutex<HashMap<String, 
+            // for iterations needs to clone the instance which 
+            // forces us to clone each sub data of the structure
+            // hence need to arc and mutex the receiver
+            (Sender<String>, Arc<Mutex<Receiver<String>>>)>>>
+    }
+
+    impl PubSub{
+        pub fn new() -> Self{
+
+            Self{
+                channels: Arc::new(Mutex::new(HashMap::default())),
+            }
+
+        }
+        pub async fn publish(&self, topic: &str, data: &str){
+            let channels = self.channels.clone();
+            let unlockedChannels = channels.lock().await;
+            let channelOfTopic = unlockedChannels.get(topic);
+            if channelOfTopic.is_some(){
+                let channelOfTopic = channelOfTopic.unwrap(); 
+                let sender = channelOfTopic.0.clone(); // can't take ownership of channelOfTopic since it's behind a shared ref
+                let dataString = data.to_string();
+                tokio::spawn(async move{
+                    sender.send(dataString).await;
+                });
+            }
+            
+        }
+        // subscribe must return the receiver so we can iterate over that 
+        pub async fn subscribe(&self, topic: &str) -> Arc<Mutex<Receiver<String>>>{
+            // create a new receiver then add to the list of all subscribers
+            // subscribing means constantly pushing a new receiver into the map
+            let (tx, rx) = tokio::sync::mpsc::channel(100);
+            let arcedMutexedReceiver = Arc::new(Mutex::new(rx));
+            let channels = self.channels.clone();
+
+            // insert the receiver into the map 
+            let mut unlockedChannels = channels.lock().await;
+            (*unlockedChannels).insert(topic.to_string(), (tx.clone(), arcedMutexedReceiver.clone()));
+
+            arcedMutexedReceiver.clone()
+        }
+
+    }
+
+    let ps = PubSub::new();
+    let clonedPs = ps.clone();
+    tokio::spawn(async move{
+        let getSub = clonedPs.subscribe("news").await;
+        let mut sub = getSub.lock().await;
+        while let Some(msg) = sub.recv().await{
+            log::info!("received: {msg:}");
+        }
+    });
+
+    let clonedPs1 = ps.clone();
+    tokio::spawn(async move{
+        let getSub = clonedPs1.subscribe("brave").await;
+        let mut sub = getSub.lock().await;
+        while let Some(msg) = sub.recv().await{
+            log::info!("received: {msg:}");
+        }
+    });
+    
+    ps.publish("brave", "wildonion").await;
+    ps.publish("news", "wildonionNews").await; 
+
 }

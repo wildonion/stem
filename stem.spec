@@ -1,15 +1,12 @@
 
 
-ُREAD: desktop books for quantum computing and neuroscience
-READ: algo coding: gaming, quantum computing, codeforces, graph and nalgebra
 TASKS:
         0 -> #[derive(Service(prot=http, host=0.0.0.0, port=2535))] pub struct OtpDto; gives the Otp, deploy(), routers() and stop() methods
         1 -> complete impl OnionStream for Container{} and impl OnionStream for Event{} and #[event] proc macro for event varaints
         2 -> serverless deployement of container objects and their services as BPF also impl different services for different dtos like tcp service for MinIoDriver dto
         3 -> loadbalancer for container services (Container{}) with round robing and weighted round robin, 
         4 -> stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub, wrtc, quic, tcp, ws, http2:
-             startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), 
-             sendP2pRequest(), sendRpcRequest()
+             startP2pSwarmEventLoop(), receiveP2pResponse(), receiveRpcResponse(), sendP2pRequest(), sendRpcRequest()
         5 -> serverless stemlib based iot, opentable, khadangApp, broker exchange, stockbot and game mmq with stemlib and wrangler:
                 send notif with cronjobs and neuron actor worker containers: timeout, ctx, tokioTime, redisPubSubExpChan, webhook, polling, parking, jobq mpsc, redis and rmq pubsub, rpc, grpc and p2p gossipsub
                 tor like p2p distribtued redis based obj storage interface with  kad, stemlib, fsm, redis atomic tx, rayon, tokio, codec, synprot: https://arpitbhayani.me/blogs/consistent-hashing/
