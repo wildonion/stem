@@ -144,15 +144,28 @@ pub async fn onionEnv(){
         let mut receiver = getReceiver.lock().await;
         while let Some(mut d) = receiver.recv().await{
             
+            // ex) using object storage to store and fetch data
             let objectId = d.store().await;
             let object = String::fetch(&objectId).await;
-            let mut                                                                                                                                                                                         streamer = String::fetchChunk(&objectId).await;
+            
+            // model1)
+            // streaming over object chunk, we could receive each chunk from the channel also 
+            let mut streamer = String::fetchChunk(&objectId).await;
             let mut buffer = vec![];
-            // streaming over object chunk
             while let Some(d) = streamer.next().await{
                 let b = d.unwrap();
                 buffer.extend_from_slice(b.to_vec().as_slice());
             }
+
+            // model2)
+            // streaming over chunks, coming from a channel
+            let mut getReceiver = String::fetchChunkChan(&objectId).await;
+            let mut buffer = vec![];
+            let mut streamer = getReceiver.lock().await;
+            while let Some(d) = streamer.recv().await{
+                buffer.extend_from_slice(&d);
+            }
+
             // ...
         }
     });

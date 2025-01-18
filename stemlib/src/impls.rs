@@ -24,6 +24,8 @@ use rayon::string;
 use routers::getAllEntitiesHandler;
 use salvo::conn::TcpListener;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 use uuid::timestamp::context;
 use wallexerr::misc::Wallet;
 use crate::*;
@@ -770,7 +772,24 @@ impl Actor for Neuron{
 /// a distributed object storage to store objects (instances and files) on ram
 impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static> ObjectStorage for T{
 
-    // we can call next() method on this method to get the next future item of the stream
+    async fn fetchChunkChan(key: &str) -> Arc<Mutex<Receiver<Vec<u8>>>>{
+        let chunk_size = 10;
+        let bytes = Self::fetch(key).await;
+
+        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(100);
+        for i in (0..bytes.len()).step_by(chunk_size){
+            let mut end = i + chunk_size;
+            if end > bytes.len(){
+                end = bytes.len()
+            }
+            let chunk = &bytes[i..end];
+            tx.send(chunk.to_vec()).await;
+        }
+
+        Arc::new(Mutex::new(rx))
+    }
+
+    /// we can call next() method on this method to get the next future item of the stream
     async fn fetchChunk(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>> {
         
         let chunk_size = 10;

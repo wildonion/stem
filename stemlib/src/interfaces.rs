@@ -38,6 +38,8 @@ pub trait ObjectStorage{ // it can be any bytes io or &[u8], an encoded instance
     async fn fetch(key: &str) -> Vec<u8>;
     /// load the object from the storage by streaming over its chunk
     async fn fetchChunk(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>>;
+    /// load the object into the ram and send each chunk to the channel
+    async fn fetchChunkChan(key: &str) -> Arc<Mutex<Receiver<Vec<u8>>>>;
     /// comapare the current checksum against the passed in object id, this is useful to detect steghided object
     fn checksum(&mut self, objId: &str) -> bool; 
 }
