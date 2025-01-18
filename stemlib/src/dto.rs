@@ -6,9 +6,12 @@
 */
 
 use std::pin::Pin;
+use std::sync::mpsc::Receiver;
 use interfaces::ObjectStorage;
 use salvo::Router;
 use thread::ThreadId;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::Mutex;
 use crate::*;
 use crate::messages::*;
 use crate::impls::*;
@@ -504,3 +507,20 @@ pub type Io = Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = ()>
 pub type IoEvent = Arc<dyn Fn(Event) -> Pin<Box<dyn std::future::Future<Output = ()> 
     + Send + Sync + 'static>> 
     + Send + Sync + 'static>;
+
+
+// channles context
+pub static CHANNELS: Lazy<
+    Arc<Mutex<HashMap<String, // the topic
+    // for iterations needs to clone the instance which 
+    // forces us to clone each sub data of the structure
+    // hence need to arc and mutex the receiver
+    (Sender<String>, Arc<Mutex<tokio::sync::mpsc::Receiver<String>>>)>>>> = 
+    Lazy::new(||{
+
+        Arc::new(tokio::sync::Mutex::new(
+            HashMap::default()
+        ))
+
+    });
+

@@ -4,9 +4,11 @@ use std::error::Error;
 use crate::messages::*;
 use crate::impls::*;
 use crate::dto::*;
+use tokio::sync::mpsc::Receiver;
 use wallexerr::misc::{SecureCellConfig, Wallet};
 use crate::*;
 use salvo::Router;
+use tokio::sync::Mutex;
 
 
 pub trait ShaHasher{
@@ -42,4 +44,9 @@ pub trait Service: Send + Sync + 'static{ // don't inheritence from Serialize an
     // the trait is generic over any router 
     fn startService(&self, host: &str, port: u16);
     fn getServiceInfo(&self) -> String;
+}
+
+pub trait PubSub: Send + Sync + 'static{
+    async fn subscribe(&mut self, topic: &str) -> Arc<Mutex<Receiver<String>>>;
+    async fn publish(&self, topic: &str, data: &str);
 }

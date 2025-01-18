@@ -1,14 +1,16 @@
 use core::time;
 use std::collections::{HashMap, VecDeque};
+use std::default;
 use std::future::Future;
 use std::sync::{Arc, Condvar};
 use std::thread::{self, park, JoinHandle};
 use crate::*;
 use clap::error;
 use crypter::wallet::ed25519;
+use deadpool_lapin::lapin::protocol::channel;
 use deadpool_redis::redis::{AsyncCommands, RedisError};
 use deadpool_redis::Connection;
-use interfaces::{Crypter, ObjectStorage};
+use interfaces::{Crypter, ObjectStorage, PubSub};
 use salvo::{FlowCtrl, Router};
 use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
@@ -16,6 +18,7 @@ use stemlib::dto::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
 use stemlib::interfaces::OnionStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::Mutex;
 use wallexerr::misc::SecureCellConfig; // import the interface to use the on() method on the Neuron instance
 use stemlib::dsl::*;
 use stemlib::misc::setupRedis;
@@ -50,8 +53,7 @@ use stemlib::misc::setupRedis;
 // ================================================================================
 // ================================================================================
 // ================================================================================
-pub async fn onionEnv(){
-
+pub async fn onionEnv(){ 
 
     // ==============================================================================
     // ======================= STEP 1) CREATE CONTAINER COMPONENTS AND THEIR SERVICES
@@ -63,33 +65,33 @@ pub async fn onionEnv(){
     let mut webhookHandlerComponent = Container{
         service: Arc::new(WebHookHandler),
         id: Uuid::new_v4().to_string(),
-        requests: Arc::new(vec![]),
+        requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"), // the server of webhook hanlder
-        port: 2879
+        port: 2879,
     };
 
     let mut otpComponent = Container{
         service: Arc::new(Otp),
         id: Uuid::new_v4().to_string(),
-        requests: Arc::new(vec![]),
+        requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"),
-        port: 2877
+        port: 2877,
     };
 
     let mut rateLimiterComponent = Container{
         service: Arc::new(RateLimiter),
         id: Uuid::new_v4().to_string(),
-        requests: Arc::new(vec![]),
+        requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"),
-        port: 2870
+        port: 2870,
     };
     
     let mut walletComponent = Container{
         service: Arc::new(WalletDto), // object safe trait for dependency injection, WalletDto impls the Service trait
         id: Uuid::new_v4().to_string(),
-        requests: Arc::new(vec![]),
+        requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"),
-        port: 2875
+        port: 2875,
     };
 
     let uploadDriverComponent = Container{
@@ -114,7 +116,7 @@ pub async fn onionEnv(){
         id: Uuid::new_v4().to_string(),
         host: String::from("0.0.0.0"),
         port: 8375,
-        requests: Arc::new(vec![])
+        requests: Arc::new(vec![]) // requests to this container so far
     };
 
 
@@ -129,6 +131,17 @@ pub async fn onionEnv(){
     //     log::info!("sent event: {:?}", event);
 
     // }).await;
+
+    // webhook handler container publish data for the passed in topic to the channel
+    // wallet component container can subscribe to the topic to receive the data
+    webhookHandlerComponent.publish("topic", "data").await;
+    let getReceiver = walletComponent.subscribe("topic").await;
+    tokio::spawn(async move{
+        let mut receiver = getReceiver.lock().await;
+        while let Some(d) = receiver.recv().await{
+            // ...
+        }
+    });
 
     // ======================================================
     // ======================= STEP 2) START CONTAINER ACTOR 
@@ -166,6 +179,19 @@ pub async fn onionEnv(){
     let underlyingService = walletComponentActor.send(
         GetServiceInfo
     ).await;
+
+    let task = Arc::new(||{
+        Box::pin(async move{
+            log::info!("a heavy task..");
+        })
+    });
+    let mut time = tokio::time::interval(tokio::time::Duration::from_secs(10));
+    tokio::spawn(async move{
+        loop{
+            time.tick().await;
+            task().await;
+        }
+    });
 
     // ================================================================================
     // ======================= STEP 4) BUIL APP CONTEXT AND PUSH THE CONTAINERS INTO IT
@@ -222,9 +248,8 @@ pub async fn onionEnv(){
             true // local spawn, set to true if we want to execute the task inside the actor thread
         )
     ).await.unwrap();
- 
 
-    // keep the app up so the dto service can be in a constant execution process
+    // keep the app up so the dto services can be in a constant execution state
     loop{}
 
     // ============================================================================

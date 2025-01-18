@@ -6,6 +6,8 @@
 */
 
 
+use std::collections::BTreeMap;
+
 use deadpool_lapin::lapin::options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions};
 use deadpool_lapin::lapin::types::FieldTable;
 use deadpool_lapin::lapin::{Connection as LapinConnection, ConnectionProperties};
@@ -820,6 +822,47 @@ impl OnionStream for Event{
 
     }
     
+}
+
+impl PubSub for Container{
+
+    async fn publish(&self, topic: &str, data: &str) {
+
+        let channels = CHANNELS.clone();
+        let unlockedChannels = channels.lock().await;
+        let channelOfTopic = unlockedChannels.get(topic);
+        if channelOfTopic.is_some(){
+            let channelOfTopic = channelOfTopic.unwrap(); 
+            let sender = channelOfTopic.0.clone(); // can't take ownership of channelOfTopic since it's behind a shared ref
+            let dataString = data.to_string();
+            tokio::spawn(async move{
+                sender.send(dataString).await;
+            });
+        }
+
+    }
+    async fn subscribe(&mut self, topic: &str) 
+        -> Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<String>>> {
+ 
+       // create a new receiver then add to the list of all subscribers
+        // subscribing means constantly pushing a new receiver into the map
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let arcedMutexedReceiver = Arc::new(tokio::sync::Mutex::new(rx));
+        let channels = CHANNELS.clone();
+
+        // insert the receiver into the map 
+        let mut unlockedChannels = channels.lock().await;
+        if unlockedChannels.get(topic).is_some(){
+            let chan = unlockedChannels.get(topic).unwrap();
+            let rx = chan.clone().1;
+            rx
+        } else{
+            (*unlockedChannels).insert(topic.to_string(), (tx.clone(), arcedMutexedReceiver.clone()));
+            arcedMutexedReceiver.clone()
+        }
+
+    }
+
 }
 
 
