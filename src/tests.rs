@@ -147,18 +147,20 @@ pub async fn onionEnv(){
             tokio::spawn(async move{
 
                 log::info!("executing callback for received event: ... ");
-                // ====================== do objection storage things with received d
+                // ======================
                 // ex) using object storage to store and fetch data
                 let receivedData = serde_json::from_value::<String>(event.clone().data.action_data).unwrap();
                 let objectId = event.store().await;
                 let object = String::fetch(&objectId).await;
 
-                // model1)
+                // downloading file from object storage)
                 // streaming over chunks, having them as future object  
-                let mut streamer = String::fetchChunk(&objectId).await;
+                let mut objStreamer = String::fetchChunk(&objectId).await;
+                let mut file = tokio::fs::File::create("path.txt").await.unwrap();
                 let mut buffer = vec![];
-                while let Some(d) = streamer.next().await{
+                while let Some(d) = objStreamer.next().await{
                     let b = d.unwrap();
+                    file.write_all(&b).await; // write to disk chunk by chunk
                     // encrypted chunk
                     b.to_vec().encrypt(
                         &mut SecureCellConfig{ 
@@ -170,8 +172,10 @@ pub async fn onionEnv(){
                     // receive a chunk from the channel and append it to the buffer
                     buffer.extend_from_slice(b.to_vec().as_slice()); 
                 }
-
-                // model2)
+                file.flush().await.unwrap();
+                // ======================
+                
+                // downloading file from the channel)
                 // streaming over chunks, coming from a jobq channel
                 let mut getReceiver = String::fetchChunkChan(&objectId).await;
                 let mut buffer = vec![];
@@ -179,8 +183,7 @@ pub async fn onionEnv(){
                 while let Some(d) = streamer.recv().await{
                     buffer.extend_from_slice(&d);
                 }
-                // ======================
-        
+
                 // ...
             });
 

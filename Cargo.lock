@@ -6114,7 +6114,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stem"
-version = "0.4.0-dev.4"
+version = "0.4.0-dev.5"
 dependencies = [
  "actix",
  "actix-web",
