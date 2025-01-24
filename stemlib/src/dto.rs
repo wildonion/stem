@@ -361,7 +361,7 @@ pub struct Buffer<E>{ // eg: Buffer<Event>
 }
 
 #[derive(Clone, Debug)]
-pub enum StreamError{
+pub enum ChanError{
     Sender(String),
     Receiver(String)
 }
@@ -444,6 +444,17 @@ pub struct WebHookHandler;
 pub struct RateLimiter;
 
 #[derive(Clone)]
+pub struct ChanConfig{
+    pub chanType: String,
+}
+
+#[derive(Clone)]
+pub enum FsmEngineError{
+    Redis(String),
+    Map(String) // hash or btree
+}
+
+#[derive(Clone)]
 pub struct Container{
     // Arc is a reference-counted smart pointer used for thread-safe shared ownership of data
     // Arc makes the whole service field cloneable cause the container must be cloneable 
@@ -451,6 +462,7 @@ pub struct Container{
     pub service: Arc<dyn Service>, // dependency injection through dynamic dispatching
     pub id: String,
     pub requests: Arc<Vec<salvo::Request>>,
+    pub chanConfig: ChanConfig,
     // a service must have host and port
     pub host: String,
     pub port: u16
@@ -509,7 +521,7 @@ pub type IoEvent = Arc<dyn Fn(Event) -> Pin<Box<dyn std::future::Future<Output =
     + Send + Sync + 'static>;
 
 
-// channles context
+/// channles context, a map between topics and mpsc sender and thread safe receivers
 pub static CHANNELS: Lazy<
     Arc<Mutex<HashMap<String, // the topic
     // for iterations needs to clone the instance which 

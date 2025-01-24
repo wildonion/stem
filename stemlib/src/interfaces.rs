@@ -21,11 +21,10 @@ pub trait Crypter{
     fn decrypt(&mut self, secure_cell_config: &mut SecureCellConfig);
 }
 
-pub trait OnionStream{
-    type Channel;
-    async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
-        F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
-        (&mut self, streamer: &str, eventType: &str, callback: F) -> Self;
+pub trait Channel{
+    async fn on<F, R>(&mut self, eventType: &str, callback: F) -> Self
+    where F: Fn(Event, Option<ChanError>) -> R + Send + Sync + 'static, 
+    R: Future<Output = ()> + Send + Sync + 'static;
 }
 
 /// a distributed object storage interface supports object and instances and files (video, audio and image)
@@ -54,4 +53,11 @@ pub trait Service: Send + Sync + 'static{ // don't inheritence from Serialize an
 pub trait PubSub: Send + Sync + 'static{
     async fn subscribe(&mut self, topic: &str) -> Arc<Mutex<Receiver<String>>>;
     async fn publish(&self, topic: &str, data: &str);
+}
+
+/// an state machine to set and get state
+pub trait Fsm{
+    type Engine; // redis or hashMap or btreeMap
+    async fn setState(&mut self, key: &str, state: &str);
+    async fn getState(&mut self, key: &str) -> Result<String, FsmEngineError>;
 }

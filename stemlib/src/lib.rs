@@ -147,7 +147,7 @@ use actix::{prelude::*, spawn};
 use actix::Handler as ActixMessageHandler;
 use uuid::Uuid;
 use std::sync::atomic::AtomicU64;
-use interfaces::OnionStream;
+use interfaces::Channel;
 use crate::dsl::*;
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::Mode;

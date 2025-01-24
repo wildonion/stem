@@ -23,6 +23,7 @@ use misc::setupRedis;
 use rayon::string;
 use routers::getAllEntitiesHandler;
 use salvo::conn::TcpListener;
+use serde_json::json;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::Mutex;
@@ -665,7 +666,7 @@ impl InternalExecutor<Event>{
     }
 
     pub async fn run<F, R: std::future::Future<Output = ()> + Send + Sync + 'static, >(&self, callback: F)
-    where F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static{
+    where F: Clone + Fn(Event, Option<ChanError>) -> R + Send + Sync + 'static{
         let get_rx = self.clone().eventloop;
         let mut rx = get_rx.try_lock();
         
@@ -675,7 +676,7 @@ impl InternalExecutor<Event>{
             tokio::spawn(async move{
                 cloned_callback(
                     Event::default(), 
-                    Some(StreamError::Receiver(error.source().unwrap().to_string()))
+                    Some(ChanError::Receiver(error.source().unwrap().to_string()))
                 ).await; // calling callback with the passed in received event
             });
         } else{
@@ -845,13 +846,12 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static> O
 
 /// this would allows us to stream over an event like sending and receiving events and executing callbacks on those events
 /// supports stream (p2p and rmq), request response (p2p and rmq-rpc), kademlia, gossipsub:
-impl OnionStream for Event{
-    type Channel = ChannelType;
+impl Channel for Event{
 
     /// a method to stream over various channels and execute callback based on those events
-    async fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, 
-            F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static>
-            (&mut self, streamer: &str, eventType: &str, callback: F) -> Self {
+    async fn on<F, R>(&mut self, eventType: &str, callback: F) -> Self
+        where F: Fn(Event, Option<ChanError>) -> R + Send + Sync + 'static, 
+        R: Future<Output = ()> + Send + Sync + 'static{
 
         // execute callback in the background thread, it can be storing 
         // and caching the event on redis and db.
@@ -904,14 +904,54 @@ impl PubSub for Container{
 }
 
 
-impl OnionStream for Container{
+impl Channel for Container{
 
-    type Channel = ChannelType;
-
-    async  fn on<R: std::future::Future<Output = ()> + Send + Sync + 'static, // the io task 
-            F: Clone + Fn(Event, Option<StreamError>) -> R + Send + Sync + 'static> // the callback with event and optional streaming error
-            (&mut self, eventType: &str, streamer: &str, callback: F) -> Self {
+    async fn on<F, R>(&mut self, eventType: &str, callback: F) -> Self
+        where F: Fn(Event, Option<ChanError>) -> R + Send + Sync + 'static, 
+        R: Future<Output = ()> + Send + Sync + 'static{
         
+        // streaming based on channel configs 
+        let chanConfig = self.clone().chanConfig;
+        let chanType = chanConfig.chanType.as_str();
+        match chanType{
+            "pubsub" => {
+                match eventType{
+                    "send" => self.publish("topic", "data").await,
+                    "recv" => {
+                        let getReceiver = self.subscribe("topic").await;
+                        tokio::spawn(async move{
+                            let mut receiver = getReceiver.lock().await;
+                            while let Some(mut d) = receiver.recv().await{
+                                // execute callback once we receive the event
+                                // nicely pass the event object to the function 
+                                let name = "".to_string();
+                                callback(Event{ 
+                                    data: EventData{ 
+                                        id: todo!(), 
+                                        receiver_info: todo!(), 
+                                        action_data: json!({"data": d}), 
+                                        actioner_info: todo!(), 
+                                        action_type: todo!(), 
+                                        fired_at: todo!(), 
+                                        is_seen: todo!() 
+                                    }, 
+                                    status: todo!(), 
+                                    timestamp: todo!(), 
+                                    offset: todo!() // an atomic id 
+                                }, None).await;   
+                            }
+                        });
+                    },
+                    _ => {
+
+                    }
+                }
+            },
+            _ => {
+
+            }
+        }
+
         todo!()
 
     }

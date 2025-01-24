@@ -20,7 +20,7 @@ use sha2::digest::generic_array::arr;
 use sha2::digest::Output;
 use stemlib::dto::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
-use stemlib::interfaces::OnionStream;
+use stemlib::interfaces::Channel;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use wallexerr::misc::SecureCellConfig; // import the interface to use the on() method on the Neuron instance
@@ -69,6 +69,7 @@ pub async fn onionEnv(){
     let mut webhookHandlerComponent = Container{
         service: Arc::new(WebHookHandler),
         id: Uuid::new_v4().to_string(),
+        chanConfig: ChanConfig{chanType: String::from("mpsc")},
         requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"), // the server of webhook hanlder
         port: 2879,
@@ -77,6 +78,7 @@ pub async fn onionEnv(){
     let mut otpComponent = Container{
         service: Arc::new(Otp),
         id: Uuid::new_v4().to_string(),
+        chanConfig: ChanConfig{chanType: String::from("p2p")},
         requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"),
         port: 2877,
@@ -85,6 +87,7 @@ pub async fn onionEnv(){
     let mut rateLimiterComponent = Container{
         service: Arc::new(RateLimiter),
         id: Uuid::new_v4().to_string(),
+        chanConfig: ChanConfig{chanType: String::from("pubsub")},
         requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"),
         port: 2870,
@@ -93,6 +96,7 @@ pub async fn onionEnv(){
     let mut walletComponent = Container{
         service: Arc::new(WalletDto), // object safe trait for dependency injection, WalletDto impls the Service trait
         id: Uuid::new_v4().to_string(),
+        chanConfig: ChanConfig{chanType: String::from("ws")},
         requests: Arc::new(vec![]), // requests to this container so far
         host: String::from("0.0.0.0"),
         port: 2875,
@@ -118,56 +122,70 @@ pub async fn onionEnv(){
             path: String::from("here.txt")
         }),
         id: Uuid::new_v4().to_string(),
+        chanConfig: ChanConfig{chanType: String::from("http")},
         host: String::from("0.0.0.0"),
         port: 8375,
         requests: Arc::new(vec![]) // requests to this container so far
     };
 
-
-    // streaming over contanier is also possible, generally this sugar syntax is better
-    // than sending message using .send() method, behind the scene it's using the actor 
-    // sending message pattern, this is before starting the container actor
-    walletComponent.on("send", "mpsc", |event, error| async move{
-
-        if error.is_some(){
-            log::error!("error has happened: {:?}", error.unwrap());
-        }
-        log::info!("sent event: {:?}", event);
-
-    }).await;
-
-    // webhook handler container publish data for the passed in topic to the channel
-    // wallet component container can subscribe to the topic to receive the data
-    webhookHandlerComponent.publish("topic", "data").await;
-    let getReceiver = walletComponent.subscribe("topic").await;
+    let mut clonedWalletComponent = walletComponent.clone();
     tokio::spawn(async move{
-        let mut receiver = getReceiver.lock().await;
-        while let Some(mut d) = receiver.recv().await{
-            
-            // ex) using object storage to store and fetch data
-            let objectId = d.store().await;
-            let object = String::fetch(&objectId).await;
-            
-            // model1)
-            // streaming over object chunk, we could receive each chunk from the channel also 
-            let mut streamer = String::fetchChunk(&objectId).await;
-            let mut buffer = vec![];
-            while let Some(d) = streamer.next().await{
-                let b = d.unwrap();
-                buffer.extend_from_slice(b.to_vec().as_slice());
-            }
 
-            // model2)
-            // streaming over chunks, coming from a channel
-            let mut getReceiver = String::fetchChunkChan(&objectId).await;
-            let mut buffer = vec![];
-            let mut streamer = getReceiver.lock().await;
-            while let Some(d) = streamer.recv().await{
-                buffer.extend_from_slice(&d);
-            }
+        // streaming over contanier is also possible, generally this sugar syntax is better
+        // than sending message using .send() method, currently based on the channel confit 
+        // the channel type for walletComponent is ws which means we're sending ws event through
+        // switch to a new channel using walltComponent.switchChannel("p2p"); method
+        clonedWalletComponent.on("recv", |mut event, error| async move{
 
-            // ...
-        }
+            if error.is_some(){
+                log::error!("error has happened: {:?}", error.unwrap());
+            }
+            log::info!("sent event: {:?}", event);
+
+            // do the redis operations inside a new thread cause, 
+            // call the object storage methods inside a new thread
+            tokio::spawn(async move{
+
+                log::info!("executing callback for received event: ... ");
+                // ====================== do objection storage things with received d
+                // ex) using object storage to store and fetch data
+                let receivedData = serde_json::from_value::<String>(event.clone().data.action_data).unwrap();
+                let objectId = event.store().await;
+                let object = String::fetch(&objectId).await;
+
+                // model1)
+                // streaming over chunks, having them as future object  
+                let mut streamer = String::fetchChunk(&objectId).await;
+                let mut buffer = vec![];
+                while let Some(d) = streamer.next().await{
+                    let b = d.unwrap();
+                    // encrypted chunk
+                    b.to_vec().encrypt(
+                        &mut SecureCellConfig{ 
+                            secret_key: String::from("secret"), 
+                            passphrase: String::from("pass"), 
+                            data: vec![] 
+                        }
+                    );
+                    // receive a chunk from the channel and append it to the buffer
+                    buffer.extend_from_slice(b.to_vec().as_slice()); 
+                }
+
+                // model2)
+                // streaming over chunks, coming from a jobq channel
+                let mut getReceiver = String::fetchChunkChan(&objectId).await;
+                let mut buffer = vec![];
+                let mut streamer = getReceiver.lock().await;
+                while let Some(d) = streamer.recv().await{
+                    buffer.extend_from_slice(&d);
+                }
+                // ======================
+        
+                // ...
+            });
+
+        }).await;
+
     });
 
     // ======================================================

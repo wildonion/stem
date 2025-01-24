@@ -166,7 +166,7 @@ impl Transaction{
             hash: Some(String::from("")), // stringify the whole tx object then hash it
             tx_sig: Some(String::from("")), // sign the the stringified_tx_object with prvkey
             signer: String::from(""), // the one who has signed with the prv key usually the server
-            payer: String::from("")
+            payer: String::from("") // the one who paid for the gas fee of this transaction
         };
 
         tx_data

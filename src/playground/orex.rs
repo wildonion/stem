@@ -58,6 +58,14 @@ impl From<std::io::Error> for CustomeErrMe1{
 /*  https://lunatic.solutions/blog/rust-without-the-async-hard-part/
     https://rustmagazine.org/issue-4/how-tokio-schedule-tasks/#:~:text=Tokio%20uses%20work%20stealing%20to,other%20workers'%20queues%20to%20execute.&text=In%20the%20above%20figure%2C%20there,are%20purely%20CPU%2Dbound%20tasks
     
+    syncing state and types of chans:
+        Mutex semaphore park Chan condvar atomic rwlock
+        runner worker thread pool > multiple threads use a shared jobq chan with drop
+        fanout fanin or mpsc      > multiple threads sends to chan but single thread can recv
+        pubsub or mpmc            > multiple producer and multiple consumer or pubsub (subscribers must gets built first)
+        pipelining channels       > pass channels in each stage to complete a pipeline like image processing
+
+
     - none async rust: none io tasks like crypter using os threadpool
     - async rust     : async future io tasks like db and file operations using tokio light io threads in a none blocking way
     - await          : await suspend the task execution allows runtime to notify the caller once the task is solved but meanwhile executing other tasks (none blocking)

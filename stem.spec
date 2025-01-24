@@ -35,7 +35,7 @@ TASKS:
                         #[inject(ram, network=p2p)] proc macro on top of an io task to distribute shellcode of the compressed, encoded and encrypted neuron object into the ram and through the network using mmio
                 ssh based keypair with ed25519 wallet: use a high entropy seed with mnemonic for the rng to generate the keypair then convert sig and keypair into hex/base64/base58
                 talking with the engine through rmq (rpc and streaming) p2p req-res
-                WalletServiceActorWorker (updatePrice/txCrawler/DepositActorWorker) 
+                WalletServiceActorWorker (getBalance/updatePrice/updateBalance/txCrawler/DepositActorWorker/receiveCommitedTx) 
                 DepositActorWorker checks the latest deposits to send the increase balance command to the WalletServiceActorWorker through rmq 
                 Dex AMM liquidity pool, escrow and orders contracts.
                 create bridge between chains
