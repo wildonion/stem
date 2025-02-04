@@ -71,7 +71,6 @@ pub async fn report(
     let reportCall = ctx.apiCount.lock().await;
     let reportMap = &reportCall.map; // can't move out of Mutex so we're borrowing the map in here
     res.render(Json(reportMap));
-
 }
 
 

@@ -773,25 +773,8 @@ impl Actor for Neuron{
 /// a distributed object storage to store objects (instances and files) on ram
 impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static> ObjectStorage for T{
 
-    async fn fetchChunkChan(key: &str) -> Arc<Mutex<Receiver<Vec<u8>>>>{
-        let chunk_size = 10;
-        let bytes = Self::fetch(key).await;
-
-        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(100);
-        for i in (0..bytes.len()).step_by(chunk_size){
-            let mut end = i + chunk_size;
-            if end > bytes.len(){
-                end = bytes.len()
-            }
-            let chunk = &bytes[i..end];
-            tx.send(chunk.to_vec()).await;
-        }
-
-        Arc::new(Mutex::new(rx))
-    }
-
     /// we can call next() method on this method to get the next future item of the stream
-    async fn fetchChunk(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>> {
+    async fn fetchStream(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>> {
         
         let chunk_size = 10;
         let bytes = Self::fetch(key).await;
@@ -811,7 +794,7 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static> O
     /// store the object on ram
     async fn store(&mut self) -> String {
     
-        let redisPool = setupRedis().await.unwrap();
+        let redisPool = setupRedis().await.unwrap(); // get this from context or global context
         let mut conn = redisPool.get().await.unwrap();
         
         let data = self.clone();

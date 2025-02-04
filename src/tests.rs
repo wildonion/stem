@@ -1,4 +1,6 @@
 
+use futures::stream::{self, StreamExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use core::time;
 use std::collections::{HashMap, VecDeque};
 use std::default;
@@ -11,9 +13,7 @@ use crypter::wallet::ed25519;
 use deadpool_lapin::lapin::protocol::channel;
 use deadpool_redis::redis::{AsyncCommands, RedisError};
 use deadpool_redis::Connection;
-use fut::stream;
-use futures::StreamExt;
-use interfaces::{Crypter, ObjectStorage, PubSub};
+use interfaces::{Crypter, ObjectStorage, PubSub, ShaHasher};
 use is_type::Is;
 use salvo::{FlowCtrl, Router};
 use sha2::digest::generic_array::arr;
@@ -21,7 +21,6 @@ use sha2::digest::Output;
 use stemlib::dto::{Neuron, TransmissionMethod, *};
 use stemlib::messages::*;
 use stemlib::interfaces::Channel;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use wallexerr::misc::SecureCellConfig; // import the interface to use the on() method on the Neuron instance
 use stemlib::dsl::*;
@@ -29,6 +28,70 @@ use stemlib::misc::setupRedis;
 
 
 
+#[tokio::test]
+async fn streamObjStrg(){
+    
+    let mut map: HashMap::<String, Vec<u8>> = HashMap::new(); // an in memory object storage using hash map
+    // upload streaming
+    let mut file = tokio::fs::File::open("video.mp4").await.unwrap();
+    let chunkSize = 10; // 10 bytes
+    let mut buf = Vec::with_capacity(chunkSize);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
+    let mut streamBuf = vec![]; 
+    let objId = streamBuf.store().await;
+
+    let getFileObject = map.get_mut("video.mp4");
+    let mut fileObj = vec![];
+    if getFileObject.is_some(){
+        fileObj = getFileObject.unwrap().clone();
+    } else{
+        map.insert("vide.mp4".to_string(), vec![]);
+    }
+ 
+    let mut file = tokio::fs::File::create("file.mp4").await.unwrap();
+    // read 10 bytes per each iteration then send each 
+    // chunk into the channel
+    let clonedTx = tx.clone();
+    loop{
+        let readBytes = file.read(&mut buf).await.unwrap(); // read 10 bytes of the whole file
+        if readBytes == 0{
+            break;
+        }
+
+        // process on those 10 bytes
+        // 1) filling the object inside the OBJ STORAGE chunk by chunk
+        let mut key = String::from("some random bytes");
+        key.hashMe();
+        let mut pass = String::from("some random high secure bytes");
+        pass.hashMe();
+        // encrypt the buffer
+        buf.encrypt(&mut SecureCellConfig{ 
+            secret_key: key, 
+            passphrase: pass, 
+            data: vec![] // this gets filled inside the trait implementation
+        });
+        fileObj.extend_from_slice(&buf); // pass the encrypted buffer
+        // 2) send the buffer to the channel to save it in file later
+        tx.send(buf.clone()).await;
+        // 3) push the buffer into the stream buffer
+        streamBuf.push(buf.clone());
+        // 4) write into file as they're coming
+        file.write_all(&buf).await;
+    }
+
+    let mut streamer = stream::iter(streamBuf);
+
+    while let Some(chunk) = rx.recv().await{
+        // write to file as they're coming from the channel
+        file.write_all(&chunk).await;
+    }
+
+    while let Some(chunk) = streamer.next().await{
+        // also we can write the byte into file in here
+        // ...
+    }
+
+}
 
 
 // ================================================================================
@@ -155,7 +218,7 @@ pub async fn onionEnv(){
 
                 // downloading file from object storage)
                 // streaming over chunks, having them as future object  
-                let mut objStreamer = String::fetchChunk(&objectId).await;
+                let mut objStreamer = String::fetchStream(&objectId).await;
                 let mut file = tokio::fs::File::create("path.txt").await.unwrap();
                 let mut buffer = vec![];
                 while let Some(d) = objStreamer.next().await{
@@ -174,15 +237,6 @@ pub async fn onionEnv(){
                 }
                 file.flush().await.unwrap();
                 // ======================
-                
-                // downloading file from the channel)
-                // streaming over chunks, coming from a jobq channel
-                let mut getReceiver = String::fetchChunkChan(&objectId).await;
-                let mut buffer = vec![];
-                let mut streamer = getReceiver.lock().await;
-                while let Some(d) = streamer.recv().await{
-                    buffer.extend_from_slice(&d);
-                }
 
                 // ...
             });

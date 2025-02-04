@@ -5804,3 +5804,39 @@ async fn pubsubTest(){
     ps.publish("news", "wildonionNews").await; 
 
 }
+
+pub async fn fetchme(){
+    
+
+    pub struct Fetch{
+        pub token: String,
+        pub endpoint: String,
+    }
+
+    impl Fetch{
+        pub async fn post<F, R>(&self, endpoint: &str, callback: F)
+        where F: Fn(serde_json::Value) -> R + Send + Sync + 'static,
+        R: Send + Sync + 'static + std::future::Future<Output=()>
+        {
+            // get users and then execute the callback 
+            let userInfo = User{};
+            let users = serde_json::json!(
+                {
+                    "users":  vec![userInfo]
+                }
+            );
+            tokio::spawn(callback(users));
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct User;
+    let api = Fetch{endpoint: String::from("https://me.com"), token: "jwt".to_string()};
+   
+    // send a post request to the endpoint
+    api.post("/get/users", |users| async move{
+        let users = serde_json::from_value::<Vec<User>>(users).unwrap();
+    });
+
+
+}

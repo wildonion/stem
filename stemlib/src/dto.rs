@@ -474,6 +474,9 @@ pub enum MessageWorker{
     Terminate
 }
 
+pub enum KindError{
+    EventBuffer()
+}
 
 #[derive(Clone)]
 pub struct CronScheduler{
