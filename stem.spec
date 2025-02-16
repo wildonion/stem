@@ -67,7 +67,7 @@ TASKS:
                                 5 -> send the completed tx to txConfirmedQueue queue 
                                 6 -> receive tx using neuron actor, inside the walle service
                                 7 -> add tx to wallet then produce a completed transaction notif to rmq
-                                8 -> short polling to receive the notifications in client side
+                                8 -> ws/short polling to receive the notifications in client side
                         }
         6 -> build onion based protocols for neuron stemlib:
                 SYNAPSE protocol network behavior features1: file sharing, vpn like tor, ton and v2ray, firewall, gateway like nginx and traefik 

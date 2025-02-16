@@ -2,8 +2,6 @@
 
 
 
-mod tests;
-
 use dto::Neuron;
 use serde::{Serialize, Deserialize};
 use tracing::Level;
@@ -15,7 +13,7 @@ use tokio::{net::unix::SocketAddr, task};
 use stemplugins::*;
 use stemlib::*;
 use std::env;
-
+mod tests;
 
 
 #[actix_web::main] // use actix_web main context since we have actors
@@ -32,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
             .expect("setting default subscriber failed");
     
     tests::onionEnv().await;
-    
+
     Ok(())
 
 }

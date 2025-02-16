@@ -7,6 +7,8 @@
 
 
 use std::collections::BTreeMap;
+use std::iter::zip;
+use actix_web::rt::net;
 use bytes::Bytes;
 use deadpool_lapin::lapin::options::{BasicConsumeOptions, ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions};
 use deadpool_lapin::lapin::types::FieldTable;
@@ -24,6 +26,7 @@ use rayon::string;
 use routers::getAllEntitiesHandler;
 use salvo::conn::TcpListener;
 use serde_json::json;
+use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::Mutex;
@@ -821,10 +824,24 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static> O
     }
 
     /// check that either two objects are the same or not
-    fn checksum(&mut self, objId: &str) -> bool {
-        true
+    async fn checksum(&mut self, objId: &str) -> bool {
+        
+        let obj = Self::fetch(&objId).await;
+        let chunk = 10;
+        let chunked = obj.chunks(chunk);
+        
+        let mut dataString = serde_json::to_string(&obj).unwrap();
+        let mut thisString = serde_json::to_string(&self.clone()).unwrap();
+        
+        dataString.hashMe();
+        thisString.hashMe();
+
+        dataString == thisString
+
     }
 
+
+    
 }
 
 /// this would allows us to stream over an event like sending and receiving events and executing callbacks on those events
@@ -1226,7 +1243,7 @@ impl RunnerActorThreadPoolEventLoop{
         let eventLoop = Arc::new(tokio::sync::Mutex::new(rx));
         
         assert!(size < Self::MAX_WORKERS, "reached maximum workers");
-        
+
         Self{ buffer: Buffer { size: 100, events: Arc::new(tokio::sync::Mutex::new(vec![])) }, workers: {
             (0..size)
             .into_iter()

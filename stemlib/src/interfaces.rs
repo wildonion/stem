@@ -38,7 +38,7 @@ pub trait ObjectStorage{ // it can be any bytes io or &[u8], an encoded instance
     /// load the object from the storage by streaming over its chunk
     async fn fetchStream(key: &str) -> impl Stream<Item = Result<Bytes, deadpool_redis::redis::RedisError>>;
     /// comapare the current checksum against the passed in object id, this is useful to detect steghided object
-    fn checksum(&mut self, objId: &str) -> bool; 
+    async fn checksum(&mut self, objId: &str) -> bool; 
 }
 
 pub trait Service: Send + Sync + 'static{ // don't inheritence from Serialize and Deserialize cause it can't be object safe trait
